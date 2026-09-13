@@ -1,0 +1,19 @@
+{
+  "name": "reverse-ast-parser",
+  "version": "1.0.0",
+  "description": "AST structural parser helper for JavaScript and TypeScript",
+  "main": "scripts/parse_js.js",
+  "scripts": {},
+  "dependencies": {
+    "@babel/parser": "^7.29.8",
+    "@babel/traverse": "^7.29.8"
+  },
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs"
+}
