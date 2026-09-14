@@ -80,13 +80,15 @@ class BaselineOrderingEngine:
                 if src != tgt:  # Ignore self-loops for adjacency
                     valid_edges.append((src, tgt))
 
-        # 3b. Intra-Package / Same-Directory Symbol Reference Linking
-        # Group file nodes by directory / package namespace
+        # 3b. Intra-Package / Same-Directory Symbol Reference Linking (Go package scope)
+        # Group file nodes by directory / package namespace (only for languages like Go where
+        # files in the same directory share package scope without explicit import statements)
         dir_to_files: Dict[str, List[FileNode]] = {}
         for fn in file_nodes:
-            norm_p = self._norm_path(fn.path)
-            d = str(Path(norm_p).parent)
-            dir_to_files.setdefault(d, []).append(fn)
+            if getattr(fn, "language", None) == "go" or fn.path.endswith(".go"):
+                norm_p = self._norm_path(fn.path)
+                d = str(Path(norm_p).parent)
+                dir_to_files.setdefault(d, []).append(fn)
 
         for d, f_nodes in dir_to_files.items():
             if len(f_nodes) <= 1:

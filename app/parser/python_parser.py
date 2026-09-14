@@ -188,19 +188,30 @@ class PythonImportVisitor(ast.NodeVisitor):
         rel_path = symbol.replace(".", "/") + ".py"
         init_path = symbol.replace(".", "/") + "/__init__.py"
 
+        # 1. Check relative to source_path directory first (intra-package resolution)
+        source_dir = str(Path(self.source_path).parent).replace("\\", "/")
+        if source_dir and source_dir != ".":
+            same_dir_rel = f"{source_dir}/{rel_path}"
+            same_dir_init = f"{source_dir}/{init_path}"
+            if same_dir_rel in self.all_repo_files:
+                return same_dir_rel, False
+            if same_dir_init in self.all_repo_files:
+                return same_dir_init, False
+
+        # 2. Check root-relative path
         if rel_path in self.all_repo_files:
             return rel_path, False
         if init_path in self.all_repo_files:
             return init_path, False
 
-        # Check for src/ prefix
+        # 3. Check for src/ prefix
         if f"src/{rel_path}" in self.all_repo_files:
             return f"src/{rel_path}", False
         if f"src/{init_path}" in self.all_repo_files:
             return f"src/{init_path}", False
 
-        # Check for suffix matches in repo files
-        for repo_file in self.all_repo_files:
+        # 4. Deterministic suffix matches in repo files
+        for repo_file in sorted(self.all_repo_files):
             if repo_file.endswith("/" + rel_path) or repo_file == rel_path:
                 return repo_file, False
             if repo_file.endswith("/" + init_path) or repo_file == init_path:

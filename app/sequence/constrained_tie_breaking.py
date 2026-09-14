@@ -16,9 +16,10 @@ DOMAIN_PRIORITY: Dict[str, int] = {
     "core": 3,
     "backend": 4,
     "frontend": 5,
-    "tests": 6,
-    "docs": 7,
-    "uncategorized": 8,
+    "examples": 6,
+    "tests": 7,
+    "docs": 8,
+    "uncategorized": 9,
 }
 
 LLMProviderCallable = Callable[

@@ -14,6 +14,7 @@ class DomainType(str, Enum):
     CONFIG = "config"
     TESTS = "tests"
     CORE = "core"
+    EXAMPLES = "examples"
     UNCATEGORIZED = "uncategorized"
 
 

@@ -38,6 +38,12 @@ class ConventionRulesEngine:
     DATABASE_FOLDERS = {"db", "database", "migrations", "migration", "schema", "schemas", "sql"}
     DATABASE_EXTENSIONS = {".sql"}
 
+    # Examples and tutorial patterns
+    EXAMPLES_FOLDERS = {
+        "examples", "example", "demo", "demos", "sample", "samples",
+        "tutorial", "tutorials", "showcase", "cookbook"
+    }
+
     # Frontend patterns
     FRONTEND_FOLDERS = {
         "frontend", "client", "web", "ui", "components", "views",
@@ -110,14 +116,18 @@ class ConventionRulesEngine:
         if ext in cls.DATABASE_EXTENSIONS:
             return DomainType.DATABASE, ConfidenceLevel.HIGH
 
-        # 5. Frontend rule
+        # 5. Examples / Tutorials / Demos rule
+        if any(folder in cls.EXAMPLES_FOLDERS for folder in parts[:-1]):
+            return DomainType.EXAMPLES, ConfidenceLevel.HIGH
+
+        # 6. Frontend rule
         if any(folder in cls.FRONTEND_FOLDERS for folder in parts[:-1]):
             return DomainType.FRONTEND, ConfidenceLevel.HIGH
 
         if ext in cls.FRONTEND_EXTENSIONS:
             return DomainType.FRONTEND, ConfidenceLevel.HIGH
 
-        # 6. Backend rule
+        # 7. Backend rule
         if any(folder in cls.BACKEND_FOLDERS for folder in parts[:-1]):
             return DomainType.BACKEND, ConfidenceLevel.HIGH
 

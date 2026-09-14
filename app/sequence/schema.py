@@ -80,3 +80,32 @@ class ScoredOrderingResult(BaseModel):
     repo_confidence_summary: RepoConfidenceSummary
     isolated_files: List[str] = Field(default_factory=list)
     cyclic_files: List[str] = Field(default_factory=list)
+
+
+# --- Stage D Schemas ---
+
+class BuildStepNarrative(BaseModel):
+    """Represents an architectural build step narrative corresponding to a tier or milestone."""
+    step_number: int
+    title: str
+    tier_index: int
+    files: List[str] = Field(default_factory=list)
+    domain_groups: Dict[str, List[str]] = Field(default_factory=dict)
+    dominant_domain: str = "core"  # e.g. "tests", "core", "backend", "examples", "mixed"
+    is_cyclic_cluster: bool = False
+    dominant_confidence: str  # "high" | "medium" | "low"
+    confidence_breakdown: Dict[str, int] = Field(default_factory=dict)  # e.g. {"high": 25, "medium": 5, "low": 8}
+    pedagogical_explanation: str
+    key_symbols_or_concepts: List[str] = Field(default_factory=list)
+
+
+
+
+class SequenceNarrationResult(BaseModel):
+    """Output structure of Layer 6 (Stage D) Sequence Narration."""
+    overview: str
+    confidence_disclosure: str
+    steps: List[BuildStepNarrative] = Field(default_factory=list)
+    isolated_files_summary: str
+    prompt_used: Optional[str] = None
+
