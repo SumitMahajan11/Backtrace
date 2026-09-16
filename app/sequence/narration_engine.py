@@ -1,6 +1,8 @@
 """Sequence Narration Engine & Prompt Engineering (Layer 6 Stage D)."""
 
 from collections import Counter, defaultdict
+import json
+import re
 from typing import Callable, Dict, List, Optional, Set, Tuple
 from app.sequence.schema import (
     BuildStepNarrative,
@@ -20,11 +22,11 @@ CRITICAL PEDAGOGICAL RULES & GUARDRAILS:
 2. HONEST CONFIDENCE CALIBRATION:
    - High Confidence files: Present as foundation facts backed by verified Git history and hard dependency topology.
    - Medium Confidence files: Present as domain-structured inferences (e.g. config before backend, backend before tests). Explicitly acknowledge that domain heuristics guide this ordering.
-   - Low Confidence files (Cyclic Clusters): Present as tightly-coupled circular subsystems that must be understood/built as an interconnected unit rather than a strict sequence.
+   - Low Confidence files (Cyclic Clusters): Present as tightly-coupled circular subsystems that must be understood/built as an interconnected unit rather than a strict sequence. NEVER use ordinal language ("first", "then", "next", "step 1", "finally") within a cyclic cluster.
    - Low Confidence files (Unresolved Ties): Acknowledge that these files share identical historical introduction and domain priority.
    - Isolated files: Present separately as orthogonal standalone utilities, configs, or documentation.
 3. TEACHING FOCUS: Explain WHY each layer comes when it does, what foundational capabilities it unlocks for the subsequent layers, and what key concepts a developer should master in each step.
-4. DO NOT HALLUCINATE: Never invent dependencies or files not present in the input.
+4. DO NOT HALLUCINATE: Never invent dependencies or files not present in the input. Ground all claims strictly in the files listed in that milestone.
 """
 
 
@@ -55,7 +57,7 @@ class NarrationEngine:
         if llm_provider:
             try:
                 raw_response = llm_provider(STAGE_D_SYSTEM_PROMPT, user_prompt)
-                # Attempt to parse or format LLM response, or merge into structured result
+                # Parse or wrap LLM response into structured result
                 return self._parse_or_wrap_llm_response(
                     raw_response=raw_response,
                     scored_result=scored_result,
@@ -63,8 +65,10 @@ class NarrationEngine:
                     disclosure=disclosure,
                     prompt_used=user_prompt,
                 )
-            except Exception:
-                # Fall through to deterministic fallback on error
+            except Exception as e:
+                import traceback
+                print(f"\n[LLM PROVIDER EXCEPTION]: {type(e).__name__}: {e}")
+                traceback.print_exc()
                 pass
 
         # 4. Deterministic Fallback Generation
@@ -85,17 +89,29 @@ class NarrationEngine:
         total_files = len(scored_result.files)
         cyclic_count = len(scored_result.cyclic_files)
         isolated_count = len(scored_result.isolated_files)
+        unresolved_tie_count = sum(
+            1 for f in scored_result.files
+            if f.confidence == "low" and f.path not in scored_result.cyclic_files and f.path not in scored_result.isolated_files
+        )
 
         tier_to_files: Dict[int, List[ScoredFileEntry]] = defaultdict(list)
         for f in scored_result.files:
             tier_to_files[f.tier_index].append(f)
 
         if not summary.history_available:
+            low_parts = []
+            if cyclic_count > 0:
+                low_parts.append(f"{cyclic_count} cyclic files")
+            if isolated_count > 0:
+                low_parts.append(f"{isolated_count} isolated files")
+            if unresolved_tie_count > 0:
+                low_parts.append(f"{unresolved_tie_count} unresolved-tie sibling files")
+            low_desc = ", ".join(low_parts) if low_parts else "unresolved structural estimates"
             header = (
                 f"**Confidence Calibration Note (No Git History / Zip Upload):**\n"
                 f"This repository was analyzed without Git commit history. Sequence ordering is derived "
                 f"purely from static AST imports and domain-level heuristics ({summary.medium_pct}% medium confidence). "
-                f"{summary.low_pct}% of files reside in cyclic clusters or isolated sets where ordering is an educated structural estimate."
+                f"{summary.low_pct}% of files ({low_desc}) reside in cyclic clusters, isolated sets, or unresolved sibling ties where ordering is an educated structural estimate."
             )
         else:
             disclosure_lines = [
@@ -121,6 +137,13 @@ class NarrationEngine:
                     f"- **Cyclic Dependency Clusters ({cyclic_count} Files in Cycles):** "
                     f"These files belong to circular dependency groups (e.g. core framework interdependencies). "
                     f"They are grouped into co-dependent milestones rather than false strict linear sequences."
+                )
+
+            if unresolved_tie_count > 0:
+                disclosure_lines.append(
+                    f"- **Unresolved Sibling Ties ({unresolved_tie_count} Files with Arbitrary Ordering):** "
+                    f"These sibling files within the same tier share identical creation dates and domain classifications; "
+                    f"with no distinguishing structural or historical signal to order them, their intra-tier sequence is an educated estimate."
                 )
 
             if isolated_count > 0:
@@ -218,7 +241,37 @@ class NarrationEngine:
             files_in_tier = tier_to_files[tier_idx]
             is_cyclic = any(f.path in scored_result.cyclic_files for f in files_in_tier)
             cyclic_tag = " [CYCLIC CLUSTER]" if is_cyclic else ""
+
+            # Domain breakdown
+            domain_groups: Dict[str, List[str]] = defaultdict(list)
+            for f in files_in_tier:
+                meta = refined_result.node_metadata.get(f.path) if refined_result else None
+                dom = meta.domain if meta and meta.domain else None
+                if not dom or dom == "uncategorized":
+                    p_lower = f.path.lower()
+                    if "test" in p_lower:
+                        dom = "tests"
+                    elif "example" in p_lower or "tutorial" in p_lower or "demo" in p_lower or "sample" in p_lower:
+                        dom = "examples"
+                    elif "docs" in p_lower:
+                        dom = "docs"
+                    elif p_lower.endswith(".toml") or p_lower.endswith(".yaml") or p_lower.endswith(".json"):
+                        dom = "config"
+                    elif "src/" in p_lower or "app/" in p_lower or "pkg/" in p_lower:
+                        dom = "core"
+                    else:
+                        dom = "core"
+                domain_groups[str(dom)].append(f.path)
+
+            domain_counts = {dom: len(paths) for dom, paths in domain_groups.items()}
+            sorted_domains = sorted(domain_counts.items(), key=lambda x: x[1], reverse=True)
+            top_dom, top_count = sorted_domains[0] if sorted_domains else ("core", len(files_in_tier))
+            dom_pct = (top_count / max(len(files_in_tier), 1)) * 100.0
+
             prompt_lines.append(f"\n### Milestone {tier_idx + 1} (Tier {tier_idx}){cyclic_tag}:")
+            prompt_lines.append(f"Dominant Domain: {top_dom} ({top_count}/{len(files_in_tier)} files, {dom_pct:.1f}%)")
+            if dom_pct >= 50.0:
+                prompt_lines.append(f"Architectural Focus: Primarily {top_dom} ({dom_pct:.0f}% of files in tier).")
             for f in files_in_tier:
                 prompt_lines.append(
                     f"  - `{f.path}` | Confidence: {f.confidence.upper()} | Method: {f.tie_break_method or 'none'} | Reason: {f.confidence_reason}"
@@ -229,11 +282,17 @@ class NarrationEngine:
             for f in tier_to_files[-1]:
                 prompt_lines.append(f"  - `{f.path}` | Confidence: LOW | Reason: {f.confidence_reason}")
 
-        prompt_lines.append("\n## OUTPUT INSTRUCTION:")
-        prompt_lines.append("Generate a clear, pedagogical Markdown narration with:")
-        prompt_lines.append("1. High-Level Architectural Overview")
-        prompt_lines.append("2. Step-by-Step Milestone Breakdown (explaining each tier's role and purpose)")
-        prompt_lines.append("3. Standalone Files Summary")
+        prompt_lines.append("\n## OUTPUT INSTRUCTION & FORMAT REQUIREMENTS:")
+        prompt_lines.append("Generate an architectural teaching narrative with the following sections:")
+        prompt_lines.append("1. High-Level Architectural Overview (1-2 paragraphs introducing the system)")
+        prompt_lines.append("2. For each Milestone above, output a formatted section exactly using this structure:")
+        prompt_lines.append("### Milestone <N>: <Pedagogical Title>")
+        prompt_lines.append("**Role:** <2-4 sentence architectural explanation. Name 1-2 representative files from this milestone (e.g. `path/to/file.py`) and explain the concrete capabilities or contracts they introduce. Avoid generic filler.>")
+        prompt_lines.append("")
+        prompt_lines.append("CRITICAL CONSTRAINTS:")
+        prompt_lines.append("- For any Milestone marked [CYCLIC CLUSTER], you MUST NOT use ordinal/sequential ordering language (such as 'first', 'second', 'then', 'next', 'finally', or 'step 1') to order files within the cluster. You must explicitly explain that these files form a co-dependent circular subsystem that must be studied and built together as a cohesive unit.")
+        prompt_lines.append("- Name specific files from each milestone's file list to explain what they do.")
+        prompt_lines.append("- Output valid Markdown.")
 
         return "\n".join(prompt_lines)
 
@@ -315,7 +374,7 @@ class NarrationEngine:
                     dominant_confidence=dominant_conf,
                     confidence_breakdown=conf_breakdown,
                     pedagogical_explanation=explanation,
-                    key_symbols_or_concepts=[f.path for f in files_in_tier[:5]],
+                    key_symbols_or_concepts=[],
                 )
             )
 
@@ -527,8 +586,8 @@ class NarrationEngine:
         disclosure: str,
         prompt_used: str,
     ) -> SequenceNarrationResult:
-        """Wraps LLM raw markdown output into the structured SequenceNarrationResult schema."""
-        # Generate base deterministic steps
+        """Parses LLM markdown output into structured SequenceNarrationResult schema, extracting per-milestone explanations."""
+        # Generate base deterministic steps for fallback ground truth
         fallback = self._generate_deterministic_narration(
             scored_result=scored_result,
             refined_result=refined_result,
@@ -536,10 +595,215 @@ class NarrationEngine:
             prompt_used=prompt_used,
         )
 
+        if not raw_response or not raw_response.strip():
+            return fallback
+
+        # Save raw LLM response to file for audit and scrutiny
+        try:
+            with open("raw_llm_response.txt", "w", encoding="utf-8") as f:
+                f.write(raw_response)
+        except Exception:
+            pass
+
+        # Parse overview and milestones using flexible header regex
+        # Supports: "### Milestone 1: ...", "**Milestone 1: ...**", "Milestone 1: ..."
+        overview = fallback.overview
+        header_pattern = re.compile(
+            r'(?i)(?:^|\n)(?:#{1,4}\s+|\*{1,2})?Milestone\s+(\d+)[:\s\-*]+([^\n]*)'
+        )
+        matches = list(header_pattern.finditer(raw_response))
+
+        parsed_milestones: Dict[int, Tuple[str, str]] = {}
+
+        if matches:
+            first_part = raw_response[:matches[0].start()].strip()
+        else:
+            first_part = raw_response.strip()
+
+        if first_part:
+            cleaned_ov = re.sub(r'^#+\s*', '', first_part).strip()
+            if cleaned_ov:
+                overview = cleaned_ov
+
+            for i, match in enumerate(matches):
+                try:
+                    m_num = int(match.group(1))
+                    raw_title = match.group(2).strip().rstrip('*').strip()
+                    start_pos = match.end()
+                    end_pos = matches[i + 1].start() if (i + 1) < len(matches) else len(raw_response)
+                    block = raw_response[start_pos:end_pos].strip()
+
+                    # Strip any trailing isolated files section
+                    block = re.split(r'(?i)(?:^|\n)(?:#{1,4}\s+|\*{1,2})?Isolated\s+Standalone', block)[0].strip()
+
+                    lines = [line.strip() for line in block.split('\n') if line.strip()]
+                    title = raw_title
+                    explanation = ""
+
+                    if lines:
+                        first_line = lines[0]
+                        if not title:
+                            if first_line.startswith(":") or first_line.startswith("-"):
+                                title = first_line.lstrip(":- ").strip()
+                                lines = lines[1:]
+                            elif "**Title:**" in first_line or "Title:" in first_line:
+                                title = re.sub(r'(?i)\*\*title:\*\*|title:', '', first_line).strip()
+                                lines = lines[1:]
+
+                    remaining_text = "\n".join(lines).strip()
+                    if remaining_text:
+                        explanation = remaining_text
+
+                    if explanation:
+                        parsed_milestones[m_num] = (title, explanation)
+                except Exception:
+                    continue
+
+        # Merge parsed explanations into fallback steps, preserving structural ground truth
+        merged_steps: List[BuildStepNarrative] = []
+        validation_audit = []
+        for step in fallback.steps:
+            m_num = step.step_number
+            if m_num in parsed_milestones:
+                p_title, p_expl = parsed_milestones[m_num]
+                new_title = p_title if p_title else step.title
+
+                # Perform post-generation prose validation to prevent cross-milestone file references
+                validated_expl, stripped_cnt, used_fallback = self._validate_milestone_prose(
+                    explanation=p_expl,
+                    milestone_files=step.files,
+                    fallback_explanation=step.pedagogical_explanation,
+                )
+
+                validation_audit.append({
+                    "milestone": m_num,
+                    "title": new_title,
+                    "raw_explanation": p_expl,
+                    "validated_explanation": validated_expl,
+                    "stripped_sentence_count": stripped_cnt,
+                    "used_fallback": used_fallback,
+                })
+
+                formatted_expl = validated_expl
+                if not formatted_expl.startswith("**Role:**"):
+                    formatted_expl = f"**Role:** {formatted_expl}"
+
+                merged_steps.append(
+                    BuildStepNarrative(
+                        step_number=step.step_number,
+                        title=new_title,
+                        tier_index=step.tier_index,
+                        files=step.files,
+                        domain_groups=step.domain_groups,
+                        dominant_domain=step.dominant_domain,
+                        is_cyclic_cluster=step.is_cyclic_cluster,
+                        dominant_confidence=step.dominant_confidence,
+                        confidence_breakdown=step.confidence_breakdown,
+                        pedagogical_explanation=formatted_expl,
+                        key_symbols_or_concepts=[],
+                    )
+                )
+            else:
+                validation_audit.append({
+                    "milestone": m_num,
+                    "title": step.title,
+                    "raw_explanation": None,
+                    "validated_explanation": step.pedagogical_explanation,
+                    "stripped_sentence_count": 0,
+                    "used_fallback": True,
+                })
+                merged_steps.append(step)
+
+        try:
+            with open("validation_audit.json", "w", encoding="utf-8") as f:
+                json.dump(validation_audit, f, indent=2)
+        except Exception:
+            pass
+
         return SequenceNarrationResult(
-            overview=raw_response[:500] if raw_response else fallback.overview,
+            overview=overview,
             confidence_disclosure=disclosure,
-            steps=fallback.steps,
+            steps=merged_steps,
             isolated_files_summary=fallback.isolated_files_summary,
             prompt_used=prompt_used,
         )
+
+    def _validate_milestone_prose(
+        self,
+        explanation: str,
+        milestone_files: List[str],
+        fallback_explanation: str,
+    ) -> Tuple[str, int, bool]:
+        """
+        Validates LLM-generated milestone prose against ground-truth AST milestone membership.
+        Detects cross-milestone file references, truncated paths, and non-existent files.
+        Strips offending sentences, cleans dangling discourse connectives, and safely
+        reverts to deterministic explanation if the explanation is substantially compromised.
+        Returns (validated_explanation, stripped_sentence_count, used_fallback).
+        """
+        milestone_file_set = set(milestone_files)
+        code_extensions = (
+            ".py", ".ts", ".js", ".jsx", ".tsx", ".rs", ".go", ".java", ".cpp", ".cc", ".c",
+            ".h", ".hpp", ".tla", ".sh", ".bash", ".toml", ".yaml", ".yml", ".json", ".md"
+        )
+
+        # Robust sentence splitting: prevents splitting on e.g., i.e., vs., or mid-identifier dots
+        sentences = [
+            s.strip() for s in re.split(
+                r'(?<!\be\.g)(?<!\bi\.e)(?<!\bvs)(?<=[.!?])\s+(?=[A-Z0-9`"“])',
+                explanation
+            ) if s.strip()
+        ]
+        if not sentences:
+            sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', explanation) if s.strip()]
+
+        cleaned_sentences = []
+        stripped_count = 0
+        stripped_prior = False
+
+        for sentence in sentences:
+            words = re.findall(r'[`\'"]?([a-zA-Z0-9_\-./\\]+\.[a-zA-Z0-9_-]+)[`\'"]?', sentence)
+            has_invalid_file = False
+            for raw_w in words:
+                w = raw_w.replace('\\', '/').strip('`\'"')
+                if any(w.endswith(ext) for ext in code_extensions):
+                    # Exact path match in milestone
+                    if w in milestone_file_set:
+                        continue
+                    # Basename match: matches if any file in milestone ends with /w or is w
+                    if any(mf.endswith('/' + w) or mf == w for mf in milestone_files):
+                        continue
+                    # File mention is not in this milestone: flag as cross-milestone hallucination
+                    has_invalid_file = True
+                    break
+
+            if not has_invalid_file:
+                # If an immediate predecessor sentence was stripped, normalize dangling discourse connectives
+                if stripped_prior:
+                    sanitized = re.sub(
+                        r'^(Furthermore|Additionally|Moreover|Consequently|As a result|In addition),\s*',
+                        '',
+                        sentence,
+                        flags=re.IGNORECASE
+                    )
+                    if sanitized:
+                        sentence = sanitized[0].upper() + sanitized[1:]
+                    stripped_prior = False
+                cleaned_sentences.append(sentence)
+            else:
+                stripped_count += 1
+                stripped_prior = True
+
+        # Fall back if:
+        # 1. No sentences survived
+        # 2. Strict majority of sentences were stripped
+        # 3. Remaining sentences contain fewer than 8 words (inadequate stub)
+        total_words = sum(len(s.split()) for s in cleaned_sentences)
+        if (
+            not cleaned_sentences
+            or len(cleaned_sentences) < (len(sentences) + 1) // 2
+            or total_words < 8
+        ):
+            return fallback_explanation, stripped_count, True
+
+        return " ".join(cleaned_sentences), stripped_count, False

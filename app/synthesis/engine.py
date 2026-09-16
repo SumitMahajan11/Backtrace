@@ -49,23 +49,35 @@ class SynthesisEngine:
         # Detect primary language & entry points
         lang_counts: Dict[str, int] = {}
         entry_points: List[str] = []
-        exports_by_file: Dict[str, List[str]] = {}
+        symbols_by_file: Dict[str, List[str]] = {}
 
         for node in parsed_files:
             lang_counts[node.language] = lang_counts.get(node.language, 0) + 1
             if node.entry_point:
                 entry_points.append(node.path)
+            
+            # Extract genuine code symbols (classes, functions, exports), strictly excluding filenames
+            syms: List[str] = []
+            if node.classes:
+                syms.extend(node.classes)
+            if node.functions:
+                syms.extend(node.functions)
             if node.exports:
-                exports_by_file[node.path] = node.exports
+                syms.extend(node.exports)
+            valid_syms = [s for s in syms if s and "/" not in s and "\\" not in s and not s.endswith(".py")]
+            if valid_syms:
+                symbols_by_file[node.path] = sorted(list(set(valid_syms)))
 
         primary_lang = max(lang_counts.items(), key=lambda x: x[1])[0] if lang_counts else "unknown"
 
         # Tally cyclic and isolated file totals
         cyclic_count = sum(len(step.files) for step in narration_result.steps if step.is_cyclic_cluster)
-        isolated_count = sum(len(step.files) for step in narration_result.steps if step.tier_index == -1)
+        total_files_count = len(parsed_files) if parsed_files else sum(domain_counts.values())
+        milestone_files_count = sum(len(step.files) for step in narration_result.steps)
+        isolated_count = max(0, total_files_count - milestone_files_count)
 
         arch_overview = ArchitectureOverview(
-            total_files=len(parsed_files) if parsed_files else sum(domain_counts.values()),
+            total_files=total_files_count,
             total_domains=len(domain_counts),
             domain_file_counts=domain_counts,
             primary_language=primary_lang,
@@ -78,24 +90,29 @@ class SynthesisEngine:
         synthesized_milestones: List[SynthesizedMilestone] = []
 
         for step in narration_result.steps:
-            # Collect exports across files in this milestone
-            milestone_exports: List[str] = []
+            # Collect genuine exports/symbols across files strictly in this milestone
+            milestone_symbols: List[str] = []
             for f in step.files:
-                if f in exports_by_file:
-                    milestone_exports.extend(exports_by_file[f])
-            milestone_exports = sorted(list(set(milestone_exports)))[:10]
+                if f in symbols_by_file:
+                    milestone_symbols.extend(symbols_by_file[f])
+            milestone_symbols = sorted(list(set(milestone_symbols)))[:10]
 
             # Query RAG if engine provided to extract contextual citations
+            # HARD FILTER: Citations must come ONLY from files in step.files
             deep_dive_citations: List[str] = []
             if rag_engine and step.files:
-                sample_file = step.files[0]
-                query_str = f"What is the primary role and exported interface of {sample_file}?"
-                try:
-                    rag_res = rag_engine.query(query_str, target_path=sample_file)
-                    for c in rag_res.citations:
-                        deep_dive_citations.append(c.line_range_str)
-                except Exception:
-                    pass
+                milestone_file_set = set(step.files)
+                for sample_file in step.files[:3]:
+                    query_str = f"What is the primary role and exported interface of {sample_file}?"
+                    try:
+                        rag_res = rag_engine.query(query_str, target_path=sample_file)
+                        for c in rag_res.citations:
+                            if c.file_path in milestone_file_set:
+                                if c.line_range_str not in deep_dive_citations:
+                                    deep_dive_citations.append(c.line_range_str)
+                    except Exception:
+                        pass
+                deep_dive_citations = deep_dive_citations[:8]
 
             # Define high-level architectural role based on dominant domain & position
             arch_role = self._determine_architectural_role(step)
@@ -110,10 +127,11 @@ class SynthesisEngine:
                 domain_breakdown=domain_breakdown_counts,
                 files=step.files,
                 confidence=step.dominant_confidence,
+                confidence_breakdown=step.confidence_breakdown,
                 is_cyclic=step.is_cyclic_cluster,
                 is_isolated=(step.tier_index == -1),
                 architectural_role=arch_role,
-                key_symbols_and_exports=milestone_exports or step.key_symbols_or_concepts,
+                key_symbols_and_exports=milestone_symbols,
                 deep_dive_citations=deep_dive_citations,
                 prerequisite_tiers=[],
                 dependent_tiers=[],

@@ -90,3 +90,29 @@ def test_pipeline_orchestrator_on_flask_repo_fixture():
     assert res.report.architecture_overview.primary_language == "python"
     assert res.report.total_milestones >= 4
     assert "src/flask/config.py" in res.report.milestones[0].files
+
+
+def test_pipeline_orchestrator_heartbeat_wiring():
+    """Verifies heartbeat_callback is called at every stage boundary during pipeline execution."""
+    files = {
+        "src/a.py": "def a(): pass\n",
+        "src/b.py": "from .a import a\n",
+    }
+    heartbeat_calls = []
+
+    def on_heartbeat():
+        heartbeat_calls.append(len(heartbeat_calls) + 1)
+
+    orchestrator = PipelineOrchestrator()
+    res = orchestrator.run_pipeline(
+        repo_name="heartbeat-test",
+        file_paths=list(files.keys()),
+        file_contents=files,
+        heartbeat_callback=on_heartbeat,
+        enable_rag=False,
+    )
+
+    assert res.success is True
+    # At least 6 stage transitions (ingestion, parsing, understanding, reasoning, synthesis, complete)
+    assert len(heartbeat_calls) >= 6
+

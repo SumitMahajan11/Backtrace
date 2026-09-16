@@ -6,3 +6,6 @@ pytest>=8.0.0
 pytest-asyncio>=0.23.0
 sqlalchemy>=2.0.0
 javalang>=0.13.0
+pyjwt>=2.8.0
+stripe>=8.0.0
+

@@ -89,3 +89,22 @@ This is a chronological record of every major decision made during planning, inc
 - Analytics: PostHog free tier from day one
 - Backup: daily automated database backup to cloud storage
 
+### Stage D: Live LLM Narration & Prose Validation Architecture
+**Decided:** Adopt a strict division of labor between the prompt and the validator for pedagogical sequence narration:
+1. The prompt encourages concrete file-level citations and pedagogical roles without heavy negative constraints (which cause smaller models like 3B to retreat into safely vacuous boilerplate).
+2. The post-generation prose validator (`_validate_milestone_prose`) enforces structural graph-truth by parsing file mentions against AST milestone membership, excising hallucinated sentences, healing orphaned discourse connectives (`Furthermore,`, `Additionally,`), and falling back to the deterministic domain-aware template if $>50\%$ of the block or substantive length (<8 words) is compromised.
+3. **Factual Grounding vs. Representativeness Boundary:** The validator guarantees factual AST grounding (no non-existent files, no cross-milestone file references, valid syntax), but *cannot mechanically guarantee architectural representativeness*. In large multi-domain tiers (e.g. 35 files where 31 are tests and 4 are examples), smaller models exhibit anchoring bias, selecting the first few files they encounter and rationalizing them rather than reflecting the tier's true center of gravity.
+4. **Production Mode Decision:** Deterministic narration remains the production default (`llm_provider=None`) across the pipeline. It guarantees exact domain arithmetic, zero token latency/cost, and immunity to salience skew. Live LLM mode is supported as an opt-in enhancement gated behind the validator, with hybrid single-sentence domain anchor injection identified as the roadmap path for v2.
+
+### Layer 11: v1 In-Process Execution & Dead-Worker Lock Recovery
+**Decided:**
+1. **v1 Execution Model:** Keep `PipelineOrchestrator` as an in-process synchronous engine with progress callback hooks (`progress_callback`) and structured stage events. Full distributed queuing (Celery/RQ) with multi-node worker pools is formally deferred to v2. Architecture documentation was updated to remove misleading claims of an active Celery/RQ infrastructure.
+2. **Dead-Worker Detection & Lock TTL:** Added a 15-minute lock timeout (`DEFAULT_PROCESSING_LOCK_TIMEOUT_SECONDS = 900`) and a worker heartbeat helper (`heartbeat_processing_lock`) in `StorageRepository.acquire_processing_lock`. If a worker dies, is OOM-killed, or crashes mid-flight, subsequent requests no longer wait 30 days for repository expiration; the expired lock is automatically transitioned to `status='failed'` with full diagnostic metadata, and a new processing lock is acquired immediately.
+
+### Production Readiness & Secrets Hardening (Post-Stage 6 Deployment Model)
+**Decided:**
+1. **Zero-Fallback Secret Validation by Construction:** Configured centralized typed settings (`app/core/config.py`) via `pydantic-settings`. In `ENVIRONMENT=production`, all required production secrets (`GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `JWT_SECRET_KEY` [$\ge 32$ chars], `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ID_PRO`) have zero default fallback values in code. Missing, empty, or development placeholder strings trigger an immediate `ValidationError` at application boot, failing fast before requests can be accepted.
+2. **Deployment Scoping & Single-Instance Architecture:** Backtrace v1 deploys as a single-instance container process with persistent volume storage (`/data/backtrace.db`). Distributed state infrastructure (Redis task queues, Redis rate-limiting clusters) and external PostgreSQL migration toolchains (Alembic) are intentionally scoped out of v1 and deferred to post-launch multi-instance clustering.
+3. **Container Sandboxing & Runtime Verification Boundary:** The production `Dockerfile` enforces an unprivileged execution user (`USER appuser`, UID/GID 10001) with `no-new-privileges:true`. **Caveat / Pre-Deploy Gate:** Automated `pytest` suites execute within the host runner environment and verify application config constraints, JWT security, and cryptographic signature rejection; the runtime guarantee that the container process actually executes as UID 10001 is a **mandatory pre-deploy manual verification gate** (`docker build && docker run ... whoami`).
+
+

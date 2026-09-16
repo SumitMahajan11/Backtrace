@@ -36,5 +36,9 @@ class PipelineResult(BaseModel):
     graph_output: Dict[str, Any] = Field(default_factory=dict)
     quiz_output: Dict[str, Any] = Field(default_factory=dict)
     events: List[PipelineProgressEvent] = Field(default_factory=list)
+    parse_errors: List[Dict[str, Any]] = Field(default_factory=list)
+    uncategorized_files: List[str] = Field(default_factory=list)
+    run_id: str = ""
     error: Optional[str] = None
     execution_time_seconds: float = 0.0
+

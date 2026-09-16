@@ -16,6 +16,7 @@ class SynthesizedMilestone(BaseModel):
     domain_breakdown: Dict[str, int] = Field(default_factory=dict)
     files: List[str] = Field(default_factory=list)
     confidence: str  # "high" | "medium" | "low"
+    confidence_breakdown: Dict[str, int] = Field(default_factory=dict)
     is_cyclic: bool = False
     is_isolated: bool = False
     

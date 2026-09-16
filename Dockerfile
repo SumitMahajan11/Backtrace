@@ -1,0 +1,57 @@
+# Multi-stage hardened production Dockerfile for Backtrace Analysis Engine
+# Stage 1: Dependency builder
+FROM python:3.13-slim AS builder
+
+WORKDIR /build
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    curl \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir --user -r requirements.txt
+
+# Stage 2: Minimal unprivileged runtime image
+FROM python:3.13-slim AS runner
+
+WORKDIR /app
+
+# Install git for repo analysis history extraction and curl for health checks
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root unprivileged service user (UID 10001)
+RUN groupadd -g 10001 appgroup && \
+    useradd -u 10001 -g appgroup -s /sbin/nologin -d /app -M appuser
+
+# Copy Python packages from builder
+COPY --from=builder /root/.local /home/appuser/.local
+ENV PATH="/home/appuser/.local/bin:${PATH}"
+
+# Prepare persistent data and logs directory
+RUN mkdir -p /data /app/logs && \
+    chown -R appuser:appgroup /data /app
+
+# Copy application source code
+COPY --chown=appuser:appgroup app /app/app
+COPY --chown=appuser:appgroup docs /app/docs
+
+# Switch to unprivileged execution user
+USER appuser
+
+# Healthcheck definition
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+EXPOSE 8000
+
+ENV ENVIRONMENT=production \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    DATABASE_URL=sqlite:////data/backtrace.db
+
+CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log"]

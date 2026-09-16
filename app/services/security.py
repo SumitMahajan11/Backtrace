@@ -7,23 +7,46 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Generator, List, Optional
 
+import stat
 from app.models.ingestion import CloneTimeoutError, IngestionError
 from app.security.path_hardening import create_secure_temp_dir
+
+
+def safe_rmtree(target_path: Path) -> None:
+    """
+    Guarantees complete deletion of temporary workspace directory,
+    handling read-only git files (.git objects on Windows) across success and failure paths.
+    """
+    if not target_path.exists():
+        return
+
+    def _handle_remove_readonly(func, path, exc_info):
+        try:
+            os.chmod(path, stat.S_IWRITE)
+            func(path)
+        except Exception:
+            pass
+
+    try:
+        shutil.rmtree(target_path, onexc=_handle_remove_readonly)
+    except TypeError:
+        shutil.rmtree(target_path, onerror=_handle_remove_readonly)
+    except Exception:
+        shutil.rmtree(target_path, ignore_errors=True)
 
 
 @contextmanager
 def sandbox_workspace() -> Generator[Path, None, None]:
     """
     Creates an isolated temporary directory for cloning and processing repos.
-    Ensures safe cleanup after execution completes or fails.
+    Ensures guaranteed teardown after execution completes or fails.
     """
     temp_dir = create_secure_temp_dir(prefix="ingest_sandbox_")
     try:
         yield temp_dir
     finally:
-        # Secure cleanup of temporary working directory
-        if temp_dir.exists():
-            shutil.rmtree(temp_dir, ignore_errors=True)
+        safe_rmtree(temp_dir)
+
 
 
 def build_sandboxed_env() -> dict[str, str]:

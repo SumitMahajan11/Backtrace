@@ -105,11 +105,12 @@ Added specifically because the system processes **untrusted user-submitted code*
 
 ---
 
-## Layer 11 — Job Queue / Progress Tracking
-Because full pipeline processing (especially with LLM calls in Layers 4/6/7 and embeddings in Layer 5) takes far longer than a normal HTTP request timeout:
-- Background job queue (Celery or RQ) orchestrates the pipeline running layer-by-layer
-- Frontend polls a status endpoint to show live progress
-- In-app completion notification for v1 (no email service yet — deferred as a later addition)
+## Layer 11 — Orchestration & Progress Tracking
+Full pipeline processing (especially with LLM calls in Layers 4/6/7 and embeddings in Layer 5) executes through `PipelineOrchestrator`:
+- **v1 Execution Model**: In-process synchronous orchestrator with live progress callback hooks (`progress_callback`) and structured log events. Web wrappers (e.g. FastAPI `BackgroundTasks` or thread pool) invoke the orchestrator without blocking ASGI event loops.
+- **Progress Tracking**: Real-time event emissions per stage (`PipelineProgressEvent`) enabling status streaming and step-by-step UI observation.
+- **Deadlock Recovery & Resiliency**: Storage-layer processing locks include a 15-minute TTL (`DEFAULT_PROCESSING_LOCK_TIMEOUT_SECONDS = 900`) and dead-worker detection, preventing aborted runs from wedging repository commits for 30 days.
+- **Deferred to v2**: Multi-node distributed queue infrastructure (Celery / Redis Queue) with persistent distributed job states and external worker pools.
 
 **Depends on:** coordinates all layers
 **Feeds:** Layer 8 (progress UI), end user

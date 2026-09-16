@@ -50,9 +50,21 @@ logs/
 .DS_Store
 Thumbs.db
 
-# Temporary & Scratch / Debug scripts
+# Databases & local sqlite storage
+*.db
+*.sqlite
+*.sqlite3
+
+# Embedded fixture test repositories
+tests/fixtures/real_repos/
+tests/fixtures/real_repos_locked/
+
+# Temporary & Scratch / Debug scripts & local reports
 scratch/
 debug_*.py
 tmp/
 temp/
 *.tmp
+raw_llm_response.txt
+live_llm_report.md
+validation_audit.json

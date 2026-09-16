@@ -41,6 +41,7 @@ class GraphExportFormatter:
                     "domain": m.dominant_domain,
                     "color": DOMAIN_HEX_COLORS.get(m.dominant_domain.lower(), "#9CA3AF"),
                     "confidence": m.confidence,
+                    "confidence_breakdown": m.confidence_breakdown,
                     "is_cyclic": m.is_cyclic,
                     "is_isolated": m.is_isolated,
                     "exports": m.key_symbols_and_exports,

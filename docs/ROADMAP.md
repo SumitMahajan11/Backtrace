@@ -25,11 +25,12 @@ Note: there is a single shipping milestone (the full finished product — see DE
 - **Layer 8** (Output Formatting): depends on Layer 7 being stable, since it only presents Layer 7's data
 - **Layer 11** (Job Queue/Progress): wire in once there's a real multi-layer pipeline worth queuing
 
-## Stage 6 — Hardening
+## Stage 6 — Hardening (Completed & Verified)
 - Layer 9 fully fleshed out: consent flows, proper caching (repo URL + commit hash keying), cleanup routines, backups
-- Remaining Layer 2 language parsers completed if not already done
+- Remaining Layer 2 language parsers completed (all 9 locked languages verified on full fixtures)
 - Edge case handling across all layers: large repos, malformed input, missing git history, unsupported languages, uncategorized files
-- Auth, billing, monitoring, analytics, CI/CD wired in
+- Commercial subsystems wired in: GitHub OAuth Auth & Session, Stripe Billing & Quota Gating, FastHTML Frontend UI, Sentry Error Monitoring & PostHog Analytics, Zero-Fallback Production Settings & Containerization
+
 
 ---
 

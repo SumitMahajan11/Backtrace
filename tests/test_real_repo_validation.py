@@ -196,3 +196,107 @@ fn main() {}
 
     rust_res = results["rust"]
     assert "serde::Serialize" in rust_res.external_dependencies or "serde" in rust_res.external_dependencies
+
+
+def test_all_nine_locked_languages_real_repo_validation():
+    """
+    Stage 6 Layer 2 Section 6.2 Acceptance Criteria:
+    - Confirm all 9 locked-language parsers against GENUINE repository source files:
+      1. Python: pallets/flask (src/flask/app.py, src/flask/blueprints.py)
+      2. JavaScript: expressjs/express (lib/express.js)
+      3. TypeScript: reduxjs/redux (src/redux_index.ts)
+      4. Java: spring-projects/spring-petclinic (OwnerController.java)
+      5. Rust: tokio-rs/tokio (listener.rs)
+      6. Go: gin-gonic/gin (gin.go)
+      7. C++: fmtlib/fmt (include/fmt/format.h, include/fmt/core.h)
+      8. Shell: nvm-sh/nvm (scripts/nvm_install.sh)
+      9. TLA+: tlaplus/Examples (DieHard.tla, DieHard.cfg)
+
+    Loads actual cloned/extracted repository files from tests/fixtures/real_repos_locked/
+    rather than hand-written string literals, ensuring complex real-world AST features
+    (e.g., C++ template macros, Go method receivers, TypeScript exported interfaces)
+    parse with 0 errors and valid symbol extraction.
+    """
+    fixture_dir = Path(__file__).resolve().parent / "fixtures" / "real_repos_locked"
+    assert fixture_dir.exists(), f"Fixture directory not found: {fixture_dir}"
+
+    real_repo_files = {
+        str(p.relative_to(fixture_dir).as_posix()): p.read_text(encoding="utf-8", errors="replace")
+        for p in fixture_dir.rglob("*")
+        if p.is_file()
+    }
+
+    assert len(real_repo_files) >= 10, f"Expected at least 10 real repo files, found {len(real_repo_files)}"
+
+    registry = ParserRegistry()
+    results = registry.parse_repository_files(list(real_repo_files.keys()), real_repo_files)
+
+    # 1. Validate that every language parsed with ZERO errors
+    for lang in ["python", "javascript", "java", "go", "rust", "shell", "cpp", "tla+"]:
+        assert lang in results, f"Language {lang} missing from results"
+        res = results[lang]
+        assert len(res.parse_errors) == 0, f"Parse error in {lang}: {res.parse_errors}"
+        assert len(res.files) > 0, f"No files parsed for {lang}"
+
+    # 2. Python verification (pallets/flask real code)
+    py_app = next(f for f in results["python"].files if f.path == "src/flask/app.py")
+    assert "Flask" in py_app.classes
+    assert len(py_app.imports) > 50
+
+    py_bp = next(f for f in results["python"].files if f.path == "src/flask/blueprints.py")
+    assert "Blueprint" in py_bp.classes
+
+    # 3. JavaScript verification (expressjs/express real code)
+    js_app = next(f for f in results["javascript"].files if f.path == "lib/express.js")
+    assert "createApplication" in js_app.functions
+    assert len(js_app.imports) > 0
+
+    # 4. TypeScript verification (reduxjs/redux real code)
+    ts_app = next(f for f in results["javascript"].files if f.path == "src/redux_index.ts")
+    assert len(ts_app.exports) > 0
+    assert any("Observable" in exp or "Dispatch" in exp for exp in ts_app.exports)
+
+    # 5. Java verification (spring-projects/spring-petclinic real code)
+    java_ctrl = next(f for f in results["java"].files if "OwnerController.java" in f.path)
+    assert "OwnerController" in java_ctrl.classes
+    assert len(java_ctrl.imports) > 10
+
+    # 6. Rust verification (tokio-rs/tokio real code)
+    rust_listener = next(f for f in results["rust"].files if "listener.rs" in f.path)
+    assert len(rust_listener.imports) > 10
+
+    rust_mutex = next(f for f in results["rust"].files if "mutex.rs" in f.path)
+    assert "Mutex" in rust_mutex.classes
+    assert "MutexGuard" in rust_mutex.classes
+    assert any("crate::sync" in e.target or "std::cell" in e.target for e in rust_mutex.imports)
+
+    # 7. Go verification (gin-gonic/gin real code)
+    go_engine = next(f for f in results["go"].files if f.path == "gin.go")
+    assert any("Handler" in c for c in go_engine.classes)
+    assert any("New" in fn or "Default" in fn for fn in go_engine.functions)
+
+    # 8. C++ verification (fmtlib/fmt real code)
+    cpp_fmt = next(f for f in results["cpp"].files if "format.h" in f.path)
+    assert "format_error" in cpp_fmt.classes
+    assert "basic_memory_buffer" in cpp_fmt.classes
+    assert "formatter" in cpp_fmt.classes
+    assert "format" in cpp_fmt.functions or "format_as" in cpp_fmt.functions
+
+    # Assert internal include resolution: core.h must be detected AND resolved=True
+    core_edge = next((e for e in cpp_fmt.imports if "core.h" in e.target), None)
+    assert core_edge is not None, "core.h include missing from format.h"
+    assert core_edge.resolved is True, f"core.h expected resolved=True, got {core_edge.resolved}"
+
+    cpp_core = next(f for f in results["cpp"].files if "core.h" in f.path)
+    assert "basic_format_context" in cpp_core.classes or "arg_pack" in cpp_core.classes
+
+    # 9. Shell verification (nvm-sh/nvm real code)
+    sh_build = next(f for f in results["shell"].files if "nvm_install.sh" in f.path)
+    assert sh_build.path == "scripts/nvm_install.sh"
+
+    # 10. TLA+ verification (tlaplus/Examples DieHard real spec)
+    tla_diehard = next(f for f in results["tla+"].files if "DieHard.tla" in f.path)
+    assert "module:DieHard" in tla_diehard.exports
+    assert any("DieHard.cfg" in exp for exp in tla_diehard.exports)
+
+

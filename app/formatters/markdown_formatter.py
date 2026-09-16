@@ -46,14 +46,20 @@ class MarkdownReportFormatter:
         # 4. Milestone-by-Milestone Walkthrough
         lines.append("## 3. Step-by-Step Architectural Milestones")
         for m in report.milestones:
-            badge = f"**[{m.confidence.upper()} CONFIDENCE]**"
+            # Render dominant confidence alongside explicit breakdown dictionary to prevent re-flattening
+            breakdown_str = ""
+            if m.confidence_breakdown:
+                parts = [f"{k.capitalize()}: {v}" for k, v in sorted(m.confidence_breakdown.items()) if v > 0]
+                if parts:
+                    breakdown_str = f" ({', '.join(parts)})"
+            badge = f"**[{m.confidence.upper()} CONFIDENCE{breakdown_str}]**"
             if m.is_cyclic:
                 badge += " *[CYCLIC CORE]*"
             elif m.is_isolated:
                 badge += " *[ISOLATED COMPONENT]*"
 
             lines.append(f"### Milestone {m.tier}: {m.title}")
-            lines.append(f"{badge} — *{m.architectural_role}*\n")
+            lines.append(f"{badge} -- *{m.architectural_role}*\n")
             lines.append(f"**Overview:** {m.summary}\n")
 
             # Domain Breakdown if multi-domain

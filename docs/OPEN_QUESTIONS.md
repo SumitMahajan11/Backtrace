@@ -20,3 +20,20 @@ These were intentionally deferred during planning — not forgotten, just not ur
 
 ### Meta / process
 - **This documentation set itself**: after any future planning session or major decision change, update `DECISIONS_LOG.md` (add new entries, don't delete old ones) and adjust `ARCHITECTURE.md`/`ROADMAP.md` if the change affects layer design. Ask Claude to regenerate/update these files rather than starting a new spec from scratch, so decision history isn't lost.
+
+## Deferred to Pre-Launch / Commercial Milestone (Stage 6 scoping decision) — RESOLVED & IMPLEMENTED
+
+The pre-launch milestones identified during Stage 6 scoping are now fully implemented and verified:
+
+- **[RESOLVED] User authentication**: Implemented GitHub OAuth login, stateless JWT access tokens (15-min expiry, algorithm allowlist enforcement), SHA-256 hashed refresh token rotation, and open-redirect defenses (`app/security/auth.py`, `app/api/auth.py`, `tests/test_auth_session.py`).
+- **[RESOLVED] Billing / payment integration**: Integrated Stripe hosted Checkout and Customer Portal (zero raw card touch), monthly free tier quota enforcement (configurable), webhook HMAC cryptographic signature validation, and idempotent event deduplication (`app/services/billing_service.py`, `app/api/billing.py`, `tests/test_billing_and_quota.py`).
+- **[RESOLVED] Frontend UI**: Built unified FastHTML UI served directly from FastAPI process, covering Login, Dashboard, live SSE analysis progress tracking, and complete Markdown/Graph/Quiz Report rendering (`app/api/frontend.py`, `tests/test_frontend_ui.py`).
+- **[RESOLVED] Monitoring & Analytics**: Wired Sentry error tracking with recursive secret and header scrubbing (`app/monitoring/sentry.py`) and PostHog product analytics tracking 6 mandatory funnel events with strict PII exclusion (`app/monitoring/posthog.py`, `tests/test_monitoring_analytics.py`).
+- **[RESOLVED] Production Configuration & Secrets Hardening**: Established `pydantic-settings` centralized configuration with zero-fallback fail-fast validation in production mode, multi-stage unprivileged Dockerfile (`USER appuser`), and persistent volume deployment configuration (`app/core/config.py`, `Dockerfile`, `docker-compose.yml`, `tests/test_production_readiness.py`).
+
+### Remaining Launch-Day Gates (Pre-Flight Operations)
+1. **Live Credentials Provisioning**: Populate `.env.production` with live GitHub OAuth Client ID/Secret, Stripe live secret key & webhook signing secret, and production Sentry DSN / PostHog API key.
+2. **Container UID Manual Verification**: Execute `docker build -t backtrace:prod . && docker run --rm backtrace:prod whoami` to verify that execution runs under `appuser` (UID 10001) rather than `root`.
+3. **Legal / ToS Wording**: Finalize public Terms of Service and Privacy Policy text matching the backend consent model in `StorageRepository`.
+
+
