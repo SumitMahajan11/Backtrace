@@ -39,8 +39,8 @@ services:
       - .env.production
     environment:
       - PISTON_URL=http://piston:2000
-      - REDIS_URL=redis://redis:6379/0
-      - DATABASE_URL=postgresql+psycopg2://postgres:postgres@postgres:5432/backtrace
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - DATABASE_URL=postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-backtrace}
     volumes:
       - backtrace_data:/data
     depends_on:
@@ -78,13 +78,13 @@ services:
     expose:
       - "5432"
     environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=backtrace
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB:-backtrace}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d backtrace"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-backtrace}"]
       interval: 5s
       timeout: 3s
       retries: 5

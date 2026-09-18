@@ -22,6 +22,9 @@ for env_file in [".env", ".env.production"]:
         elif stripped.startswith("JWT_SECRET="):
             new_lines.append(f"JWT_SECRET={generate_secure_secret(32)}\n")
             rotated_keys.append("JWT_SECRET")
+        elif stripped.startswith("JWT_SECRET_KEY="):
+            new_lines.append(f"JWT_SECRET_KEY={generate_secure_secret(32)}\n")
+            rotated_keys.append("JWT_SECRET_KEY")
         elif stripped.startswith("SECRET_KEY="):
             new_lines.append(f"SECRET_KEY={generate_secure_secret(32)}\n")
             rotated_keys.append("SECRET_KEY")
