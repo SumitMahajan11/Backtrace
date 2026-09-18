@@ -14,8 +14,15 @@ for cmd_name, cmd in [
             ports = sdef.get("ports", [])
             expose = sdef.get("expose", [])
             env = sdef.get("environment", {})
+            cmd_str = str(sdef.get("command", ""))
+            health_str = str(sdef.get("healthcheck", ""))
             has_db_pass = "POSTGRES_PASSWORD" in str(env) or "DATABASE_URL" in str(env)
-            has_redis_pass = "REDIS_PASSWORD" in str(env) or "REDIS_URL" in str(env)
+            has_redis_pass = (
+                "REDIS_PASSWORD" in str(env)
+                or "REDIS_URL" in str(env)
+                or "--requirepass" in cmd_str
+                or "-a" in health_str
+            )
             print(f"  Service '{sname}':")
             print(f"    - Published Host Ports: {ports if ports else 'NONE (Zero public host exposure)'}")
             print(f"    - Internal Expose: {expose if expose else 'NONE'}")
