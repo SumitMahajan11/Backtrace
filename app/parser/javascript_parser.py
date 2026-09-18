@@ -38,7 +38,11 @@ class JavaScriptLanguageParser(SubprocessLanguageParser):
 
         path_obj = Path(file_path)
         filename = path_obj.name.lower()
-        is_entry = filename in {"index.js", "index.ts", "app.js", "app.ts", "server.js", "server.ts", "main.js", "main.ts"}
+        is_entry = filename in {
+            "index.js", "index.ts", "index.jsx", "index.tsx",
+            "server.js", "server.ts", "server.jsx", "server.tsx",
+            "main.js", "main.ts", "main.jsx", "main.tsx",
+        }
         entry_type = "main_script" if is_entry else None
 
         category_map = {
@@ -101,6 +105,7 @@ class JavaScriptLanguageParser(SubprocessLanguageParser):
             f"{normalized_path}/index.ts",
             f"{normalized_path}/index.tsx",
             f"{normalized_path}/index.js",
+            f"{normalized_path}/index.jsx",
         ]
 
         for cand in candidates:

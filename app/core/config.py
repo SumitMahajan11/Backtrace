@@ -49,9 +49,27 @@ class Settings(BaseSettings):
     POSTHOG_API_KEY: Optional[str] = None
     POSTHOG_HOST: str = "https://app.posthog.com"
 
+    # Distributed Rate Limiting & Redis (Prompt 27)
+    REDIS_URL: Optional[str] = "redis://localhost:6379/0"
+    RATE_LIMIT_CIRCUIT_BREAKER_THRESHOLD: int = 5
+    RATE_LIMIT_REDIS_TIMEOUT: float = 0.5
+
     # CORS & Security
     ALLOWED_HOSTS: list[str] = ["*"]
     CORS_ORIGINS: list[str] = ["http://localhost:8000", "http://127.0.0.1:8000"]
+
+    # Points & Economy Engine (Prompt 23 & 24)
+    POINTS_FIRST_SOLVE_ONLY: bool = True
+    POINTS_BASE_VALUE: int = 50  # base points per milestone, adjustable
+    POINTS_HINT_1_MULTIPLIER: float = 0.50
+    POINTS_HINT_2_MULTIPLIER: float = 0.25
+    POINTS_SOLUTION_REVEALED_MULTIPLIER: float = 0.0
+    POINTS_MIN_REPO_FILES: int = 5
+    POINTS_MIN_REPO_LOC: int = 150
+    POINTS_EXPIRY_DAYS: int = 180
+    POINTS_QUOTA_REWARD_COST: int = 100  # Cost in points for extra monthly quota
+    POINTS_QUOTA_REWARD_AMOUNT: int = 2  # Number of repos added per quota redemption
+    ENABLE_PUBLIC_LEADERBOARD: bool = True  # Feature flag for public community ranking
 
     model_config = SettingsConfigDict(
         env_file=".env",

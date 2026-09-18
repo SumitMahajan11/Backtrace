@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+
+<html data-theme="dark" lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Sign In // Backtrace Repository Archaeology</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&amp;display=swap" rel="stylesheet"/>
+<style>
+    /* ==========================================================================
+       Backtrace Archival Dossier — Token Foundation (Embedded for Standalone Preview)
+       ========================================================================== */
+    :root, :root[data-theme="dark"] {
+      --ink: #0d0f12;
+      --panel: #13171f;
+      --panel-raised: #1a202c;
+      --panel-overlay: #232a38;
+      
+      --hairline: #262f3e;
+      --hairline-soft: #1c2330;
+      
+      --text-primary: #f0f4f8;
+      --text-secondary: #94a3b8;
+      --text-tertiary: #627288;
+      
+      --brass: #d4a359;
+      --brass-soft: rgba(212, 163, 89, 0.12);
+      --brass-border: rgba(212, 163, 89, 0.35);
+
+      --teal: #2dd4bf;
+      --teal-soft: rgba(45, 212, 191, 0.12);
+      --teal-border: rgba(45, 212, 191, 0.35);
+
+      --amber: #f59e0b;
+      --amber-soft: rgba(245, 158, 11, 0.12);
+
+      --crimson: #f43f5e;
+      
+      --focus-ring: rgba(212, 163, 89, 0.5);
+      color-scheme: dark;
+    }
+
+    :root[data-theme="light"] {
+      --ink: #f7f9fc;
+      --panel: #ffffff;
+      --panel-raised: #eef2f7;
+      --panel-overlay: #e2e8f0;
+      
+      --hairline: #cbd5e1;
+      --hairline-soft: #e2e8f0;
+      
+      --text-primary: #0f172a;
+      --text-secondary: #475569;
+      --text-tertiary: #64748b;
+      
+      --brass: #9a6c1e;
+      --brass-soft: rgba(154, 108, 30, 0.12);
+      --brass-border: rgba(154, 108, 30, 0.3);
+
+      --teal: #0d9488;
+      --teal-soft: rgba(13, 148, 136, 0.1);
+      --teal-border: rgba(13, 148, 136, 0.3);
+
+      --focus-ring: rgba(154, 108, 30, 0.4);
+      color-scheme: light;
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--ink);
+      color: var(--text-primary);
+      font-family: 'IBM Plex Sans', -apple-system, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      transition: background-color 150ms ease, color 150ms ease;
+    }
+
+    /* Shared Navigation Shell */
+    .nav-shell {
+      height: 56px;
+      padding: 0 1.5rem;
+      background: var(--panel);
+      border-bottom: 1px solid var(--hairline);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .nav-logo-text {
+      font-family: 'Newsreader', Georgia, serif;
+      font-weight: 600;
+      font-size: 1.125rem;
+      letter-spacing: -0.02em;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.15rem 0.5rem;
+      border-radius: 2px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.6875rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      background: var(--panel-raised);
+      color: var(--text-secondary);
+      border: 1px solid var(--hairline);
+    }
+
+    .tag.tag-brass {
+      background: var(--brass-soft);
+      color: var(--brass);
+      border-color: var(--brass-border);
+    }
+
+    .tag.tag-teal {
+      background: var(--teal-soft);
+      color: var(--teal);
+      border-color: var(--teal-border);
+    }
+
+    /* Minimal Theme Toggle for Prompt 1 Validation */
+    .theme-toggle-btn {
+      background: transparent;
+      border: 1px solid var(--hairline);
+      color: var(--text-secondary);
+      padding: 0.35rem 0.75rem;
+      border-radius: 4px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.75rem;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      transition: all 120ms ease;
+    }
+
+    .theme-toggle-btn:hover {
+      background: var(--panel-raised);
+      color: var(--text-primary);
+      border-color: var(--hairline);
+    }
+
+    /* Page Layout */
+    .login-container {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem 1rem;
+    }
+
+    /* Unmodified Login Card — purely inheriting tokens without redesigning content yet */
+    .login-card {
+      width: 100%;
+      max-width: 440px;
+      background: var(--panel);
+      border: 1px solid var(--hairline);
+      border-radius: 4px;
+      padding: 2.25rem;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+    }
+
+    .login-header {
+      margin-bottom: 2rem;
+    }
+
+    .login-header h1 {
+      font-family: 'Newsreader', Georgia, serif;
+      font-size: 1.75rem;
+      font-weight: 500;
+      color: var(--text-primary);
+      margin-bottom: 0.5rem;
+      letter-spacing: -0.015em;
+    }
+
+    .login-header p {
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    .case-citation {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.6875rem;
+      color: var(--text-tertiary);
+      margin-top: 0.75rem;
+      padding-top: 0.75rem;
+      border-top: 1px solid var(--hairline-soft);
+    }
+
+    .form-group {
+      margin-bottom: 1.25rem;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      color: var(--text-secondary);
+      margin-bottom: 0.375rem;
+    }
+
+    .form-input {
+      width: 100%;
+      padding: 0.625rem 0.875rem;
+      background: var(--panel-raised);
+      border: 1px solid var(--hairline);
+      border-radius: 4px;
+      color: var(--text-primary);
+      font-family: 'IBM Plex Sans', sans-serif;
+      font-size: 0.875rem;
+      outline: none;
+      transition: border-color 120ms ease;
+    }
+
+    .form-input:focus {
+      border-color: var(--brass);
+      box-shadow: 0 0 0 2px var(--focus-ring);
+    }
+
+    .form-input::placeholder {
+      color: var(--text-tertiary);
+    }
+
+    .login-btn {
+      width: 100%;
+      padding: 0.6875rem 1rem;
+      background: var(--panel-raised);
+      border: 1px solid var(--brass-border);
+      color: var(--brass);
+      font-family: 'IBM Plex Sans', sans-serif;
+      font-size: 0.875rem;
+      font-weight: 600;
+      border-radius: 4px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      transition: all 120ms ease;
+      margin-top: 1.5rem;
+    }
+
+    .login-btn:hover {
+      background: var(--brass-soft);
+      border-color: var(--brass);
+    }
+
+    .login-btn:focus-visible {
+      outline: 2px solid var(--focus-ring);
+      outline-offset: 2px;
+    }
+
+    .oauth-divider {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin: 1.5rem 0;
+      color: var(--text-tertiary);
+      font-size: 0.75rem;
+      font-family: 'IBM Plex Mono', monospace;
+    }
+
+    .oauth-divider::before, .oauth-divider::after {
+      content: "";
+      flex: 1;
+      height: 1px;
+      background: var(--hairline-soft);
+    }
+
+    .oauth-btn {
+      width: 100%;
+      padding: 0.625rem 1rem;
+      background: transparent;
+      border: 1px solid var(--hairline);
+      color: var(--text-primary);
+      font-family: 'IBM Plex Sans', sans-serif;
+      font-size: 0.875rem;
+      border-radius: 4px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      transition: all 120ms ease;
+    }
+
+    .oauth-btn:hover {
+      background: var(--panel-raised);
+      border-color: var(--text-secondary);
+    }
+
+    .login-footer {
+      margin-top: 1.75rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--hairline-soft);
+      font-size: 0.75rem;
+      color: var(--text-tertiary);
+      text-align: center;
+    }
+
+    .login-footer a {
+      color: var(--brass);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+
+    /* Foundation verification banner confirming token inheritance */
+    .verification-strip {
+      max-width: 440px;
+      margin: 1rem auto 0;
+      padding: 0.75rem 1rem;
+      background: var(--panel);
+      border: 1px dashed var(--hairline);
+      border-radius: 4px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.6875rem;
+      color: var(--text-secondary);
+    }
+
+    .verification-strip .token-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 0.25rem;
+    }
+
+    .verification-strip .token-row:last-child {
+      margin-bottom: 0;
+    }
+  </style>
+</head>
+<body>
+<!-- Base Shared Nav Shell -->
+<header class="nav-shell">
+<div class="nav-brand">
+<span class="nav-logo-text">
+        BACKTRACE <span class="tag tag-brass">DOSSIER FOUNDATION</span>
+</span>
+</div>
+<div style="display: flex; align-items: center; gap: 0.75rem;">
+<span class="tag tag-teal">SHARED TOKENS WIRED</span>
+<button aria-label="Toggle Theme Mode" class="theme-toggle-btn" id="themeBtn" onclick="toggleTheme()">
+<span id="themeIcon">◐</span> <span id="themeLabel">data-theme="dark"</span>
+</button>
+</div>
+</header>
+<!-- Login Verification View: Unchanged page content inheriting base tokens -->
+<main class="login-container">
+<div style="width: 100%; max-width: 440px;">
+<div class="login-card"><div class="login-header" style="margin-bottom: 1.75rem; text-align: left;"><h1 style="font-family: 'Newsreader', Georgia, serif; font-size: 1.875rem; font-weight: 500; color: var(--text-primary); margin-bottom: 0.625rem; letter-spacing: -0.015em;">Repository Forensics</h1><p style="font-size: 0.875rem; color: var(--text-secondary); line-height: 1.55;">Sign in with your GitHub account to inspect repository case files and deconstructed build strata.</p></div><div style="display: flex; flex-direction: column; gap: 1rem;"><button class="login-btn" onmouseout="this.style.background='var(--panel-raised)'; this.style.borderColor='var(--brass-border)';" onmouseover="this.style.background='var(--brass-soft)'; this.style.borderColor='var(--brass)';" style="width: 100%; margin-top: 0; padding: 0.75rem 1rem; background: var(--panel-raised); border: 1px solid var(--brass-border); color: var(--brass); font-family: 'IBM Plex Sans', sans-serif; font-size: 0.9375rem; font-weight: 600; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.625rem; transition: all 120ms ease; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);" type="button"><svg aria-hidden="true" fill="currentColor" height="18" viewbox="0 0 16 16" width="18"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path></svg>Continue with GitHub</button></div><div class="login-footer" style="margin-top: 1.75rem; padding-top: 1rem; border-top: 1px solid var(--hairline-soft); font-size: 0.75rem; color: var(--text-tertiary); text-align: center; font-family: 'IBM Plex Sans', sans-serif;">Institutional access authenticated via GitHub OAuth scopes.</div></div>
+<!-- Foundation Token Verification Strip -->
+</div>
+</main>
+<script>
+    function toggleTheme() {
+      const html = document.documentElement;
+      const currentTheme = html.getAttribute('data-theme') || 'dark';
+      const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+      html.setAttribute('data-theme', newTheme);
+      document.getElementById('themeLabel').textContent = `data-theme="${newTheme}"`;
+    }
+  </script>
+</body>
+</html>

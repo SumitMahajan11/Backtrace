@@ -122,8 +122,8 @@ def test_sentry_before_send_redaction_payload_scrubbing():
         "level": "error",
         "message": "Division by zero in pipeline orchestrator",
         "request": {
-            "url": "https://api.backtrace.dev/analyses/submit?token=raw_query_token_123&state=state_abc",
-            "query_string": "token=raw_query_token_123&state=state_abc&public_filter=active",
+            "url": "https://api.backtrace.dev/analyses/submit?token=raw_query_token_123&auth=private_key_code&state=state_abc",
+            "query_string": "token=raw_query_token_123&auth=private_key_code&state=state_abc&public_filter=active",
             "headers": {
                 "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.sensitive_payload",
                 "Cookie": "access_token=secret_jwt_cookie; refresh_token=secret_refresh_cookie",
@@ -182,8 +182,10 @@ def test_sentry_before_send_redaction_payload_scrubbing():
     assert req["cookies"]["access_token"] == "[REDACTED]"
     assert req["cookies"]["refresh_token"] == "[REDACTED]"
 
-    # 3. Verify Query String Redaction
+    # 3. Verify Query String & URL Redaction
+    assert req["url"] == "https://api.backtrace.dev/analyses/submit?token=[REDACTED]&auth=[REDACTED]&state=[REDACTED]"
     assert "token=[REDACTED]" in req["query_string"]
+    assert "auth=[REDACTED]" in req["query_string"]
     assert "state=[REDACTED]" in req["query_string"]
     assert "public_filter=active" in req["query_string"]
 
@@ -194,11 +196,11 @@ def test_sentry_before_send_redaction_payload_scrubbing():
     assert req["data"]["repo_url"] == "https://github.com/org/repo"
     assert req["data"]["safe_metadata"] == "public_build_info"
 
-    # 5. Verify User Context Zero-PII Policy
-    assert scrubbed_event["user"] == {"id": "usr_101"}
+    # 5. Verify User Context Zero-PII Policy & IP Geolocation Suppression
+    assert scrubbed_event["user"] == {"id": "usr_101", "ip_address": "{{none}}"}
     assert "email" not in scrubbed_event["user"]
     assert "username" not in scrubbed_event["user"]
-    assert "ip_address" not in scrubbed_event["user"]
+    assert scrubbed_event["user"]["ip_address"] == "{{none}}"
 
     # 6. Verify Extra & Breadcrumbs Redaction
     assert scrubbed_event["extra"]["debug_auth_header"] == "[REDACTED]"

@@ -50,6 +50,13 @@ def sample_report():
         milestones=[m0, m1],
         total_milestones=2,
         synthesis_timestamp="2026-09-14T12:00:00Z",
+        file_symbols={
+            "src/utils.py": ["helper"],
+            "src/main.py": ["main"],
+        },
+        file_dependencies=[
+            {"source": "src/main.py", "target": "src/utils.py", "type": "import"}
+        ],
     )
 
 
@@ -74,6 +81,12 @@ def test_graph_formatter_json_and_mermaid(sample_report):
     assert json_dag["repo_name"] == "demo-repo"
     assert json_dag["total_nodes"] == 2
     assert any(n["id"] == "src/utils.py" for n in json_dag["nodes"])
+    assert len(json_dag["edges"]) == 1
+    assert json_dag["edges"][0]["source"] == "src/main.py"
+    assert json_dag["edges"][0]["target"] == "src/utils.py"
+
+    utils_node = next(n for n in json_dag["nodes"] if n["id"] == "src/utils.py")
+    assert utils_node["exports"] == ["helper"]
 
     # Mermaid
     mermaid = formatter.format_mermaid(sample_report)

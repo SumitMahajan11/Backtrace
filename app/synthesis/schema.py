@@ -23,6 +23,7 @@ class SynthesizedMilestone(BaseModel):
     # Enriched contextual fields from Layer 5 RAG and Layer 4 Architecture
     architectural_role: str = ""
     key_symbols_and_exports: List[str] = Field(default_factory=list)
+    file_symbols: Dict[str, List[str]] = Field(default_factory=dict)
     deep_dive_citations: List[str] = Field(default_factory=list)
     prerequisite_tiers: List[int] = Field(default_factory=list)
     dependent_tiers: List[int] = Field(default_factory=list)
@@ -39,6 +40,7 @@ class ArchitectureOverview(BaseModel):
     entry_point_files: List[str] = Field(default_factory=list)
     cyclic_cluster_file_count: int = 0
     isolated_file_count: int = 0
+    total_loc: int = 0
 
 
 class SynthesizedRepositoryReport(BaseModel):
@@ -49,4 +51,6 @@ class SynthesizedRepositoryReport(BaseModel):
     milestones: List[SynthesizedMilestone] = Field(default_factory=list)
     total_milestones: int
     synthesis_timestamp: str
+    file_symbols: Dict[str, List[str]] = Field(default_factory=dict)
+    file_dependencies: List[Dict[str, Any]] = Field(default_factory=list)
     metadata: Dict[str, Any] = Field(default_factory=dict)

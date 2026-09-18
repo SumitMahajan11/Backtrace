@@ -1,0 +1,37 @@
+{
+  "defaultAction": "SCMP_ACT_ALLOW",
+  "architectures": [
+    "SCMP_ARCH_X86_64",
+    "SCMP_ARCH_X86",
+    "SCMP_ARCH_X32"
+  ],
+  "syscalls": [
+    {
+      "names": [
+        "acct",
+        "bpf",
+        "create_module",
+        "delete_module",
+        "finit_module",
+        "get_kernel_syms",
+        "init_module",
+        "kexec_file_load",
+        "kexec_load",
+        "lookup_dcookie",
+        "nfsservctl",
+        "open_by_handle_at",
+        "query_module",
+        "reboot",
+        "swapon",
+        "swapoff",
+        "sysfs",
+        "uselib",
+        "vm86",
+        "vm86old"
+      ],
+      "action": "SCMP_ACT_ERRNO",
+      "args": [],
+      "comment": "Block kernel exploitation, module insertion, host reboot, and handle-based filesystem escapes"
+    }
+  ]
+}

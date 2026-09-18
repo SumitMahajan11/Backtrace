@@ -284,8 +284,14 @@ class BaselineOrderingEngine:
             return [raw_tgt]
 
         # 2. Match with standard extensions
-        for ext in [".py", ".go", ".ts", ".js", ".java", ".rs", ".cpp", ".h", ".tla"]:
+        for ext in [".py", ".go", ".ts", ".tsx", ".js", ".jsx", ".java", ".rs", ".cpp", ".h", ".tla"]:
             cand = raw_tgt + ext
+            if cand in universe:
+                return [cand]
+
+        # 2b. Match index files in directory
+        for idx_ext in ["/index.tsx", "/index.jsx", "/index.ts", "/index.js", "/__init__.py"]:
+            cand = raw_tgt + idx_ext
             if cand in universe:
                 return [cand]
 
@@ -302,7 +308,15 @@ class BaselineOrderingEngine:
         # 4. Suffix match
         suffix_matches: List[str] = []
         for f in universe:
-            if f.endswith("/" + raw_tgt) or f.endswith("/" + raw_tgt + ".py") or f.endswith("/" + raw_tgt + ".go"):
+            if (
+                f.endswith("/" + raw_tgt)
+                or f.endswith("/" + raw_tgt + ".py")
+                or f.endswith("/" + raw_tgt + ".go")
+                or f.endswith("/" + raw_tgt + ".js")
+                or f.endswith("/" + raw_tgt + ".jsx")
+                or f.endswith("/" + raw_tgt + ".ts")
+                or f.endswith("/" + raw_tgt + ".tsx")
+            ):
                 suffix_matches.append(f)
 
         if suffix_matches:

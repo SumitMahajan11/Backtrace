@@ -1,0 +1,150 @@
+# ==============================================================================
+# Production Docker Compose Configuration (Piston Disabled / Omitted)
+# ==============================================================================
+# Architecture:
+# - Nginx reverse proxy (Ports 80/443 with TLS certbot integration)
+# - Backtrace FastAPI Application (Internal port 8000)
+# - PostgreSQL 16 Alpine (Internal network ONLY - no published host ports)
+# - Redis 7 Alpine (Internal network ONLY - no published host ports with requirepass)
+# - Piston Execution Sandbox: EXCLUDED / DISABLED (Relying on fast-fail 503 & structural grading)
+# ==============================================================================
+
+services:
+  nginx:
+    image: nginx:alpine
+    container_name: backtrace_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - certbot_certs:/etc/letsencrypt:ro
+      - certbot_www:/var/www/certbot:ro
+    depends_on:
+      backtrace-app:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+    networks:
+      - default
+
+  backtrace-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: backtrace_production_app
+    restart: unless-stopped
+    expose:
+      - "8000"
+    ports:
+      - "127.0.0.1:8000:8000"
+    env_file:
+      - .env.production
+    environment:
+      - ENABLE_PUBLIC_LEADERBOARD=false
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - DATABASE_URL=postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-backtrace}
+      - PISTON_URL=http://disabled:2000
+    volumes:
+      - backtrace_data:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4096M
+        reservations:
+          cpus: '0.5'
+          memory: 1024M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - default
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: backtrace_postgres
+    restart: unless-stopped
+    expose:
+      - "5432"
+    # Note: No host ports published (127.0.0.1 or 0.0.0.0:5432) for zero attack surface
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB:-backtrace}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-backtrace}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1024M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    networks:
+      - default
+
+  redis:
+    image: redis:7-alpine
+    container_name: backtrace_redis
+    restart: unless-stopped
+    expose:
+      - "6379"
+    # Note: No host ports published for zero attack surface; authentication enforced
+    command: redis-server --save 60 1 --loglevel warning --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+    networks:
+      - default
+
+networks:
+  default:
+
+volumes:
+  backtrace_data:
+    driver: local
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  certbot_certs:
+    driver: local
+  certbot_www:
+    driver: local

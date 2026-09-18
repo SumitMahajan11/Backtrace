@@ -44,7 +44,7 @@ def inspect_health(target_engine=engine) -> Tuple[Dict[str, Any], int]:
 
     # 2. Storage / Cache Subsystem Check
     try:
-        with get_db_session() as session:
+        with Session(target_engine) as session:
             count = session.query(RepoModel).count()
         checks["storage_cache"] = {
             "status": "healthy",
@@ -71,6 +71,44 @@ def inspect_health(target_engine=engine) -> Tuple[Dict[str, Any], int]:
         overall_healthy = False
         checks["pipeline_orchestrator"] = {
             "status": "unhealthy",
+            "error": str(exc),
+        }
+
+    # 4. Piston Sandbox Execution Service Check (Prompt 21)
+    try:
+        from app.services.piston_health import piston_health_monitor
+        piston_status = piston_health_monitor.get_status()
+        checks["piston_sandbox"] = piston_status
+    except Exception as exc:
+        checks["piston_sandbox"] = {
+            "status": "unhealthy",
+            "is_available": False,
+            "error": str(exc),
+        }
+
+    # 5. Redis Distributed Cache & Rate Limiter Check (Prompt 28)
+    redis_start = time.time()
+    try:
+        from app.core.config import get_settings
+        settings = get_settings()
+        redis_url = getattr(settings, "REDIS_URL", "redis://localhost:6379/0")
+        
+        # Test connection with a lightweight ping
+        import redis
+        client = redis.Redis.from_url(redis_url, socket_timeout=1.5, socket_connect_timeout=1.5)
+        is_alive = bool(client.ping())
+        redis_latency_ms = round((time.time() - redis_start) * 1000, 2)
+        
+        checks["redis"] = {
+            "status": "healthy" if is_alive else "unhealthy",
+            "latency_ms": redis_latency_ms,
+            "is_connected": is_alive,
+        }
+    except Exception as exc:
+        # In testing or when Redis is not running locally, report status accurately
+        checks["redis"] = {
+            "status": "unhealthy",
+            "is_connected": False,
             "error": str(exc),
         }
 

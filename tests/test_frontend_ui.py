@@ -182,10 +182,10 @@ def test_dashboard_view_free_and_paid_tier_indicators(client, create_user):
     client.cookies.set("access_token", token)
     resp = client.get("/dashboard")
     assert resp.status_code == 200
-    assert "Analysis Dashboard" in resp.text
-    assert "FREE" in resp.text
+    assert "Root-Cause Inquest Ledger" in resp.text
+    assert "FREE TIER" in resp.text
     assert "0 / 5" in resp.text
-    assert "Start New Codebase Analysis" in resp.text
+    assert "Reconstruct Repository History" in resp.text
     assert "coder_bob" in resp.text
 
 

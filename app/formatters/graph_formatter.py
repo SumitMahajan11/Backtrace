@@ -33,6 +33,7 @@ class GraphExportFormatter:
         for m in report.milestones:
             tier_groups[m.tier] = m.files
             for f in m.files:
+                file_exports = report.file_symbols.get(f, m.file_symbols.get(f, []))
                 nodes.append({
                     "id": f,
                     "label": f.split("/")[-1],
@@ -44,14 +45,17 @@ class GraphExportFormatter:
                     "confidence_breakdown": m.confidence_breakdown,
                     "is_cyclic": m.is_cyclic,
                     "is_isolated": m.is_isolated,
-                    "exports": m.key_symbols_and_exports,
+                    "exports": file_exports,
                 })
 
+        # File-level dependency edges
+        file_edges: List[Dict[str, Any]] = list(report.file_dependencies) if report.file_dependencies else []
+
         # Milestone-level dependency edges
-        edges: List[Dict[str, Any]] = []
+        milestone_edges: List[Dict[str, Any]] = []
         for m in report.milestones:
             for dep_tier in m.dependent_tiers:
-                edges.append({
+                milestone_edges.append({
                     "source": f"tier_{m.tier}",
                     "target": f"tier_{dep_tier}",
                     "type": "tier_dependency",
@@ -60,9 +64,13 @@ class GraphExportFormatter:
         return {
             "repo_name": report.repo_name,
             "total_nodes": len(nodes),
+            "total_files": report.architecture_overview.total_files,
+            "total_loc": report.architecture_overview.total_loc,
+            "architecture_overview": report.architecture_overview.model_dump(),
             "nodes": nodes,
+            "edges": file_edges,
             "tier_groups": tier_groups,
-            "milestone_edges": edges,
+            "milestone_edges": milestone_edges,
         }
 
     def format_mermaid(self, report: SynthesizedRepositoryReport) -> str:

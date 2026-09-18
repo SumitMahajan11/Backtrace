@@ -49,8 +49,10 @@ class AuthService:
         Builds the GitHub OAuth authorization URL with a cryptographically secure,
         single-use CSRF state token.
         """
-        c_id = client_id or GITHUB_CLIENT_ID
-        r_uri = redirect_uri or GITHUB_REDIRECT_URI
+        from app.core.config import get_settings
+        settings = get_settings()
+        c_id = client_id or settings.GITHUB_CLIENT_ID or GITHUB_CLIENT_ID
+        r_uri = redirect_uri or settings.GITHUB_REDIRECT_URI or GITHUB_REDIRECT_URI
 
         # Validate open redirect safety on desired destination
         if redirect_target and not is_safe_redirect_url(redirect_target):
@@ -75,9 +77,11 @@ class AuthService:
         redirect_uri: Optional[str] = None,
     ) -> str:
         """Exchanges GitHub authorization code for GitHub OAuth access token."""
-        c_id = client_id or GITHUB_CLIENT_ID
-        c_secret = client_secret or GITHUB_CLIENT_SECRET
-        r_uri = redirect_uri or GITHUB_REDIRECT_URI
+        from app.core.config import get_settings
+        settings = get_settings()
+        c_id = client_id or settings.GITHUB_CLIENT_ID or GITHUB_CLIENT_ID
+        c_secret = client_secret or settings.GITHUB_CLIENT_SECRET or GITHUB_CLIENT_SECRET
+        r_uri = redirect_uri or settings.GITHUB_REDIRECT_URI or GITHUB_REDIRECT_URI
 
         payload = {
             "client_id": c_id,

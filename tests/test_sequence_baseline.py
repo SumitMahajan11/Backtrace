@@ -239,3 +239,40 @@ def test_segmentation_metadata_attached():
     meta = result.node_metadata.get("src/app.py")
     assert meta is not None
     assert meta.domain == "backend"
+
+
+def test_jsx_tsx_relative_and_index_import_resolution():
+    """
+    Verify that .jsx and .tsx extensionless and index imports resolve correctly.
+    App.jsx imports './components/Button' (Button.jsx) and './components/Card' (Card/index.tsx).
+    """
+    engine = BaselineOrderingEngine()
+
+    node_btn = FileNode(path="src/components/Button.jsx", language="javascript", imports=[])
+    node_card = FileNode(path="src/components/Card/index.tsx", language="javascript", imports=[])
+    node_app = FileNode(
+        path="src/App.jsx",
+        language="javascript",
+        imports=[
+            ImportEdge(
+                target="src/components/Button",
+                source_path="src/App.jsx",
+                resolved=True,
+                is_external=False,
+            ),
+            ImportEdge(
+                target="src/components/Card",
+                source_path="src/App.jsx",
+                resolved=True,
+                is_external=False,
+            ),
+        ],
+    )
+
+    all_files = ["src/App.jsx", "src/components/Button.jsx", "src/components/Card/index.tsx"]
+    result = engine.compute_baseline_order([node_app, node_btn, node_card], all_repo_files=all_files)
+
+    assert len(result.tiers) == 2
+    assert set(result.tiers[0].files) == {"src/components/Button.jsx", "src/components/Card/index.tsx"}
+    assert result.tiers[1].files == ["src/App.jsx"]
+

@@ -1,16 +1,55 @@
 services:
+  nginx:
+    image: nginx:alpine
+    container_name: backtrace_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - certbot_certs:/etc/letsencrypt:ro
+      - certbot_www:/var/www/certbot:ro
+    depends_on:
+      backtrace-app:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+    networks:
+      - default
+
   backtrace-app:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: backtrace_production_app
     restart: unless-stopped
+    expose:
+      - "8000"
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     env_file:
       - .env.production
+    environment:
+      - PISTON_URL=http://piston:2000
+      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=postgresql+psycopg2://postgres:postgres@postgres:5432/backtrace
     volumes:
       - backtrace_data:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      piston:
+        condition: service_started
     deploy:
       resources:
         limits:
@@ -21,14 +60,151 @@ services:
           memory: 1024M
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
+      interval: 15s
       timeout: 5s
       retries: 3
       start_period: 10s
     security_opt:
       - no-new-privileges:true
     read_only: false
+    networks:
+      - default
+      - piston_isolated_net
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: backtrace_postgres
+    restart: unless-stopped
+    expose:
+      - "5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=backtrace
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d backtrace"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1024M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    networks:
+      - default
+
+  redis:
+    image: redis:7-alpine
+    container_name: backtrace_redis
+    restart: unless-stopped
+    expose:
+      - "6379"
+    command: redis-server --save 60 1 --loglevel warning --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+    networks:
+      - default
+
+  piston:
+    image: ghcr.io/engineer-man/piston:latest
+    container_name: backtrace_piston
+    restart: unless-stopped
+    privileged: false
+    cap_drop:
+      - ALL
+    cap_add:
+      - SYS_ADMIN
+      - SYS_CHROOT
+      - SETUID
+      - SETGID
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - KILL
+      - SYS_RESOURCE
+      - SYS_PTRACE
+      - NET_ADMIN
+    security_opt:
+      - seccomp:./docker/piston-seccomp.json
+      - apparmor=unconfined
+    cgroup: host
+    read_only: true
+    entrypoint:
+      - /bin/bash
+      - -c
+      - |
+        mkdir -p /sys/fs/cgroup/isolate/init 2>/dev/null || true
+        echo 1 > /sys/fs/cgroup/isolate/cgroup.procs 2>/dev/null || true
+        echo '+cpuset +cpu +io +memory +pids' > /sys/fs/cgroup/cgroup.subtree_control 2>/dev/null || true
+        echo 1 > /sys/fs/cgroup/isolate/init/cgroup.procs 2>/dev/null || true
+        echo '+cpuset +memory' > /sys/fs/cgroup/isolate/cgroup.subtree_control 2>/dev/null || true
+        echo "Initialized cgroup"
+        chown -R piston:piston /piston
+        exec su -- piston -c 'ulimit -n 65536 && node /piston_api/src'
+    ports:
+      # Bound strictly to localhost interface (127.0.0.1) - never exposed to public WAN
+      - "127.0.0.1:2000:2000"
+    volumes:
+      - piston_packages:/piston/packages
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    tmpfs:
+      - /tmp:exec,mode=1777
+      - /var/local/lib/isolate:exec,mode=1777
+      - /run:exec,mode=755
+      - /piston:exec,mode=755
+    environment:
+      - PISTON_BIND_ADDRESS=0.0.0.0:2000
+      - PISTON_DISABLE_NETWORKING=true
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2048M
+          pids: 256
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    mem_limit: 2048M
+    cpus: 2.0
+    pids_limit: 256
+    networks:
+      piston_isolated_net:
+
+networks:
+  default:
+  piston_isolated_net:
+    driver: bridge
+    internal: true
 
 volumes:
   backtrace_data:
+    driver: local
+  postgres_data:
+    driver: local
+  piston_packages:
+    external: true
+  redis_data:
+    driver: local
+  certbot_certs:
+    driver: local
+  certbot_www:
     driver: local

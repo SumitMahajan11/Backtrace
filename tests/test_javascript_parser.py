@@ -130,3 +130,34 @@ def test_parser_registry_multi_language():
     js_res = results["javascript"]
     assert len(js_res.file_nodes) == 2
     assert "react" in js_res.external_dependencies
+
+
+def test_js_jsx_entry_point_and_default_exports():
+    code_main = """
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App';
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+"""
+    code_app = """
+import React from 'react';
+import Navbar from './components/Navbar';
+
+function App() {
+    return <div><Navbar /></div>;
+}
+export default App;
+"""
+    parser = JavaScriptLanguageParser()
+    all_files = {"src/main.jsx", "src/App.jsx", "src/components/Navbar.jsx"}
+
+    node_main, edges_main = parser.parse_single_file("src/main.jsx", code_main, all_files)
+    assert node_main.entry_point is True
+    assert node_main.entry_point_type == "main_script"
+    assert any(e.target == "src/App.jsx" for e in edges_main)
+
+    node_app, edges_app = parser.parse_single_file("src/App.jsx", code_app, all_files)
+    assert "App" in node_app.exports
+    assert any(e.target == "src/components/Navbar.jsx" for e in edges_app)
+

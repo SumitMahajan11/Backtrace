@@ -49,10 +49,12 @@ def render_safe_markdown(markdown_text: Optional[str]) -> str:
     # Italic: *text*
     escaped = re.sub(r"\*([^*]+)\*", r"<em>\1</em>", escaped)
 
-    # 4. Process line-by-line structures (Headers, lists, blockquotes, paragraphs)
+    # 4. Process line-by-line structures (Headers, lists, blockquotes, tables, paragraphs)
     lines = escaped.split("\n")
     html_lines = []
     in_list = False
+    in_table = False
+    table_is_header = True
 
     for line in lines:
         stripped = line.strip()
@@ -60,8 +62,35 @@ def render_safe_markdown(markdown_text: Optional[str]) -> str:
             if in_list:
                 html_lines.append("</ul>")
                 in_list = False
+            if in_table:
+                html_lines.append("</tbody></table></div>")
+                in_table = False
             html_lines.append("<br/>")
             continue
+
+        # Markdown Tables: lines starting and ending with |
+        if stripped.startswith("|") and stripped.endswith("|"):
+            if in_list:
+                html_lines.append("</ul>")
+                in_list = False
+            # Check if separator row (| :--- | :--- |)
+            if re.match(r"^\|[\s:\-+|]+\|$", stripped):
+                table_is_header = False
+                continue
+
+            cells = [c.strip() for c in stripped.strip("|").split("|")]
+            if not in_table:
+                html_lines.append("<div class='table-responsive'><table class='report-table'>")
+                html_lines.append("<thead><tr>" + "".join(f"<th>{c}</th>" for c in cells) + "</tr></thead><tbody>")
+                in_table = True
+                table_is_header = False
+            else:
+                html_lines.append("<tr>" + "".join(f"<td>{c}</td>" for c in cells) + "</tr>")
+            continue
+        else:
+            if in_table:
+                html_lines.append("</tbody></table></div>")
+                in_table = False
 
         # Headers
         if stripped.startswith("### "):
@@ -103,6 +132,8 @@ def render_safe_markdown(markdown_text: Optional[str]) -> str:
 
     if in_list:
         html_lines.append("</ul>")
+    if in_table:
+        html_lines.append("</tbody></table></div>")
 
     final_html = "\n".join(html_lines)
 

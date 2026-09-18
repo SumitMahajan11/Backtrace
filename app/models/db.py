@@ -124,6 +124,16 @@ class UserModel(Base):
         back_populates="user",
         cascade="all, delete-orphan",
     )
+    milestone_attempts = relationship(
+        "MilestoneAttemptModel",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    points_ledger_entries = relationship(
+        "PointsLedgerModel",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
 
 
 class RefreshTokenModel(Base):
@@ -197,6 +207,16 @@ class AnalysisJobModel(Base):
     updated_at: datetime = Column(DateTime, nullable=False, default=utc_now, onupdate=utc_now)
 
     user = relationship("UserModel", back_populates="analysis_jobs")
+    milestone_attempts = relationship(
+        "MilestoneAttemptModel",
+        back_populates="job",
+        cascade="all, delete-orphan",
+    )
+    points_ledger_entries = relationship(
+        "PointsLedgerModel",
+        back_populates="job",
+        cascade="all, delete-orphan",
+    )
 
     @property
     def repo_url(self) -> str:
@@ -222,6 +242,14 @@ class AnalysisJobModel(Base):
         except Exception:
             return {}
 
+    @graph_data.setter
+    def graph_data(self, val: Any):
+        import json
+        if isinstance(val, str):
+            self.graph_output_json = val
+        else:
+            self.graph_output_json = json.dumps(val)
+
     @property
     def quiz_data(self) -> Any:
         try:
@@ -229,6 +257,67 @@ class AnalysisJobModel(Base):
             return json.loads(self.quiz_output_json) if self.quiz_output_json else {}
         except Exception:
             return {}
+
+    @quiz_data.setter
+    def quiz_data(self, val: Any):
+        import json
+        if isinstance(val, str):
+            self.quiz_output_json = val
+        else:
+            self.quiz_output_json = json.dumps(val)
+
+
+class MilestoneAttemptModel(Base):
+    """Database model tracking user attempts and structural verification per milestone tier."""
+    __tablename__ = "milestone_attempts"
+
+    id: int = Column(Integer, primary_key=True, autoincrement=True)
+    user_id: int = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    job_id: int = Column(Integer, ForeignKey("analysis_jobs.id", ondelete="CASCADE"), nullable=False, index=True)
+    milestone_tier: int = Column(Integer, nullable=False, index=True)
+    submitted_code: str = Column(Text, nullable=False, default="")
+    status: str = Column(String(32), nullable=False, default="not_started")  # not_started, attempting, structurally_verified
+    hint_level_revealed: int = Column(Integer, nullable=False, default=0)
+    implementation_revealed: bool = Column(Boolean, nullable=False, default=False)
+    last_run_stdout: Optional[str] = Column(Text, nullable=True)
+    last_run_stderr: Optional[str] = Column(Text, nullable=True)
+    last_run_exit_code: Optional[int] = Column(Integer, nullable=True)
+    last_run_at: Optional[datetime] = Column(DateTime, nullable=True)
+    grading_method: str = Column(String(32), nullable=False, default="structural_only")  # real_tests, expected_output, structural_only
+    grading_details_json: Optional[str] = Column(Text, nullable=True)
+    created_at: datetime = Column(DateTime, nullable=False, default=utc_now)
+    updated_at: datetime = Column(DateTime, nullable=False, default=utc_now, onupdate=utc_now)
+
+    user = relationship("UserModel", back_populates="milestone_attempts")
+    job = relationship("AnalysisJobModel", back_populates="milestone_attempts")
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "job_id", "milestone_tier", name="uq_user_job_milestone_tier"),
+        Index("idx_attempt_user_job_tier", "user_id", "job_id", "milestone_tier"),
+    )
+
+
+class PointsLedgerModel(Base):
+    """Immutable append-only audit ledger tracking points awarded and redeemed."""
+    __tablename__ = "points_ledger"
+
+    id: int = Column(Integer, primary_key=True, autoincrement=True)
+    user_id: int = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    job_id: Optional[int] = Column(Integer, ForeignKey("analysis_jobs.id", ondelete="CASCADE"), nullable=True, index=True)
+    milestone_tier: int = Column(Integer, nullable=False, default=0, index=True)
+    points_awarded: int = Column(Integer, nullable=False)  # Positive for awards, negative for redemptions
+    multiplier_applied: float = Column(Float, nullable=False, default=1.0)
+    reason: str = Column(String(100), nullable=False)  # e.g. "milestone_solved_no_hints", "redemption_quota_bump_2"
+    created_at: datetime = Column(DateTime, nullable=False, default=utc_now, index=True)
+
+    user = relationship("UserModel", back_populates="points_ledger_entries")
+    job = relationship("AnalysisJobModel", back_populates="points_ledger_entries")
+
+    __table_args__ = (
+        Index("idx_points_user_created", "user_id", "created_at"),
+        Index("idx_points_user_job_tier", "user_id", "job_id", "milestone_tier"),
+    )
+
 
 
 

@@ -1,6 +1,7 @@
 """Billing and Subscription Service integrating Stripe Hosted Checkout and Customer Portal."""
 
 import os
+import time
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional, Tuple
 
@@ -11,16 +12,31 @@ from app.models.db import SubscriptionModel, UserModel, utc_now
 from app.storage.billing_repository import BillingRepository
 
 # Stripe & Quota Configuration
-STRIPE_API_KEY: str = os.getenv("STRIPE_API_KEY", "")
-STRIPE_WEBHOOK_SECRET: str = os.getenv("STRIPE_WEBHOOK_SECRET", "")
-STRIPE_PRICE_ID: str = os.getenv("STRIPE_PRICE_ID", "price_backtrace_pro_monthly")
-FREE_TIER_MONTHLY_QUOTA: int = int(os.getenv("FREE_TIER_MONTHLY_QUOTA", "5"))
+def _get_billing_setting(attr: str, default: Any = "") -> Any:
+    env_val = os.getenv(attr)
+    if env_val is not None and str(env_val).strip():
+        return env_val
+    try:
+        from app.core.config import get_settings
+        settings = get_settings()
+        val = getattr(settings, attr, None)
+        if val is not None and str(val).strip():
+            return val
+    except Exception:
+        pass
+    return default
 
-DEFAULT_SUCCESS_URL: str = os.getenv(
-    "STRIPE_SUCCESS_URL", "http://localhost:3000/billing/success?session_id={CHECKOUT_SESSION_ID}"
-)
-DEFAULT_CANCEL_URL: str = os.getenv("STRIPE_CANCEL_URL", "http://localhost:3000/billing/canceled")
-DEFAULT_PORTAL_RETURN_URL: str = os.getenv("STRIPE_PORTAL_RETURN_URL", "http://localhost:3000/billing")
+
+STRIPE_API_KEY: str = str(_get_billing_setting("STRIPE_SECRET_KEY", os.getenv("STRIPE_API_KEY", os.getenv("STRIPE_SECRET_KEY", ""))))
+STRIPE_WEBHOOK_SECRET: str = str(_get_billing_setting("STRIPE_WEBHOOK_SECRET", os.getenv("STRIPE_WEBHOOK_SECRET", "")))
+STRIPE_PRICE_ID: str = str(_get_billing_setting("STRIPE_PRICE_ID_PRO", os.getenv("STRIPE_PRICE_ID", "price_backtrace_pro_monthly")))
+FREE_TIER_MONTHLY_QUOTA: int = int(_get_billing_setting("FREE_TIER_MONTHLY_LIMIT", os.getenv("FREE_TIER_MONTHLY_QUOTA", "5")))
+
+DEFAULT_SUCCESS_URL: str = str(_get_billing_setting(
+    "STRIPE_SUCCESS_URL", os.getenv("STRIPE_SUCCESS_URL", "http://localhost:8000/dashboard?session_id={CHECKOUT_SESSION_ID}")
+))
+DEFAULT_CANCEL_URL: str = str(_get_billing_setting("STRIPE_CANCEL_URL", os.getenv("STRIPE_CANCEL_URL", "http://localhost:8000/dashboard")))
+DEFAULT_PORTAL_RETURN_URL: str = str(_get_billing_setting("STRIPE_PORTAL_RETURN_URL", os.getenv("STRIPE_PORTAL_RETURN_URL", "http://localhost:8000/dashboard")))
 
 if STRIPE_API_KEY:
     stripe.api_key = STRIPE_API_KEY
@@ -37,10 +53,86 @@ class BillingServiceError(Exception):
 class BillingService:
     """Orchestrates Stripe Checkout, Customer Portal, Webhook verification, and Quota Gating."""
 
+    _price_cache: Dict[str, Tuple[float, Dict[str, Any]]] = {}
+    _PRICE_CACHE_TTL: float = 3600.0  # 1-hour cache TTL
+
+    @classmethod
+    def get_pro_price_details(cls, price_id: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Dynamically fetches the Stripe Price object for the Pro subscription tier.
+        Caches the response in-memory for 1 hour to prevent latency and API rate-limiting.
+        """
+        api_key = _get_billing_setting("STRIPE_SECRET_KEY", os.getenv("STRIPE_API_KEY", STRIPE_API_KEY))
+        if api_key:
+            stripe.api_key = api_key
+
+        p_id = price_id or _get_billing_setting("STRIPE_PRICE_ID_PRO", os.getenv("STRIPE_PRICE_ID", STRIPE_PRICE_ID))
+        if not p_id:
+            return {
+                "price_id": None,
+                "unit_amount": None,
+                "amount_formatted": "Upgrade",
+                "currency": "usd",
+                "interval": "month",
+            }
+
+        now = time.time()
+        if p_id in cls._price_cache:
+            cached_time, cached_data = cls._price_cache[p_id]
+            if now - cached_time < cls._PRICE_CACHE_TTL:
+                return cached_data
+
+        try:
+            price_obj = stripe.Price.retrieve(p_id)
+            unit_amount = getattr(price_obj, "unit_amount", 0)
+            currency = getattr(price_obj, "currency", "usd").lower()
+            recurring = getattr(price_obj, "recurring", None)
+            interval = recurring.get("interval", "month") if recurring else "month"
+
+            # Dynamic Currency Formatting
+            symbol_map = {
+                "usd": "$",
+                "inr": "₹",
+                "eur": "€",
+                "gbp": "£",
+                "cad": "CA$",
+                "aud": "A$",
+                "jpy": "¥",
+            }
+            symbol = symbol_map.get(currency, f"{currency.upper()} ")
+
+            if currency in ["jpy", "krw"]:
+                amount_formatted = f"{symbol}{unit_amount:,}"
+            else:
+                amount_decimal = unit_amount / 100.0
+                if amount_decimal.is_integer():
+                    amount_formatted = f"{symbol}{int(amount_decimal)}"
+                else:
+                    amount_formatted = f"{symbol}{amount_decimal:.2f}"
+
+            result = {
+                "price_id": p_id,
+                "unit_amount": unit_amount,
+                "currency": currency,
+                "interval": interval,
+                "amount_formatted": amount_formatted,
+            }
+            cls._price_cache[p_id] = (now, result)
+            return result
+        except Exception as exc:
+            return {
+                "price_id": p_id,
+                "unit_amount": None,
+                "amount_formatted": "Upgrade to Pro",
+                "currency": "usd",
+                "interval": "month",
+                "error": str(exc),
+            }
+
     @staticmethod
     def get_quota_limit() -> int:
         """Retrieves dynamically configured monthly quota for free-tier users."""
-        return int(os.getenv("FREE_TIER_MONTHLY_QUOTA", str(FREE_TIER_MONTHLY_QUOTA)))
+        return int(_get_billing_setting("FREE_TIER_MONTHLY_LIMIT", os.getenv("FREE_TIER_MONTHLY_QUOTA", str(FREE_TIER_MONTHLY_QUOTA))))
 
     @classmethod
     def create_checkout_session(
@@ -55,12 +147,13 @@ class BillingService:
         Creates a hosted Stripe Checkout Session for upgrading to the Paid tier.
         Zero PCI scope: Raw credit card data never touches Backtrace application code.
         """
-        if not stripe.api_key and STRIPE_API_KEY:
-            stripe.api_key = STRIPE_API_KEY
+        api_key = _get_billing_setting("STRIPE_SECRET_KEY", os.getenv("STRIPE_API_KEY", STRIPE_API_KEY))
+        if api_key:
+            stripe.api_key = api_key
 
-        p_id = price_id or os.getenv("STRIPE_PRICE_ID", STRIPE_PRICE_ID)
-        s_url = success_url or DEFAULT_SUCCESS_URL
-        c_url = cancel_url or DEFAULT_CANCEL_URL
+        p_id = price_id or _get_billing_setting("STRIPE_PRICE_ID_PRO", os.getenv("STRIPE_PRICE_ID", STRIPE_PRICE_ID))
+        s_url = success_url or _get_billing_setting("STRIPE_SUCCESS_URL", DEFAULT_SUCCESS_URL)
+        c_url = cancel_url or _get_billing_setting("STRIPE_CANCEL_URL", DEFAULT_CANCEL_URL)
 
         # Derive customer ID strictly from authenticated user's database record
         sub = BillingRepository.get_subscription_by_user_id(session, user.id)
@@ -138,7 +231,7 @@ class BillingService:
         Verifies the cryptographic HMAC-SHA256 signature on incoming Stripe webhooks.
         Rejects spoofed requests missing or failing signature verification.
         """
-        secret = webhook_secret or os.getenv("STRIPE_WEBHOOK_SECRET", STRIPE_WEBHOOK_SECRET)
+        secret = webhook_secret or _get_billing_setting("STRIPE_WEBHOOK_SECRET", STRIPE_WEBHOOK_SECRET)
         if not sig_header:
             raise BillingServiceError("Missing Stripe-Signature header", status_code=400)
 
@@ -278,6 +371,19 @@ class BillingService:
                 analytics.capture_subscription_cancelled(user_id=sub.user_id, reason="stripe_subscription_deleted")
 
     @classmethod
+    def get_effective_quota_limit(cls, user_id: int, session: Session) -> int:
+        """
+        Calculates effective monthly quota limit including base free quota + any redeemed quota bonus perks.
+        """
+        base_quota = cls.get_quota_limit()
+        try:
+            from app.services.points_engine import PointsEngine
+            bonus_quota = PointsEngine.get_user_monthly_quota_bonus(session, user_id)
+        except Exception:
+            bonus_quota = 0
+        return base_quota + bonus_quota
+
+    @classmethod
     def get_user_billing_status(cls, user: UserModel, session: Session) -> Dict[str, Any]:
         """Returns the user's tier, quota consumption, and subscription status."""
         sub = BillingRepository.get_subscription_by_user_id(session, user.id)
@@ -289,7 +395,7 @@ class BillingService:
         )
 
         current_usage = BillingRepository.get_monthly_usage_count(session, user.id)
-        quota_limit = None if is_paid else cls.get_quota_limit()
+        quota_limit = None if is_paid else cls.get_effective_quota_limit(user.id, session)
 
         return {
             "user_id": user.id,
@@ -297,7 +403,7 @@ class BillingService:
             "subscription_status": sub.status if sub else "inactive",
             "monthly_usage": current_usage,
             "monthly_quota": quota_limit,
-            "is_quota_exceeded": False if is_paid else (current_usage >= cls.get_quota_limit()),
+            "is_quota_exceeded": False if is_paid else (current_usage >= quota_limit),
             "current_period_end": sub.current_period_end.isoformat() if sub and sub.current_period_end else None,
         }
 
@@ -314,8 +420,8 @@ class BillingService:
             (is_allowed: bool, current_usage: int, quota_limit: int, tier: str)
             
         - Paid users: Bypass quota checks, record usage event, and return is_allowed=True.
-        - Free users: If monthly_usage >= quota, returns is_allowed=False without recording.
-                      If monthly_usage < quota, records usage event and returns is_allowed=True.
+        - Free users: If monthly_usage >= effective_quota, returns is_allowed=False without recording.
+                      If monthly_usage < effective_quota, records usage event and returns is_allowed=True.
         """
         sub = BillingRepository.get_subscription_by_user_id(session, user.id)
         now = utc_now()
@@ -325,14 +431,13 @@ class BillingService:
             and (sub.current_period_end is None or sub.current_period_end > now)
         )
 
-        quota_limit = cls.get_quota_limit()
-
         if is_paid:
             BillingRepository.record_usage_event(session, user.id, event_type="repo_analysis")
             current_usage = BillingRepository.get_monthly_usage_count(session, user.id)
             return True, current_usage, -1, "paid"
 
-        # Free Tier Quota Check
+        # Free Tier Effective Quota Check (Base + Redeemed Bonus)
+        quota_limit = cls.get_effective_quota_limit(user.id, session)
         current_usage = BillingRepository.get_monthly_usage_count(session, user.id)
         if current_usage >= quota_limit:
             return False, current_usage, quota_limit, "free"

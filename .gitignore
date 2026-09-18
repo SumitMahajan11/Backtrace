@@ -52,8 +52,11 @@ Thumbs.db
 
 # Databases & local sqlite storage
 *.db
+*.db-shm
+*.db-wal
 *.sqlite
 *.sqlite3
+backups/
 
 # Embedded fixture test repositories
 tests/fixtures/real_repos/
@@ -61,6 +64,7 @@ tests/fixtures/real_repos_locked/
 
 # Temporary & Scratch / Debug scripts & local reports
 scratch/
+scratch_*.py
 debug_*.py
 tmp/
 temp/
@@ -68,3 +72,6 @@ temp/
 raw_llm_response.txt
 live_llm_report.md
 validation_audit.json
+*_evidence.json
+collect_output*.txt
+pytest_execution*.txt

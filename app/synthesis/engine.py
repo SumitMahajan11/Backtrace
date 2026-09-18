@@ -72,9 +72,10 @@ class SynthesisEngine:
 
         # Tally cyclic and isolated file totals
         cyclic_count = sum(len(step.files) for step in narration_result.steps if step.is_cyclic_cluster)
-        total_files_count = len(parsed_files) if parsed_files else sum(domain_counts.values())
+        total_files_count = len(segmentation_result.files) if (segmentation_result and segmentation_result.files) else (len(parsed_files) if parsed_files else sum(domain_counts.values()))
         milestone_files_count = sum(len(step.files) for step in narration_result.steps)
         isolated_count = max(0, total_files_count - milestone_files_count)
+        total_loc_count = sum(len(content.splitlines()) for content in file_contents.values()) if file_contents else 0
 
         arch_overview = ArchitectureOverview(
             total_files=total_files_count,
@@ -84,6 +85,7 @@ class SynthesisEngine:
             entry_point_files=sorted(entry_points),
             cyclic_cluster_file_count=cyclic_count,
             isolated_file_count=isolated_count,
+            total_loc=total_loc_count,
         )
 
         # 2. Enrich each BuildStepNarrative with RAG citations and structural exports
@@ -92,9 +94,11 @@ class SynthesisEngine:
         for step in narration_result.steps:
             # Collect genuine exports/symbols across files strictly in this milestone
             milestone_symbols: List[str] = []
+            milestone_file_symbols: Dict[str, List[str]] = {}
             for f in step.files:
                 if f in symbols_by_file:
                     milestone_symbols.extend(symbols_by_file[f])
+                    milestone_file_symbols[f] = symbols_by_file[f]
             milestone_symbols = sorted(list(set(milestone_symbols)))[:10]
 
             # Query RAG if engine provided to extract contextual citations
@@ -132,6 +136,7 @@ class SynthesisEngine:
                 is_isolated=(step.tier_index == -1),
                 architectural_role=arch_role,
                 key_symbols_and_exports=milestone_symbols,
+                file_symbols=milestone_file_symbols,
                 deep_dive_citations=deep_dive_citations,
                 prerequisite_tiers=[],
                 dependent_tiers=[],
@@ -139,6 +144,18 @@ class SynthesisEngine:
                 implementation_gotchas=[],
             )
             synthesized_milestones.append(synth_m)
+
+        # Collect internal file-level import edges for graph visualizations
+        file_dependencies: List[Dict[str, Any]] = []
+        if parsed_files:
+            for node in parsed_files:
+                for imp in node.imports:
+                    if not imp.is_external and imp.resolved and imp.target:
+                        file_dependencies.append({
+                            "source": imp.source_path or node.path,
+                            "target": imp.target,
+                            "type": "import",
+                        })
 
         timestamp_str = datetime.now(timezone.utc).isoformat()
 
@@ -149,6 +166,8 @@ class SynthesisEngine:
             milestones=synthesized_milestones,
             total_milestones=len(synthesized_milestones),
             synthesis_timestamp=timestamp_str,
+            file_symbols=symbols_by_file,
+            file_dependencies=file_dependencies,
             metadata=metadata,
         )
 

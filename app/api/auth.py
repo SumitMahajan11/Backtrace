@@ -220,3 +220,34 @@ def get_authenticated_user_profile(
         is_admin=current_user.is_admin,
         created_at=current_user.created_at.isoformat(),
     )
+
+
+@router.get("/dev-login", summary="Dev Environment Login Helper")
+def dev_login(
+    user_id: int = Query(..., description="User ID to simulate login for"),
+    redirect_url: str = Query("/rewards", description="Destination URL"),
+    session: Session = Depends(get_db),
+):
+    """Dev authentication helper that sets an access token cookie for local/test browser verification."""
+    user = session.get(UserModel, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    from app.security.auth import create_access_token
+    token = create_access_token(
+        user_id=user.id,
+        github_id=user.github_id,
+        github_username=user.github_username,
+        is_admin=user.is_admin,
+    )
+    resp = RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)
+    resp.set_cookie(
+        key="access_token",
+        value=token,
+        httponly=True,
+        secure=False,
+        samesite="lax",
+        max_age=86400,
+        path="/",
+    )
+    return resp
+

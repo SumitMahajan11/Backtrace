@@ -106,6 +106,18 @@ function parseJS(code, filePath) {
         });
       }
     },
+    ExportDefaultDeclaration(path) {
+      if (path.node.declaration) {
+        const decl = path.node.declaration;
+        if (decl.id && decl.id.name) {
+          exportsList.push(decl.id.name);
+        } else if (decl.name) {
+          exportsList.push(decl.name);
+        } else if (decl.type === 'Identifier') {
+          exportsList.push(decl.name);
+        }
+      }
+    },
     ExportAllDeclaration(path) {
       if (path.node.source) {
         const specifier = path.node.source.value;

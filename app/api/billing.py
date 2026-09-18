@@ -1,7 +1,8 @@
 """Billing and Subscription API Router for Stripe Hosted Checkout and Customer Portal."""
 
 from typing import Any, Dict, Optional
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -69,6 +70,31 @@ def create_checkout(
         )
 
 
+@router.get("/checkout", summary="Redirect to Stripe Checkout Session")
+def get_checkout_redirect(
+    success_url: Optional[str] = Query(None),
+    cancel_url: Optional[str] = Query(None),
+    current_user: UserModel = Depends(get_current_user),
+    session: Session = Depends(get_db),
+):
+    """Browser GET endpoint that creates a Stripe checkout session and redirects immediately."""
+    try:
+        url = BillingService.create_checkout_session(
+            user=current_user,
+            session=session,
+            success_url=success_url,
+            cancel_url=cancel_url,
+        )
+        return RedirectResponse(url=url, status_code=status.HTTP_303_SEE_OTHER)
+    except BillingServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create Stripe Checkout session: {exc}",
+        )
+
+
 @router.post("/portal", response_model=CustomerPortalResponse, summary="Create Stripe Customer Portal Session")
 def create_customer_portal(
     payload: Optional[CustomerPortalRequest] = None,
@@ -88,6 +114,29 @@ def create_customer_portal(
             return_url=r_url,
         )
         return CustomerPortalResponse(portal_url=url)
+    except BillingServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create Customer Portal session: {exc}",
+        )
+
+
+@router.get("/portal", summary="Redirect to Stripe Customer Portal")
+def get_customer_portal_redirect(
+    return_url: Optional[str] = Query(None),
+    current_user: UserModel = Depends(get_current_user),
+    session: Session = Depends(get_db),
+):
+    """Browser GET endpoint that creates a Customer Portal session and redirects immediately."""
+    try:
+        url = BillingService.create_customer_portal_session(
+            user=current_user,
+            session=session,
+            return_url=return_url,
+        )
+        return RedirectResponse(url=url, status_code=status.HTTP_303_SEE_OTHER)
     except BillingServiceError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message)
     except Exception as exc:

@@ -139,3 +139,93 @@ def test_synthesis_engine_with_rag_citations():
     assert len(report.milestones) == 1
     assert len(report.milestones[0].deep_dive_citations) >= 1
     assert "src/math_util.py" in report.milestones[0].deep_dive_citations[0]
+
+
+def test_synthesis_engine_reconciles_total_files_and_attaches_per_file_symbols():
+    """
+    Verify that total_files matches total segmentation files (including non-code files),
+    per-file symbols are preserved, and file dependencies are extracted.
+    """
+    from app.parser.schema import ImportEdge
+
+    # AST parsed code files (2 files)
+    file_js = FileNode(
+        path="src/App.jsx",
+        language="javascript",
+        exports=["App"],
+        imports=[
+            ImportEdge(target="src/Button.jsx", source_path="src/App.jsx", resolved=True, is_external=False)
+        ],
+    )
+    file_btn = FileNode(path="src/Button.jsx", language="javascript", exports=["Button"])
+
+    # 4 total repository files in segmentation (including CSS and config)
+    seg_res = SegmentationResult(
+        files=[
+            SegmentedFileNode(path="src/App.jsx", domain=DomainType.FRONTEND, classification_method=ClassificationMethod.CONVENTION, confidence=ConfidenceLevel.HIGH),
+            SegmentedFileNode(path="src/Button.jsx", domain=DomainType.FRONTEND, classification_method=ClassificationMethod.CONVENTION, confidence=ConfidenceLevel.HIGH),
+            SegmentedFileNode(path="src/index.css", domain=DomainType.FRONTEND, classification_method=ClassificationMethod.CONVENTION, confidence=ConfidenceLevel.HIGH),
+            SegmentedFileNode(path="package.json", domain=DomainType.CONFIG, classification_method=ClassificationMethod.CONVENTION, confidence=ConfidenceLevel.HIGH),
+        ],
+        domain_counts={"frontend": 3, "config": 1},
+        method_counts={"convention": 4},
+    )
+
+    scored_seq = ScoredOrderingResult(
+        files=[
+            ScoredFileEntry(path="src/index.css", tier_index=0, confidence="high", confidence_reason="leaf"),
+            ScoredFileEntry(path="src/Button.jsx", tier_index=0, confidence="high", confidence_reason="leaf"),
+            ScoredFileEntry(path="src/App.jsx", tier_index=1, confidence="high", confidence_reason="dependent"),
+            ScoredFileEntry(path="package.json", tier_index=0, confidence="high", confidence_reason="build"),
+        ],
+        repo_confidence_summary=RepoConfidenceSummary(high_pct=100.0, medium_pct=0.0, low_pct=0.0),
+        isolated_files=[],
+        cyclic_files=[],
+    )
+
+    refined_res = RefinedOrderingResult(
+        tiers=[
+            RefinedTier(tier_index=0, ordered_files=[
+                FileOrderEntry(path="src/index.css", tie_break_method="none"),
+                FileOrderEntry(path="src/Button.jsx", tie_break_method="none"),
+                FileOrderEntry(path="package.json", tie_break_method="none"),
+            ]),
+            RefinedTier(tier_index=1, ordered_files=[
+                FileOrderEntry(path="src/App.jsx", tie_break_method="none"),
+            ]),
+        ],
+        isolated_files=[],
+        cyclic_files=[],
+        node_metadata={
+            "src/index.css": NodeMetadata(path="src/index.css", domain="frontend"),
+            "src/Button.jsx": NodeMetadata(path="src/Button.jsx", domain="frontend"),
+            "package.json": NodeMetadata(path="package.json", domain="config"),
+            "src/App.jsx": NodeMetadata(path="src/App.jsx", domain="frontend"),
+        },
+    )
+
+    narrator = NarrationEngine()
+    narration_result = narrator.generate_narration(scored_seq, refined_res)
+
+    synth = SynthesisEngine()
+    report = synth.synthesize(
+        repo_name="react-app",
+        segmentation_result=seg_res,
+        narration_result=narration_result,
+        parsed_files=[file_js, file_btn],
+    )
+
+    # 1. Total files reconciles with 4 total segmented repo files
+    assert report.architecture_overview.total_files == 4
+    assert sum(report.architecture_overview.domain_file_counts.values()) == 4
+
+    # 2. Per-file symbols attached
+    assert report.file_symbols.get("src/App.jsx") == ["App"]
+    assert report.file_symbols.get("src/Button.jsx") == ["Button"]
+    assert report.file_symbols.get("src/index.css") is None  # No JS symbols for CSS
+
+    # 3. File dependencies extracted
+    assert len(report.file_dependencies) == 1
+    assert report.file_dependencies[0]["source"] == "src/App.jsx"
+    assert report.file_dependencies[0]["target"] == "src/Button.jsx"
+

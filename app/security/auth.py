@@ -20,15 +20,27 @@ from urllib.parse import urlparse
 import jwt
 
 # Environment Configuration
-JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "backtrace-dev-secret-key-change-in-production")
+def _get_setting_val(attr: str, default: Any = "") -> Any:
+    try:
+        from app.core.config import get_settings
+        settings = get_settings()
+        val = getattr(settings, attr, None)
+        if val is not None and str(val).strip():
+            return val
+    except Exception:
+        pass
+    return os.getenv(attr, default)
+
+
+JWT_SECRET_KEY: str = str(_get_setting_val("JWT_SECRET_KEY", os.getenv("JWT_SECRET_KEY", "backtrace-dev-secret-key-change-in-production")))
 JWT_ALGORITHM: str = "HS256"
 ALLOWED_JWT_ALGORITHMS: List[str] = ["HS256"]
-JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "15"))
-REFRESH_TOKEN_EXPIRE_DAYS: int = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "30"))
+JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = int(_get_setting_val("ACCESS_TOKEN_EXPIRE_MINUTES", os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "15")))
+REFRESH_TOKEN_EXPIRE_DAYS: int = int(_get_setting_val("REFRESH_TOKEN_EXPIRE_DAYS", os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "30")))
 
-GITHUB_CLIENT_ID: str = os.getenv("GITHUB_CLIENT_ID", "")
-GITHUB_CLIENT_SECRET: str = os.getenv("GITHUB_CLIENT_SECRET", "")
-GITHUB_REDIRECT_URI: str = os.getenv("GITHUB_REDIRECT_URI", "http://localhost:8000/auth/github/callback")
+GITHUB_CLIENT_ID: str = str(_get_setting_val("GITHUB_CLIENT_ID", os.getenv("GITHUB_CLIENT_ID", "")))
+GITHUB_CLIENT_SECRET: str = str(_get_setting_val("GITHUB_CLIENT_SECRET", os.getenv("GITHUB_CLIENT_SECRET", "")))
+GITHUB_REDIRECT_URI: str = str(_get_setting_val("GITHUB_REDIRECT_URI", os.getenv("GITHUB_REDIRECT_URI", "http://localhost:8000/auth/github/callback")))
 
 DEFAULT_ALLOWED_REDIRECT_HOSTS: Set[str] = {
     "localhost",

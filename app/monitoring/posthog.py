@@ -23,8 +23,11 @@ class AnalyticsService:
         host: Optional[str] = None,
         disabled: bool = False,
     ):
-        self.api_key = api_key or os.getenv("POSTHOG_API_KEY", "")
-        self.host = host or os.getenv("POSTHOG_HOST", "https://app.posthog.com")
+        from app.core.config import get_settings
+        settings = get_settings()
+
+        self.api_key = api_key or os.getenv("POSTHOG_API_KEY") or settings.POSTHOG_API_KEY or ""
+        self.host = host or os.getenv("POSTHOG_HOST") or settings.POSTHOG_HOST or "https://app.posthog.com"
         self.disabled = disabled or os.getenv("ANALYTICS_DISABLED", "false").lower() in ("true", "1")
         self._captured_events: List[Dict[str, Any]] = []
 
@@ -34,6 +37,14 @@ class AnalyticsService:
                 project_api_key=self.api_key,
                 host=self.host,
             )
+
+    def flush(self) -> None:
+        """Flushes queued events to PostHog server."""
+        if self._client and not self.disabled:
+            try:
+                self._client.flush()
+            except Exception:
+                pass
 
     def _get_distinct_id(self, user_id: Union[int, str]) -> str:
         """Formats clean, non-PII user identifier."""
@@ -193,3 +204,15 @@ class AnalyticsService:
 
 # Global singleton instance for easy import across services and handlers
 analytics = AnalyticsService()
+
+
+def init_posthog(
+    api_key: Optional[str] = None,
+    host: Optional[str] = None,
+    disabled: bool = False,
+) -> AnalyticsService:
+    """Explicitly initializes or re-configures the global PostHog analytics singleton."""
+    global analytics
+    analytics = AnalyticsService(api_key=api_key, host=host, disabled=disabled)
+    return analytics
+

@@ -9,14 +9,17 @@ from fastapi import FastAPI, HTTPException, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from app.api.attempts import router as attempts_router
 from app.api.auth import router as auth_router
 from app.api.billing import router as billing_router
 from app.api.frontend import router as frontend_router
 from app.api.health import inspect_health
 from app.api.pipeline import router as pipeline_router
+from app.api.points import router as points_router
 from app.api.webhooks import router as webhooks_router
 from app.core.config import get_settings
 from app.db.session import init_db
+from app.monitoring.posthog import init_posthog
 from app.monitoring.sentry import init_sentry
 from app.utils.logging import get_logger
 
@@ -31,12 +34,23 @@ if settings.SENTRY_DSN:
         traces_sample_rate=settings.SENTRY_TRACES_SAMPLE_RATE,
     )
 
+# Initialize PostHog Product Analytics if configured in settings
+if settings.POSTHOG_API_KEY:
+    init_posthog(
+        api_key=settings.POSTHOG_API_KEY,
+        host=settings.POSTHOG_HOST,
+    )
+
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initializes database tables and monitoring systems on startup."""
     init_db()
+    from app.services.piston_health import piston_health_monitor
+    piston_health_monitor.start_background_task()
     yield
+    piston_health_monitor.stop_background_task()
 
 
 app = FastAPI(
@@ -81,6 +95,7 @@ async def global_unhandled_exception_handler(request: Request, exc: Exception):
     try:
         import sentry_sdk
         sentry_sdk.capture_exception(exc)
+        sentry_sdk.flush(timeout=3.0)
     except Exception:
         pass
 
@@ -94,9 +109,17 @@ async def global_unhandled_exception_handler(request: Request, exc: Exception):
 
 # Mount Routers
 app.include_router(auth_router)
+app.include_router(auth_router, prefix="/api")
 app.include_router(billing_router)
+app.include_router(billing_router, prefix="/api")
 app.include_router(pipeline_router)
+app.include_router(pipeline_router, prefix="/api")
+app.include_router(attempts_router)
+app.include_router(attempts_router, prefix="/api")
+app.include_router(points_router)
+app.include_router(points_router, prefix="/api")
 app.include_router(webhooks_router)
+app.include_router(webhooks_router, prefix="/api")
 app.include_router(frontend_router)
 
 
@@ -106,3 +129,9 @@ def get_health(response: Response) -> Dict[str, Any]:
     payload, status_code = inspect_health()
     response.status_code = status_code
     return payload
+
+
+@app.get("/debug/trigger-error", tags=["Debug"], summary="Trigger test unhandled exception for Sentry validation")
+def trigger_test_error():
+    """Triggers an unhandled exception to verify Sentry event capture and PII redaction."""
+    raise RuntimeError("Live Sentry Verification: Unhandled test error triggered at runtime")
