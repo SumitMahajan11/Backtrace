@@ -77,8 +77,19 @@ def test_determine_grading_tier_structural_fallback():
     assert tier == "structural_only"
 
 
+from unittest.mock import MagicMock
+
+
 def test_grade_attempt_tier_1_real_tests_passing():
-    engine = GradingEngine()
+    mock_exec = MagicMock()
+    mock_exec.execute.return_value = {
+        "stdout": "ALL TESTS PASSED\n",
+        "stderr": "",
+        "exit_code": 0,
+        "execution_time_ms": 12.5,
+        "timed_out": False,
+    }
+    engine = GradingEngine(execution_verifier=mock_exec)
     graph_data = {
         "milestones": [
             {
@@ -103,7 +114,15 @@ def test_grade_attempt_tier_1_real_tests_passing():
 
 
 def test_grade_attempt_tier_1_real_tests_failing():
-    engine = GradingEngine()
+    mock_exec = MagicMock()
+    mock_exec.execute.return_value = {
+        "stdout": "",
+        "stderr": "AssertionError: assert 5 == 6",
+        "exit_code": 1,
+        "execution_time_ms": 10.0,
+        "timed_out": False,
+    }
+    engine = GradingEngine(execution_verifier=mock_exec)
     graph_data = {
         "milestones": [
             {
@@ -128,7 +147,15 @@ def test_grade_attempt_tier_1_real_tests_failing():
 
 
 def test_grade_attempt_tier_2_expected_output_passing():
-    engine = GradingEngine()
+    mock_exec = MagicMock()
+    mock_exec.execute.return_value = {
+        "stdout": "HTTP Adapter initialized: max_retries=3, status=200\n",
+        "stderr": "",
+        "exit_code": 0,
+        "execution_time_ms": 15.0,
+        "timed_out": False,
+    }
+    engine = GradingEngine(execution_verifier=mock_exec)
     graph_data = {
         "milestones": [
             {"tier": 1, "included_files": ["status.py"], "exported_symbols": []}
@@ -148,7 +175,15 @@ def test_grade_attempt_tier_2_expected_output_passing():
 
 
 def test_grade_attempt_tier_2_expected_output_mismatch():
-    engine = GradingEngine()
+    mock_exec = MagicMock()
+    mock_exec.execute.return_value = {
+        "stdout": "Error: 404 Not Found\n",
+        "stderr": "",
+        "exit_code": 0,
+        "execution_time_ms": 15.0,
+        "timed_out": False,
+    }
+    engine = GradingEngine(execution_verifier=mock_exec)
     graph_data = {
         "milestones": [
             {"tier": 1, "included_files": ["status.py"], "exported_symbols": []}
@@ -168,7 +203,15 @@ def test_grade_attempt_tier_2_expected_output_mismatch():
 
 
 def test_grade_attempt_tier_3_structural_only_passing():
-    engine = GradingEngine()
+    mock_exec = MagicMock()
+    mock_exec.execute.return_value = {
+        "stdout": "Ready\n",
+        "stderr": "",
+        "exit_code": 0,
+        "execution_time_ms": 15.0,
+        "timed_out": False,
+    }
+    engine = GradingEngine(execution_verifier=mock_exec)
     graph_data = {
         "milestones": [
             {
@@ -204,7 +247,15 @@ print("Ready")
 
 
 def test_grade_attempt_tier_3_structural_only_missing_symbols():
-    engine = GradingEngine()
+    mock_exec = MagicMock()
+    mock_exec.execute.return_value = {
+        "stdout": "",
+        "stderr": "",
+        "exit_code": 0,
+        "execution_time_ms": 15.0,
+        "timed_out": False,
+    }
+    engine = GradingEngine(execution_verifier=mock_exec)
     graph_data = {
         "milestones": [
             {
