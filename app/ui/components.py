@@ -1915,8 +1915,11 @@ def report_view(
     Structured into modular visual sections with interactive SVG dependency graph diagram,
     milestone sequence spine, in-app code editor workspace, and live structural verification.
     """
-    job_id = sanitize_text(str(job.id))
-    repo_url = sanitize_text(job.repo_url)
+    try:
+        job_id = int(job.id if hasattr(job, "id") else (job.get("id", 0) if isinstance(job, dict) else 0))
+    except (ValueError, TypeError, AttributeError):
+        job_id = 0
+    repo_url = sanitize_text(getattr(job, "repo_url", "") if hasattr(job, "repo_url") else (job.get("repo_url", "") if isinstance(job, dict) else ""))
     repo_name = sanitize_text(job.repo_name or (job.repo_url.rstrip("/").split("/")[-1] if "/" in job.repo_url else job.repo_url))
     created_at = sanitize_text(job.created_at.strftime("%Y-%m-%d %H:%M UTC") if hasattr(job.created_at, "strftime") else str(job.created_at))
     duration = f"{job.execution_time_seconds:.1f}s" if job.execution_time_seconds else "Completed"
