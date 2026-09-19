@@ -75,3 +75,9 @@ validation_audit.json
 *_evidence.json
 collect_output*.txt
 pytest_execution*.txt
+
+# Database dumps, migration artifacts & backup archives
+*.sql
+*.sql.gz
+Backtrace_SQLite_Safe_Backup/
+Backtrace_Migration_Artifacts/
