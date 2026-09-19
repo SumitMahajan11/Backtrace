@@ -21,12 +21,17 @@ def pytest_configure(config):
 
     if not piston_found:
         try:
-            wsl_ip = subprocess.check_output(["wsl", "-d", "Ubuntu", "-e", "hostname", "-I"], text=True).split()[0]
-            test_url = f"http://{wsl_ip}:2000"
-            httpx.get(f"{test_url}/api/v2/runtimes", timeout=1.0)
-            os.environ["PISTON_URL"] = test_url
-            piston_health_monitor.piston_url = test_url
-            piston_found = True
+            wsl_ips = subprocess.check_output(["wsl", "hostname", "-I"], text=True).split()
+            for ip in wsl_ips:
+                test_url = f"http://{ip}:2000"
+                try:
+                    httpx.get(f"{test_url}/api/v2/runtimes", timeout=0.5)
+                    os.environ["PISTON_URL"] = test_url
+                    piston_health_monitor.piston_url = test_url
+                    piston_found = True
+                    break
+                except Exception:
+                    continue
         except Exception:
             pass
 
@@ -36,9 +41,18 @@ def pytest_configure(config):
 
 @pytest.fixture(autouse=True)
 def reset_piston_health_state():
-    """Ensure singleton piston health state is clean before each test."""
-    piston_health_monitor._is_healthy = _discovered_piston_health
+    """Ensure singleton piston health state and rate limiters are clean before each test."""
+    piston_health_monitor._is_healthy = True
     if os.environ.get("PISTON_URL"):
         piston_health_monitor.piston_url = os.environ["PISTON_URL"]
+
+    # Provide an in-memory fakeredis client to rate limiter if real redis is unavailable
+    from app.security.rate_limiter import execution_rate_limiter
+    import fakeredis
+    if not execution_rate_limiter.is_redis_healthy():
+        execution_rate_limiter._redis = fakeredis.FakeRedis(decode_responses=True)
+    execution_rate_limiter.reset_all()
+
     yield
     piston_health_monitor._is_healthy = _discovered_piston_health
+    execution_rate_limiter.reset_all()

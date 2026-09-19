@@ -485,7 +485,16 @@ def test_end_to_end_submit_api_awards_points(db_session, test_users):
             "hint_level_revealed": 1,
             "implementation_revealed": False,
         }
-        res = client.post(f"/api/attempts/{e2e_job.id}/5", json=submit_payload)
+        from unittest.mock import patch
+        mock_exec = {
+            "status": "success",
+            "exit_code": 0,
+            "stdout": "PASSED [100%]\n1 passed in 0.01s",
+            "stderr": "",
+            "truncated": False,
+        }
+        with patch("app.api.attempts.execution_verifier.execute", return_value=mock_exec):
+            res = client.post(f"/api/attempts/{e2e_job.id}/5", json=submit_payload)
         assert res.status_code == 200
         data = res.json()
         assert "points_award" in data
