@@ -396,6 +396,68 @@ console.log("{xss_script}");
     assert "&lt;img src=x" in rendered_html
 
 
+def test_graph_dag_node_single_quote_xss_sink(client, create_user, test_db):
+    """
+    Threat Model: Graph node IDs containing single quotes (e.g. a');alert(1);//.py)
+    must NOT produce raw/decoded inline handler breakout strings.
+    Must use data-node-id and selectDagNode(this.dataset.nodeId), and truncate before escaping.
+    """
+    SessionLocal, _ = test_db
+    user = create_user(github_id=9911, username="graph_sec_tester")
+    token = create_access_token(user_id=user.id, github_id=user.github_id, github_username=user.github_username)
+    client.cookies.set("access_token", token)
+
+    single_quote_payload = "a');alert(1);//.py"
+    long_entity_path = "/src/very/long/path/with/quotes/\"special\"/and/'single'/module_name.py"
+
+    with SessionLocal() as session:
+        job = AnalysisJobRepository.create_job(
+            session=session,
+            user_id=user.id,
+            repo_url="https://github.com/evil-corp/graph-xss",
+            status="completed",
+        )
+        AnalysisJobRepository.update_job_status(
+            session=session,
+            job_id=job.id,
+            status="completed",
+            report_markdown="# Safe Graph Report",
+            graph_data={
+                "nodes": [
+                    {
+                        "id": single_quote_payload,
+                        "label": single_quote_payload,
+                        "path": long_entity_path,
+                        "domain": "core",
+                        "tier": 1,
+                        "confidence": "high",
+                    }
+                ],
+                "edges": [],
+            },
+            quiz_data={"questions": []},
+        )
+        job_id = job.id
+
+    resp = client.get(f"/report/{job_id}")
+    assert resp.status_code == 200
+    html = resp.text
+
+    # 1. Ensure unsafe inline handler with single quote string interpolation is NOT present
+    assert f"selectDagNode('{single_quote_payload}')" not in html
+    assert "selectDagNode(&#x27;" not in html
+    assert "hoverDagNode(&#x27;" not in html
+
+    # 2. Ensure safe dataset invocation is used
+    assert 'onclick="selectDagNode(this.dataset.nodeId)"' in html
+    assert 'onmouseenter="hoverDagNode(this.dataset.nodeId)"' in html
+    assert 'data-node-id="a&#x27;);alert(1);//.py"' in html
+
+    # 3. Ensure truncation does not produce truncated entity fragments like 'ot;GRAPH'
+    assert "ot;GRAPH" not in html
+    assert "&#x27;single&#x27;/module_name.py" in html
+
+
 def test_diff_ast_args_xss_sanitization():
     """Threat Model: Malicious repository functions with XSS in arguments are escaped in diff HTML."""
     from app.ui.components import _render_server_diff_html

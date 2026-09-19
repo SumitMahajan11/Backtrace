@@ -2142,9 +2142,13 @@ def report_view(
                     "node": node
                 }
 
-                node_label = sanitize_text(node.get("label", node.get("id", "")))
-                node_path = sanitize_text(node.get("path", node.get("id", "")))
-                node_domain = sanitize_text(node.get("domain", node.get("type", "core"))).upper()
+                raw_label = str(node.get("label", node.get("id", "")))
+                raw_path = str(node.get("path", node.get("id", "")))
+                raw_domain = str(node.get("domain", node.get("type", "core"))).upper()
+
+                node_label = sanitize_text(raw_label)
+                node_path = sanitize_text(raw_path[-28:])
+                node_domain = sanitize_text(raw_domain[:7])
                 confidence = sanitize_text(str(node.get("confidence", "high"))).lower()
                 conf_color = "var(--teal)" if confidence == "high" else ("var(--amber)" if confidence == "medium" else "var(--brass)")
                 exports = node.get("exports", [])
@@ -2153,7 +2157,7 @@ def report_view(
                 safe_node_id = sanitize_text(node_id).replace("/", "_").replace(".", "_")
 
                 svg_nodes_html += f"""
-                <g class="dag-node" id="dag-node-{safe_node_id}" data-node-id="{sanitize_text(node_id)}" data-tier="{t_val}" data-domain="{node_domain}" onclick="selectDagNode('{sanitize_text(node_id)}')" onmouseenter="hoverDagNode('{sanitize_text(node_id)}')" onmouseleave="unhoverDagNode()" transform="translate({col_x}, {node_y})" style="cursor: pointer; transition: all 150ms ease;">
+                <g class="dag-node" id="dag-node-{safe_node_id}" data-node-id="{sanitize_text(node_id)}" data-tier="{t_val}" data-domain="{node_domain}" onclick="selectDagNode(this.dataset.nodeId)" onmouseenter="hoverDagNode(this.dataset.nodeId)" onmouseleave="unhoverDagNode()" transform="translate({col_x}, {node_y})" style="cursor: pointer; transition: all 150ms ease;">
                     <rect width="{col_width}" height="{node_h}" rx="6" fill="var(--panel)" stroke="var(--hairline)" class="dag-node-box" />
                     <!-- Confidence Indicator Dot -->
                     <circle cx="16" cy="20" r="4" fill="{conf_color}" />
@@ -2161,9 +2165,9 @@ def report_view(
                     <text x="28" y="24" fill="var(--text-primary)" font-family="'IBM Plex Mono', monospace" font-size="12" font-weight="600">{node_label}</text>
                     <!-- Domain Badge -->
                     <rect x="{col_width - 62}" y="10" width="50" height="18" rx="3" fill="var(--panel-raised)" stroke="var(--hairline)" />
-                    <text x="{col_width - 37}" y="22" fill="var(--brass)" font-family="'IBM Plex Mono', monospace" font-size="9" font-weight="600" text-anchor="middle">{node_domain[:7]}</text>
+                    <text x="{col_width - 37}" y="22" fill="var(--brass)" font-family="'IBM Plex Mono', monospace" font-size="9" font-weight="600" text-anchor="middle">{node_domain}</text>
                     <!-- File Path Subtitle -->
-                    <text x="16" y="44" fill="var(--text-tertiary)" font-family="'IBM Plex Mono', monospace" font-size="10">{node_path[-28:]}</text>
+                    <text x="16" y="44" fill="var(--text-tertiary)" font-family="'IBM Plex Mono', monospace" font-size="10">{node_path}</text>
                     <!-- Exports / Invariant count -->
                     <text x="16" y="58" fill="var(--text-secondary)" font-family="'IBM Plex Mono', monospace" font-size="9.5">{exports_count} exports &bull; Tier {t_val}</text>
                 </g>
@@ -2210,7 +2214,7 @@ def report_view(
             dot_cls = "teal" if n_conf == "high" else ("amber" if n_conf == "medium" else "crimson")
 
             catalog_rows_html += f"""
-            <tr style="cursor: pointer;" onclick="selectDagNode('{sanitize_text(n.get('id', ''))}')">
+            <tr style="cursor: pointer;" data-node-id="{sanitize_text(n.get('id', ''))}" onclick="selectDagNode(this.dataset.nodeId)">
                 <td>
                     <div style="display: flex; align-items: center; gap: 0.5rem;">
                         <span class="chip-dot {dot_cls}"></span>
@@ -2339,7 +2343,10 @@ def report_view(
     if milestones_data:
         items_html = ""
         for m in milestones_data:
-            m_tier = m.get("tier", 0)
+            try:
+                m_tier = int(m.get("tier", 0))
+            except (ValueError, TypeError):
+                m_tier = 0
             m_num_str = f"{m_tier:02d}"
             m_title = sanitize_text(m.get("title", ""))
             m_role = sanitize_text(m.get("architectural_role", ""))
@@ -2766,7 +2773,10 @@ def report_view(
             q_tier = sanitize_text(str(q.get("tier", "—")))
             q_exp = sanitize_text(q.get("explanation", ""))
             options = q.get("options", [])
-            correct_idx = q.get("correct_index", 0)
+            try:
+                correct_idx = int(q.get("correct_index", 0))
+            except (ValueError, TypeError):
+                correct_idx = 0
 
             opts_html = ""
             for opt_idx, opt in enumerate(options):

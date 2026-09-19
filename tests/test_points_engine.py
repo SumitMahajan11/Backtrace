@@ -493,6 +493,7 @@ def test_end_to_end_submit_api_awards_points(db_session, test_users):
             "stderr": "",
             "truncated": False,
         }
+        # Note: This test mocks execution_verifier.execute to focus on points calculation; it does not cover real execution.
         with patch("app.api.attempts.execution_verifier.execute", return_value=mock_exec):
             res = client.post(f"/api/attempts/{e2e_job.id}/5", json=submit_payload)
         assert res.status_code == 200
