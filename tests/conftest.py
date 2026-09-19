@@ -7,7 +7,9 @@ from app.services.piston_health import piston_health_monitor
 _discovered_piston_health = False
 
 def pytest_configure(config):
-    """Discover reachable Piston URL once for test session."""
+    """Discover reachable Piston URL once for test session and isolate Sentry monitoring."""
+    os.environ["SENTRY_DSN"] = ""
+    os.environ["ENVIRONMENT"] = "testing"
     global _discovered_piston_health
     piston_found = False
     try:

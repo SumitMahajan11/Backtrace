@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir --user -r requirements.txt
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
 # Stage 2: Minimal unprivileged runtime image
 FROM python:3.13-slim AS runner
@@ -24,13 +24,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
+# Copy installed Python packages from builder
+COPY --from=builder /install /usr/local
+
 # Create non-root unprivileged service user (UID 10001)
 RUN groupadd -g 10001 appgroup && \
     useradd -u 10001 -g appgroup -s /sbin/nologin -d /app -M appuser
-
-# Copy Python packages from builder
-COPY --from=builder /root/.local /home/appuser/.local
-ENV PATH="/home/appuser/.local/bin:${PATH}"
 
 # Prepare persistent data and logs directory
 RUN mkdir -p /data /app/logs && \

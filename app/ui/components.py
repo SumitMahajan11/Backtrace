@@ -1395,7 +1395,17 @@ def progress_view(
             if (type === "active") color = "var(--brass)";
             if (type === "error") color = "var(--crimson)";
 
-            line.innerHTML = `<span style="color: var(--text-tertiary); margin-right: 0.5rem;">[${{now}}]</span> <span style="color: ${{color}};">${{text}}</span>`;
+            const timeSpan = document.createElement("span");
+            timeSpan.style.color = "var(--text-tertiary)";
+            timeSpan.style.marginRight = "0.5rem";
+            timeSpan.textContent = `[${{now}}]`;
+
+            const msgSpan = document.createElement("span");
+            msgSpan.style.color = color;
+            msgSpan.textContent = text;
+
+            line.appendChild(timeSpan);
+            line.appendChild(msgSpan);
             logBox.appendChild(line);
             logBox.scrollTop = logBox.scrollHeight;
         }}
@@ -1803,7 +1813,9 @@ def _render_server_diff_html(
         mat = s.get("matched", {}) or s.get("expected", {})
         name = sanitize_text(mat.get("name", ""))
         kind = sanitize_text(mat.get("kind", "symbol"))
-        args_str = f"({', '.join(mat.get('args', []))})" if mat.get("args") else ""
+        raw_args = mat.get("args", [])
+        safe_args = [sanitize_text(arg) for arg in raw_args] if isinstance(raw_args, list) else []
+        args_str = f"({', '.join(safe_args)})" if safe_args else ""
         present_pills += f"""<span style="display: inline-flex; align-items: center; gap: 0.3rem; background: rgba(45, 212, 191, 0.12); border: 1px solid var(--teal-border); color: var(--teal); padding: 0.2rem 0.5rem; border-radius: 3px; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem;">✓ {name}{args_str} <span style="opacity: 0.75; font-size: 0.6875rem;">({kind})</span></span> """
 
     missing_pills = ""

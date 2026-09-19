@@ -97,11 +97,20 @@ def scrub_sensitive_dict(data: Any) -> Any:
     return data
 
 
-def scrub_sentry_event(event: Dict[str, Any], hint: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+def scrub_sentry_event(event: Dict[str, Any], hint: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
     """
-    Sentry before_send callback that sanitizes all incoming error events.
+    Sentry before_send callback that sanitizes all incoming error events and drops expected HTTP exceptions.
     Strictly strips Authorization headers, cookies, request body secrets, and user PII.
     """
+    # 0. Drop handled/expected HTTPExceptions (4xx client errors and 503 graceful fallbacks)
+    if hint and "exc_info" in hint and hint["exc_info"]:
+        exc_type, exc_val, _ = hint["exc_info"]
+        if exc_val is not None:
+            from fastapi import HTTPException
+            from starlette.exceptions import HTTPException as StarletteHTTPException
+            if isinstance(exc_val, (HTTPException, StarletteHTTPException)):
+                return None
+
     # 1. Sanitize HTTP Request Details
     if "request" in event and isinstance(event["request"], dict):
         req = event["request"]

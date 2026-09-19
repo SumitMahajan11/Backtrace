@@ -396,6 +396,42 @@ console.log("{xss_script}");
     assert "&lt;img src=x" in rendered_html
 
 
+def test_diff_ast_args_xss_sanitization():
+    """Threat Model: Malicious repository functions with XSS in arguments are escaped in diff HTML."""
+    from app.ui.components import _render_server_diff_html
+    malicious_verification = {
+        "structurally_verified": True,
+        "present_symbols": [
+            {
+                "matched": {
+                    "name": "exploit_fn",
+                    "kind": "function",
+                    "args": ["<script>alert(1)</script>", "valid_arg"],
+                }
+            }
+        ],
+    }
+    rendered = _render_server_diff_html(malicious_verification)
+    assert "<script>alert(1)</script>" not in rendered
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in rendered
+
+
+def test_progress_view_sse_log_safe_dom():
+    """Threat Model: Progress view script constructs safe text nodes rather than using raw innerHTML on SSE text."""
+    from app.ui.components import progress_view
+    from unittest.mock import MagicMock
+    mock_job = MagicMock()
+    mock_job.id = 123
+    mock_job.repo_url = "https://github.com/example/safe"
+    mock_user = MagicMock()
+    mock_user.github_username = "testuser"
+    mock_user.avatar_url = ""
+
+    html_out = progress_view(job=mock_job, current_user=mock_user)
+    assert "msgSpan.textContent = text;" in html_out
+    assert "line.innerHTML = `<span" not in html_out
+
+
 # =========================================================================
 # 8. Threat Model: IDOR (Insecure Direct Object Reference) Protection Test
 # =========================================================================
