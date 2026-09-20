@@ -46,6 +46,8 @@ if settings.POSTHOG_API_KEY:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initializes database tables and monitoring systems on startup."""
+    # Clear settings cache to ensure fresh load from .env (not any stale module-level cache)
+    get_settings.cache_clear()
     init_db()
     from app.services.piston_health import piston_health_monitor
     piston_health_monitor.start_background_task()
@@ -135,3 +137,20 @@ def get_health(response: Response) -> Dict[str, Any]:
 def trigger_test_error():
     """Triggers an unhandled exception to verify Sentry event capture and PII redaction."""
     raise RuntimeError("Live Sentry Verification: Unhandled test error triggered at runtime")
+
+
+@app.get("/debug/env", tags=["Debug"], summary="Debug: Show runtime env values")
+def debug_env():
+    """Shows key runtime env values for debugging."""
+    import os, pathlib
+    settings = get_settings()
+    cwd = os.getcwd()
+    env_path = pathlib.Path(".env").resolve()
+    return {
+        "cwd": cwd,
+        "env_file_resolved": str(env_path),
+        "env_file_exists": env_path.exists(),
+        "os_environ_GITHUB_REDIRECT_URI": os.environ.get("GITHUB_REDIRECT_URI", "NOT SET"),
+        "settings_GITHUB_REDIRECT_URI": settings.GITHUB_REDIRECT_URI,
+        "settings_ENVIRONMENT": settings.ENVIRONMENT,
+    }

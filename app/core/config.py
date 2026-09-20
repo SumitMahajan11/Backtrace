@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     # GitHub OAuth
     GITHUB_CLIENT_ID: Optional[str] = None
     GITHUB_CLIENT_SECRET: Optional[str] = None
-    GITHUB_REDIRECT_URI: str = "http://localhost:8000/api/auth/callback"
+    GITHUB_REDIRECT_URI: str = "http://localhost:8000/auth/github/callback"
 
     # Stripe Billing
     STRIPE_SECRET_KEY: Optional[str] = None

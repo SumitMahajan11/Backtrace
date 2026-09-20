@@ -81,3 +81,7 @@ pytest_execution*.txt
 *.sql.gz
 Backtrace_SQLite_Safe_Backup/
 Backtrace_Migration_Artifacts/
+
+# Local development overrides (HTTP-only nginx, no TLS certs)
+docker-compose.override.yml
+docker/nginx/default.local.conf
