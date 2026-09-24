@@ -209,10 +209,112 @@ def test_verifier_mocked_timeout():
 
 def test_verifier_connection_failure():
     import httpx
-    verifier = ExecutionVerifier()
+    verifier = ExecutionVerifier(allow_local_fallback=False)
     with patch("httpx.Client.post", side_effect=httpx.ConnectError("Connection refused")):
         with pytest.raises(ExecutionVerifierConnectionError):
             verifier.execute(submitted_code="print(1)", language="python")
+
+
+def test_verifier_local_fallback_execution():
+    """Verifies that ExecutionVerifier executes code locally with real output when Piston is unreachable."""
+    import httpx
+    verifier = ExecutionVerifier(allow_local_fallback=True)
+    with patch("httpx.Client.post", side_effect=httpx.ConnectError("Connection refused")):
+        res = verifier.execute(
+            submitted_code="print('Hello from local sandbox execution!')\nx = 10 + 32\nprint(f'Computed {x}')",
+            language="python",
+        )
+        assert res["status"] == "success"
+        assert res["exit_code"] == 0
+        assert "Hello from local sandbox execution!" in res["stdout"]
+        assert "Computed 42" in res["stdout"]
+        assert res["execution_time_ms"] >= 0.0
+
+
+def test_verifier_local_runtime_error_captured():
+    """Verifies that local execution captures real runtime exceptions in stderr."""
+    import httpx
+    verifier = ExecutionVerifier(allow_local_fallback=True)
+    with patch("httpx.Client.post", side_effect=httpx.ConnectError("Connection refused")):
+        res = verifier.execute(
+            submitted_code="def broken():\n    raise ValueError('Custom test error')\nbroken()",
+            language="python",
+        )
+        assert res["status"] == "error"
+        assert res["exit_code"] != 0
+        assert "ValueError: Custom test error" in res["stderr"]
+
+
+def test_production_mode_refuses_local_fallback_even_if_allow_local_fallback_true(monkeypatch):
+    """Verifies that in production mode, ExecutionVerifier strictly disallows local fallback
+    even when ALLOW_LOCAL_FALLBACK=true is set in the environment."""
+    import httpx
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.setenv("ALLOW_LOCAL_FALLBACK", "true")
+
+    from app.core.config import get_settings
+    get_settings.cache_clear()
+
+    try:
+        verifier = ExecutionVerifier()
+        assert verifier.allow_local_fallback is False
+
+        # When Piston is unreachable, it must raise ExecutionVerifierConnectionError, not execute locally
+        with patch("httpx.Client.post", side_effect=httpx.ConnectError("Piston daemon offline")):
+            with pytest.raises(ExecutionVerifierConnectionError) as exc_info:
+                verifier.execute(submitted_code="print('should not run')", language="python")
+            assert "Code execution sandbox is currently unavailable. Please try again shortly." in str(exc_info.value)
+    finally:
+        get_settings.cache_clear()
+
+
+def test_development_mode_logs_startup_warning_for_local_fallback(monkeypatch, caplog):
+    """Verifies that in dev/test mode with local fallback enabled, a clear startup warning is logged."""
+    import logging
+    monkeypatch.setenv("ENVIRONMENT", "development")
+    monkeypatch.setenv("ALLOW_LOCAL_FALLBACK", "true")
+
+    from app.core.config import get_settings
+    get_settings.cache_clear()
+
+    try:
+        with caplog.at_level(logging.WARNING, logger="reverse.execution_verifier"):
+            verifier = ExecutionVerifier()
+            assert verifier.allow_local_fallback is True
+            assert any(
+                "WARNING: Piston sandbox not configured — falling back to unsandboxed local execution" in record.message
+                for record in caplog.records
+            )
+    finally:
+        get_settings.cache_clear()
+
+
+def test_api_run_production_fail_closed_returns_503(client, create_user, create_job, monkeypatch):
+    """Verifies that /run endpoint in production returns HTTP 503 with specific message when Piston is unreachable."""
+    from unittest.mock import PropertyMock
+    from app.services.piston_health import PistonHealthMonitor
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    from app.core.config import get_settings
+    get_settings.cache_clear()
+
+    user = create_user(github_id=9099, username="prod_user")
+    job_id = create_job(user_id=user.id, graph_data={"tiers": {"1": []}})
+    token = create_access_token(user_id=user.id, github_id=user.github_id, github_username=user.github_username)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    try:
+        with patch.object(PistonHealthMonitor, "is_healthy", new_callable=PropertyMock, return_value=False), \
+             patch("app.api.attempts.execution_verifier.allow_local_fallback", False):
+            resp = client.post(
+                f"/attempts/{job_id}/1/run",
+                json={"submitted_code": "print('production')", "language": "python"},
+                headers=headers,
+            )
+            assert resp.status_code == 503
+            assert resp.json()["detail"] == "Code execution sandbox is currently unavailable. Please try again shortly."
+    finally:
+        get_settings.cache_clear()
+
 
 
 # =========================================================================

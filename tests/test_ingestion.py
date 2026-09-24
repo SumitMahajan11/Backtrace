@@ -162,3 +162,37 @@ def test_file_count_limit_exceeded(tmp_path, monkeypatch):
     service = IngestionService(max_file_limit=5)
     with pytest.raises(IngestionLimitExceededError, match="maximum allowed cap of 5 files"):
         service.ingest_repository(str(repo_dir))
+
+
+def test_ingest_repository_with_subpath(test_repo_path, monkeypatch):
+    """
+    Verifies that when subpath is provided, only files under that subpath are ingested.
+    """
+    monkeypatch.setattr("app.services.ingestion.validate_github_url", lambda url: ("test", "repo"))
+    monkeypatch.setattr("app.services.ingestion.validate_ssrf", lambda host: None)
+    monkeypatch.setattr("app.services.ingestion.check_repo_reachability", lambda url: None)
+
+    service = IngestionService()
+    result = service.ingest_repository(str(test_repo_path), subpath="src")
+
+    paths = [n.path for n in result.file_tree]
+    assert "src/main.py" in paths
+    assert "src/utils.py" in paths
+    assert "README.md" not in paths
+    assert len(result.file_tree) == 2
+
+
+def test_ingest_repository_subpath_path_traversal(test_repo_path, monkeypatch):
+    """
+    Verifies that path traversal in subpath is blocked with InvalidURLError.
+    """
+    from app.models.ingestion import InvalidURLError
+
+    monkeypatch.setattr("app.services.ingestion.validate_github_url", lambda url: ("test", "repo"))
+    monkeypatch.setattr("app.services.ingestion.validate_ssrf", lambda host: None)
+    monkeypatch.setattr("app.services.ingestion.check_repo_reachability", lambda url: None)
+
+    service = IngestionService()
+    with pytest.raises(InvalidURLError, match="traversal"):
+        service.ingest_repository(str(test_repo_path), subpath="../etc")
+

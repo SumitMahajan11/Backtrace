@@ -21,6 +21,8 @@ class AnalysisJobRepository:
         repo_url: str = "",
         github_url: Optional[str] = None,
         repo_name: Optional[str] = None,
+        commit_ref: Optional[str] = None,
+        subpath: Optional[str] = None,
         status: str = "pending",
         run_id: Optional[str] = None,
     ) -> AnalysisJobModel:
@@ -33,6 +35,8 @@ class AnalysisJobRepository:
             user_id=user_id,
             repo_name=target_name,
             github_url=target_url,
+            commit_ref=commit_ref,
+            subpath=subpath,
             run_id=target_run_id,
             status=status,
             created_at=utc_now(),
@@ -78,8 +82,9 @@ class AnalysisJobRepository:
         report_markdown: Optional[str] = None,
         graph_data: Optional[Dict[str, Any]] = None,
         quiz_data: Optional[Dict[str, Any]] = None,
+        execution_time_seconds: Optional[float] = None,
     ) -> Optional[AnalysisJobModel]:
-        """Updates job status, markdown output, graph, and quiz results."""
+        """Updates job status, markdown output, graph, quiz results, and execution duration."""
         job = AnalysisJobRepository.get_job_by_id(session, job_id)
         if job:
             job.status = status
@@ -91,6 +96,8 @@ class AnalysisJobRepository:
                 job.graph_output_json = json.dumps(graph_data) if isinstance(graph_data, dict) else str(graph_data)
             if quiz_data is not None:
                 job.quiz_output_json = json.dumps(quiz_data) if isinstance(quiz_data, dict) else str(quiz_data)
+            if execution_time_seconds is not None:
+                job.execution_time_seconds = execution_time_seconds
             job.updated_at = utc_now()
             session.commit()
             session.refresh(job)

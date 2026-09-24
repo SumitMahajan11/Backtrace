@@ -42,7 +42,13 @@ class CachedIngestionService:
     def __init__(self, ingestion_service: Optional[IngestionService] = None):
         self.ingestion_service = ingestion_service or IngestionService()
 
-    def ingest_with_cache(self, github_url: str, session: Session) -> IngestionResult:
+    def ingest_with_cache(
+        self,
+        github_url: str,
+        session: Session,
+        commit_ref: Optional[str] = None,
+        subpath: Optional[str] = None,
+    ) -> IngestionResult:
         """
         Main entry point for repository ingestion:
         1. Resolves lightweight remote HEAD commit hash.
@@ -54,7 +60,7 @@ class CachedIngestionService:
 
         # 1. Cache hit check
         cached_repo = StorageRepository.get_active_cached_repo(session, github_url, commit_hash)
-        if cached_repo and cached_repo.ingestion_result:
+        if cached_repo and cached_repo.ingestion_result and not subpath:
             return StorageRepository.deserialize_ingestion_result(
                 cached_repo, cached_repo.ingestion_result
             )
@@ -64,7 +70,7 @@ class CachedIngestionService:
             session, github_url, commit_hash
         )
 
-        if not is_new_lock:
+        if not is_new_lock and not subpath:
             # Another request is processing or already finished
             if repo_record.status == "complete" and repo_record.ingestion_result:
                 return StorageRepository.deserialize_ingestion_result(
@@ -82,12 +88,15 @@ class CachedIngestionService:
 
         # 3. Perform fresh sandboxed ingestion
         try:
-            result = self.ingestion_service.ingest_repository(github_url)
+            result = self.ingestion_service.ingest_repository(
+                github_url, commit_ref=commit_ref, subpath=subpath
+            )
             # Update commit_hash from ingested result if accurate
             if result.metadata.head_commit:
                 repo_record.commit_hash = result.metadata.head_commit
 
-            StorageRepository.save_ingestion_result(session, repo_record, result)
+            if not subpath:
+                StorageRepository.save_ingestion_result(session, repo_record, result)
             return result
         except Exception as e:
             StorageRepository.mark_repo_failed(session, repo_record, str(e))

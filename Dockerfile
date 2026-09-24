@@ -38,6 +38,9 @@ RUN mkdir -p /data /app/logs && \
 # Copy application source code
 COPY --chown=appuser:appgroup app /app/app
 COPY --chown=appuser:appgroup docs /app/docs
+COPY --chown=appuser:appgroup alembic /app/alembic
+COPY --chown=appuser:appgroup alembic.ini /app/alembic.ini
+COPY --chown=appuser:appgroup scripts /app/scripts
 
 # Switch to unprivileged execution user
 USER appuser
@@ -50,7 +53,7 @@ EXPOSE 8000
 
 ENV ENVIRONMENT=production \
     PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
-    DATABASE_URL=sqlite:////data/backtrace.db
+    PYTHONDONTWRITEBYTECODE=1
 
 CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log"]
+

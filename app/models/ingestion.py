@@ -54,6 +54,24 @@ class IngestionLimitExceededError(IngestionError):
     pass
 
 
+class RepoTooLargeError(IngestionLimitExceededError):
+    """Raised during preflight check when repository file count exceeds limit."""
+
+    def __init__(self, message: str, file_count: int, limit: int = 150):
+        super().__init__(message)
+        self.file_count = file_count
+        self.limit = limit
+
+
+class GitHubAPIError(IngestionError):
+    """Raised when GitHub API request fails (rate limit, 404, auth, network)."""
+
+    def __init__(self, message: str, status_code: Optional[int] = None):
+        super().__init__(message)
+        self.status_code = status_code
+
+
 class CloneTimeoutError(IngestionError):
     """Raised when git clone process exceeds allowed timeout."""
     pass
+

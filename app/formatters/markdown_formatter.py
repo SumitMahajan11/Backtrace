@@ -39,7 +39,7 @@ class MarkdownReportFormatter:
         lines.append("")
 
         # 3. Confidence & Sequence Calibration Disclosure
-        lines.append("## 2. Sequence Reasoning & Confidence Calibration")
+        lines.append("## 2. Build Order & Confidence Scoring")
         lines.append(report.confidence_disclosure)
         lines.append("")
 

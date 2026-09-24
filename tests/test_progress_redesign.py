@@ -135,11 +135,11 @@ def test_progress_view_renders_11_distinct_stages(client, create_user, test_db):
         ("STAGE 02", "Discovery & File Hierarchy", "tree layout"),
         ("STAGE 03", "AST & Syntax Parsing", "concrete syntax trees"),
         ("STAGE 04", "Global Symbol Table", "function signatures"),
-        ("STAGE 05", "Directed Dependency Graph", "directed acyclic graph"),
+        ("STAGE 05", "Directed Dependency Graph", "dependency graph"),
         ("STAGE 06", "Architecture Domain Mapping", "architectural tiers"),
-        ("STAGE 07", "LLM Cognitive Narration", "chronological reading order"),
+        ("STAGE 07", "LLM Step-by-Step Narration", "chronological reading order"),
         ("STAGE 08", "Graph & Quiz Generation", "interactive visual dependency graph"),
-        ("STAGE 09", "Persistence & Dossier Assembly", "persisted final report"),
+        ("STAGE 09", "Persistence & Architecture Report Assembly", "persisted final report"),
         ("STAGE 10", "Telemetry & Quota Allocation", "tracked AST token metrics"),
     ]
 

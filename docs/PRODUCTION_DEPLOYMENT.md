@@ -17,7 +17,8 @@ Under the project's **"no money / minimal cost"** constraint, Backtrace requires
 
 | Provider / Tier | Compute & Specs | Price | Architecture Decision |
 | :--- | :--- | :--- | :--- |
-| **Oracle Cloud Always Free (Ampere A1 ARM64)** *(Target)* | 4 OCPU (ARM64), 24 GB RAM, 200 GB NVMe | **$0.00 / mo** | **Selected Target**: Runs Nginx, Backtrace FastAPI backend, PostgreSQL 16, and Redis 7 with huge RAM and compute headroom at zero cost. **Piston execution is kept disabled/offline by default** on ARM64; the backend's graceful degradation returns verified 503 fast-fails for remote execution while structural Tier-3 grading, repo ingestion, and analysis continue to work completely. |
+| **Cloudflare Tunnel (Zero Trust) + Local Docker** *(Recommended)* | Local host (Desktop / Server) | **$0.00 / mo** | **Selected Zero-Cost Target**: Securely exposes the full stack (`backtrace-app`, `postgres`, `redis`, `piston`, `piston-init`) through an outbound encrypted tunnel without opening router ports or paying for VPS hosting. Full details in [DEPLOYMENT.md](file:///d:/Projects/Reverse/DEPLOYMENT.md). |
+| **Oracle Cloud Always Free (Ampere A1 ARM64)** | 4 OCPU (ARM64), 24 GB RAM, 200 GB NVMe | **$0.00 / mo** | Runs Nginx, Backtrace FastAPI backend, PostgreSQL 16, and Redis 7 at zero cost. |
 | **DuckDNS + Let's Encrypt** | Free Dynamic DNS Subdomain (`*.duckdns.org`) | **$0.00 / mo** | Automated Let's Encrypt TLS issuance via Certbot HTTP-01 challenge. |
 | **Stripe Integration** | Test Mode (`sk_test_...`) | **$0.00 / mo** | Kept in test mode on deployed demo to prevent accidental financial charges. |
 

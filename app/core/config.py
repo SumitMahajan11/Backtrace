@@ -21,6 +21,21 @@ class Settings(BaseSettings):
     HOST: str = "0.0.0.0"
     PORT: int = 8000
 
+    @property
+    def is_production(self) -> bool:
+        """Returns True if the application is running in production mode."""
+        return self.ENVIRONMENT == "production"
+
+    @property
+    def is_development(self) -> bool:
+        """Returns True if the application is running in development mode."""
+        return self.ENVIRONMENT == "development"
+
+    @property
+    def is_test(self) -> bool:
+        """Returns True if the application is running in test mode."""
+        return self.ENVIRONMENT == "test"
+
     # Database
     DATABASE_URL: str = "sqlite:///./backtrace.db"
 
@@ -30,10 +45,12 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 30
 
-    # GitHub OAuth
+    # GitHub OAuth & API Access
     GITHUB_CLIENT_ID: Optional[str] = None
     GITHUB_CLIENT_SECRET: Optional[str] = None
     GITHUB_REDIRECT_URI: str = "http://localhost:8000/auth/github/callback"
+    GITHUB_TOKEN: Optional[str] = None
+    GITHUB_PAT: Optional[str] = None
 
     # Stripe Billing
     STRIPE_SECRET_KEY: Optional[str] = None

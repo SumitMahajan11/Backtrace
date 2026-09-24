@@ -50,6 +50,8 @@ services:
         condition: service_healthy
       piston:
         condition: service_started
+      piston-init:
+        condition: service_completed_successfully
     deploy:
       resources:
         limits:
@@ -187,13 +189,64 @@ services:
     cpus: 2.0
     pids_limit: 256
     networks:
-      piston_isolated_net:
+      - default
+      - piston_isolated_net
+
+  piston-init:
+    image: curlimages/curl:latest
+    container_name: backtrace_piston_init
+    restart: "no"
+    depends_on:
+      piston:
+        condition: service_started
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo "Waiting for Piston sandbox API..."
+        until curl -s -f http://piston:2000/api/v2/runtimes > /dev/null; do
+          sleep 1
+        done
+        echo "Installing locked v1 language runtimes in Piston sandbox..."
+        for pkg in '{"language":"python","version":"3.10.0"}' \
+                   '{"language":"node","version":"18.15.0"}' \
+                   '{"language":"typescript","version":"5.0.3"}' \
+                   '{"language":"java","version":"15.0.2"}' \
+                   '{"language":"rust","version":"1.68.2"}' \
+                   '{"language":"go","version":"1.16.2"}' \
+                   '{"language":"gcc","version":"10.2.0"}' \
+                   '{"language":"bash","version":"5.2.0"}'; do
+          curl -s -X POST http://piston:2000/api/v2/packages -H "Content-Type: application/json" -d "$$pkg" || true
+        done
+        echo "Piston runtimes initialization complete."
+    networks:
+      - default
+      - piston_isolated_net
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: backtrace_cloudflared
+    restart: unless-stopped
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN:-}
+    command: tunnel --no-autoupdate run
+    depends_on:
+      backtrace-app:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.05'
+          memory: 32M
+    networks:
+      - default
 
 networks:
   default:
   piston_isolated_net:
     driver: bridge
-    internal: true
 
 volumes:
   backtrace_data:
@@ -201,7 +254,7 @@ volumes:
   postgres_data:
     driver: local
   piston_packages:
-    external: true
+    driver: local
   redis_data:
     driver: local
   certbot_certs:

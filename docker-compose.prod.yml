@@ -137,6 +137,27 @@ services:
     networks:
       - default
 
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: backtrace_prod_cloudflared
+    restart: unless-stopped
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN:-}
+    command: tunnel --no-autoupdate run
+    depends_on:
+      backtrace-app:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.05'
+          memory: 32M
+    networks:
+      - default
+
 networks:
   default:
 

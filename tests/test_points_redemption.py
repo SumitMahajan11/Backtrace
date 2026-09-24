@@ -244,12 +244,20 @@ def test_insufficient_balance_rejection(db_session, test_users):
     assert exc_info.value.status_code == 400
 
 
-def test_concurrency_anti_double_spend(test_db_session_factory):
+def test_concurrency_anti_double_spend(tmp_path):
     """
     Two near-simultaneous redemption requests with a balance of 100 points:
     Exactly one succeeds and the other is rejected with Insufficient point balance.
     """
-    session = test_db_session_factory()
+    db_file = tmp_path / "test_concurrency.db"
+    test_engine = create_engine(
+        f"sqlite:///{db_file}",
+        connect_args={"check_same_thread": False, "timeout": 30},
+    )
+    init_db(target_engine=test_engine)
+    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
+
+    session = TestingSessionLocal()
     racer = UserModel(github_id=8804, github_username="racer_user", email="racer@example.com")
     session.add(racer)
     session.commit()
@@ -272,7 +280,7 @@ def test_concurrency_anti_double_spend(test_db_session_factory):
     failures = []
 
     def redemption_worker():
-        w_sess = test_db_session_factory()
+        w_sess = TestingSessionLocal()
         try:
             w_user = w_sess.get(UserModel, user_id_val)
             res = PointsEngine.redeem_quota_perk(w_sess, w_user)
@@ -299,6 +307,7 @@ def test_concurrency_anti_double_spend(test_db_session_factory):
     assert final_balance == 0
 
     session.close()
+    test_engine.dispose()
 
 
 def test_badges_unlock_criteria(db_session):
@@ -416,7 +425,7 @@ def test_rewards_frontend_pages_and_actions(db_session, test_users):
         resp_page = client.get("/rewards")
         assert resp_page.status_code == 200
         assert "Points & Rewards Protocol" in resp_page.text
-        assert "Dossier Prestige Badges" in resp_page.text
+        assert "Architecture Report Achievement Badges" in resp_page.text
         assert "Global Builder Leaderboard" in resp_page.text
         assert "Points Audit Ledger" in resp_page.text
         assert "Redeem +2 Repos (100 PTS)" in resp_page.text

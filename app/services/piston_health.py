@@ -77,7 +77,7 @@ class PistonHealthMonitor:
             if "127.0.0.1" in url or "localhost" in url:
                 try:
                     import subprocess
-                    wsl_ip = subprocess.check_output(["wsl", "-d", "Ubuntu", "-e", "hostname", "-I"], text=True).split()[0]
+                    wsl_ip = subprocess.check_output(["wsl", "-d", "Ubuntu", "-e", "hostname", "-I"], text=True, timeout=1.0).split()[0]
                     fallback_url = f"http://{wsl_ip}:2000/api/v2/runtimes"
                     with httpx.Client(timeout=self.request_timeout_seconds) as client:
                         resp = client.get(fallback_url)

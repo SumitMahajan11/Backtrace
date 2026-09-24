@@ -64,15 +64,30 @@ def show_login(
 def show_dashboard(
     request: Request,
     error: Optional[str] = Query(None),
+    success: Optional[str] = Query(None),
+    session_id: Optional[str] = Query(None),
     user: Optional[UserModel] = Depends(get_current_user_optional),
     session: Session = Depends(get_db),
 ):
     """
     Render user dashboard with repo submission form, past analysis jobs, and quota badge.
     Redirects unauthenticated visitors to /login.
+    Fulfills Stripe Checkout session synchronously if session_id query parameter is present.
     """
     if not user:
         return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
+
+    if session_id:
+        try:
+            res = BillingService.fulfill_checkout_session(
+                session_id=session_id,
+                user=user,
+                session=session,
+            )
+            if res.get("success") and not success:
+                success = res.get("message")
+        except Exception:
+            pass
 
     billing_status = BillingService.get_user_billing_status(user, session)
     past_jobs = AnalysisJobRepository.get_jobs_for_user(session, user.id)
@@ -83,6 +98,7 @@ def show_dashboard(
             billing_status=billing_status,
             past_jobs=past_jobs,
             error=error,
+            success=success,
         )
     )
 
@@ -92,15 +108,29 @@ def show_settings(
     request: Request,
     error: Optional[str] = Query(None),
     success: Optional[str] = Query(None),
+    session_id: Optional[str] = Query(None),
     user: Optional[UserModel] = Depends(get_current_user_optional),
     session: Session = Depends(get_db),
 ):
     """
     Render user settings and billing ledger view.
     Redirects unauthenticated visitors to /login.
+    Fulfills Stripe Checkout session synchronously if session_id query parameter is present.
     """
     if not user:
         return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
+
+    if session_id:
+        try:
+            res = BillingService.fulfill_checkout_session(
+                session_id=session_id,
+                user=user,
+                session=session,
+            )
+            if res.get("success") and not success:
+                success = res.get("message")
+        except Exception:
+            pass
 
     billing_status = BillingService.get_user_billing_status(user, session)
     pricing_details = BillingService.get_pro_price_details()
@@ -180,12 +210,15 @@ def redeem_quota_form_action(
 def submit_analysis(
     request: Request,
     repo_url: str = Form(..., description="Target GitHub repository URL"),
+    commit_ref: Optional[str] = Form(None, description="Optional branch or commit reference"),
+    subpath: Optional[str] = Form(None, description="Optional subdirectory path scope"),
     user: Optional[UserModel] = Depends(get_current_user_optional),
     session: Session = Depends(get_db),
 ):
     """
     Process repository submission form.
-    Enforces quota gating (Prompt 2) and records an AnalysisJob.
+    Executes lightweight preflight size check against GitHub API before database job creation.
+    Enforces quota gating only on valid repos and records an AnalysisJob.
     """
     if not user:
         return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
@@ -197,7 +230,62 @@ def submit_analysis(
             status_code=status.HTTP_302_FOUND,
         )
 
-    # Enforce Billing Quota Gate
+    clean_ref = commit_ref.strip() if commit_ref and commit_ref.strip() else None
+    clean_subpath = subpath.strip().replace("\\", "/").strip("/") if subpath and subpath.strip() else None
+
+    from app.services.ingestion import check_repo_size_preflight
+    from app.models.ingestion import RepoTooLargeError, GitHubAPIError, InvalidURLError, SSRFError
+
+    billing_status = BillingService.get_user_billing_status(user, session)
+    past_jobs = AnalysisJobRepository.get_jobs_for_user(session, user.id)
+
+    # 1. Preflight File Count Check
+    try:
+        check_repo_size_preflight(
+            github_url=clean_url,
+            commit_ref=clean_ref,
+            subpath=clean_subpath,
+        )
+    except RepoTooLargeError as e:
+        # Zero DB rows created, zero quota consumed. Render dedicated "Repository Too Large" card in place.
+        return HTMLResponse(
+            content=dashboard_view(
+                current_user=user,
+                billing_status=billing_status,
+                past_jobs=past_jobs,
+                too_large_info={
+                    "file_count": e.file_count,
+                    "limit": e.limit,
+                    "repo_url": clean_url,
+                    "commit_ref": clean_ref or "",
+                    "subpath": clean_subpath or "",
+                },
+            ),
+            status_code=status.HTTP_200_OK,
+        )
+    except GitHubAPIError as e:
+        # Distinct error for GitHub API failures (rate limit, private repo, 404, auth)
+        return HTMLResponse(
+            content=dashboard_view(
+                current_user=user,
+                billing_status=billing_status,
+                past_jobs=past_jobs,
+                error=f"GitHub API Error: {str(e)}",
+            ),
+            status_code=status.HTTP_200_OK,
+        )
+    except (InvalidURLError, SSRFError) as e:
+        return HTMLResponse(
+            content=dashboard_view(
+                current_user=user,
+                billing_status=billing_status,
+                past_jobs=past_jobs,
+                error=str(e),
+            ),
+            status_code=status.HTTP_200_OK,
+        )
+
+    # 2. Enforce Billing Quota Gate (only after passing preflight)
     is_allowed, usage, limit, tier = BillingService.check_and_consume_quota(user, session)
     if not is_allowed:
         return RedirectResponse(
@@ -205,11 +293,13 @@ def submit_analysis(
             status_code=status.HTTP_302_FOUND,
         )
 
-    # Create Analysis Job record
+    # 3. Create Analysis Job record
     job = AnalysisJobRepository.create_job(
         session=session,
         user_id=user.id,
         repo_url=clean_url,
+        commit_ref=clean_ref,
+        subpath=clean_subpath,
         status="running",
     )
 
@@ -371,6 +461,8 @@ async def analysis_progress_events(
 
     job_status = str(job.status)
     target_repo_url = str(job.repo_url)
+    target_commit_ref = getattr(job, "commit_ref", None)
+    target_subpath = getattr(job, "subpath", None)
     active_user_id = int(user.id)
 
     async def event_generator() -> AsyncGenerator[str, None]:
@@ -406,7 +498,7 @@ async def analysis_progress_events(
             ],
             "synthesis": [
                 ("stage_8", 88, "Building interactive call-graphs and comprehension quiz checkpoints..."),
-                ("stage_9", 94, "Persisting synthesized dossier to primary database..."),
+                ("stage_9", 94, "Persisting synthesized architecture report to primary database..."),
                 ("stage_10", 100, "Finalizing execution metrics and recording pipeline telemetry..."),
             ],
             "complete": [],
@@ -462,6 +554,7 @@ async def analysis_progress_events(
                             event_queue.put_nowait,
                             {"type": "stage_complete", "job_id": job_id, "stage": s_key}
                         )
+                    exec_duration = round(time.time() - start_time, 3)
                     with SessionLocal() as db_session:
                         AnalysisJobRepository.update_job_status(
                             session=db_session,
@@ -470,6 +563,7 @@ async def analysis_progress_events(
                             report_markdown=f"# Architectural Analysis: {target_repo_url}\n\n## Overview\nRepository analyzed successfully.",
                             graph_data={"nodes": [{"id": "app.core", "type": "module"}], "edges": []},
                             quiz_data={"questions": [{"question": "Test question?", "options": ["A", "B"], "answer": "A"}]},
+                            execution_time_seconds=exec_duration,
                         )
                     loop.call_soon_threadsafe(event_queue.put_nowait, None)
                     return
@@ -481,7 +575,11 @@ async def analysis_progress_events(
                     {"type": "progress", "job_id": job_id, "stage": "stage_1", "percentage": 15, "message": "Cloning repository securely into isolated sandbox..."}
                 )
                 ingestion_svc = IngestionService()
-                ingest_res = ingestion_svc.ingest_repository(target_repo_url)
+                ingest_res = ingestion_svc.ingest_repository(
+                    target_repo_url,
+                    commit_ref=target_commit_ref,
+                    subpath=target_subpath,
+                )
                 loop.call_soon_threadsafe(
                     event_queue.put_nowait,
                     {"type": "stage_complete", "job_id": job_id, "stage": "stage_1"}
@@ -528,6 +626,7 @@ async def analysis_progress_events(
                     event_queue.put_nowait,
                     {"type": "progress", "job_id": job_id, "stage": "stage_9", "percentage": 95, "message": "Caching analysis report and artifacts in database..."}
                 )
+                exec_duration = round(time.time() - start_time, 3)
                 with SessionLocal() as db_session:
                     AnalysisJobRepository.update_job_status(
                         session=db_session,
@@ -537,6 +636,7 @@ async def analysis_progress_events(
                         graph_data=graph_data,
                         quiz_data=quiz_data,
                         error_message=pipeline_res.error if not pipeline_res.success else None,
+                        execution_time_seconds=exec_duration,
                     )
                 loop.call_soon_threadsafe(
                     event_queue.put_nowait,
@@ -553,7 +653,7 @@ async def analysis_progress_events(
                     analytics.capture_analysis_completed(
                         user_id=active_user_id,
                         job_id=job_id,
-                        duration_seconds=time.time() - start_time,
+                        duration_seconds=exec_duration,
                     )
                 else:
                     analytics.capture_analysis_failed(
@@ -568,6 +668,7 @@ async def analysis_progress_events(
                 loop.call_soon_threadsafe(event_queue.put_nowait, None)
 
             except Exception as exc:
+                exec_duration = round(time.time() - start_time, 3)
                 from app.db.session import SessionLocal
                 with SessionLocal() as db_session:
                     AnalysisJobRepository.update_job_status(
@@ -575,6 +676,7 @@ async def analysis_progress_events(
                         job_id=job_id,
                         status="failed",
                         error_message=str(exc),
+                        execution_time_seconds=exec_duration,
                     )
                 loop.call_soon_threadsafe(
                     event_queue.put_nowait,
@@ -648,6 +750,17 @@ def show_report(
     )
     attempts_by_tier = {a.milestone_tier: a for a in attempts}
 
+    # Query file contents from IngestionResultModel if available
+    file_contents = {}
+    if hasattr(job, "github_url") and job.github_url:
+        from app.models.db import RepoModel
+        repo = session.query(RepoModel).filter(RepoModel.github_url == job.github_url).first()
+        if repo and repo.ingestion_result and repo.ingestion_result.file_contents_json:
+            try:
+                file_contents = json.loads(repo.ingestion_result.file_contents_json)
+            except Exception:
+                file_contents = {}
+
     billing_status = BillingService.get_user_billing_status(user, session)
     return HTMLResponse(
         content=report_view(
@@ -658,6 +771,7 @@ def show_report(
             current_user=user,
             billing_status=billing_status,
             attempts_by_tier=attempts_by_tier,
+            file_contents=file_contents,
         )
     )
 

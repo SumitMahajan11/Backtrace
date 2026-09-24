@@ -19,6 +19,8 @@ def _get_initial_database_url() -> str:
 
     if url.startswith("postgres://"):
         return url.replace("postgres://", "postgresql+psycopg2://", 1)
+    if url.startswith("postgresql://") and not url.startswith("postgresql+"):
+        return url.replace("postgresql://", "postgresql+psycopg2://", 1)
     if url.startswith("sqlite:////data/") and not os.path.exists("/data"):
         return "sqlite:///./app.db"
     return url
@@ -74,6 +76,13 @@ def init_db(target_engine=engine) -> None:
         inspector = inspect(target_engine)
         tables = inspector.get_table_names()
         with target_engine.connect() as conn:
+            if "analysis_jobs" in tables:
+                col_names = [col["name"] for col in inspector.get_columns("analysis_jobs")]
+                if "commit_ref" not in col_names:
+                    conn.execute(text("ALTER TABLE analysis_jobs ADD COLUMN commit_ref VARCHAR(255)"))
+                if "subpath" not in col_names:
+                    conn.execute(text("ALTER TABLE analysis_jobs ADD COLUMN subpath VARCHAR(500)"))
+
             if "milestone_attempts" in tables:
                 columns = [col["name"] for col in inspector.get_columns("milestone_attempts")]
                 if "last_run_stdout" not in columns:

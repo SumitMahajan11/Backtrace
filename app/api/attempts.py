@@ -5,7 +5,7 @@ from __future__ import annotations
 import html
 import json
 from typing import Any, Dict, List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.orm import Session
@@ -36,6 +36,8 @@ class AttemptSubmissionRequest(BaseModel):
     """Payload for submitting code for structural verification."""
     submitted_code: str = Field(..., description="Raw user-submitted source code")
     language: str = Field(default="python", description="Language of the submitted code")
+    mode: Optional[str] = Field(default="guess", description="Engagement mode: 'guess' or 'fill'")
+    target_file: Optional[str] = Field(default=None, description="Optional target file path for multi-file milestones")
     hint_level_revealed: Optional[int] = Field(default=None, ge=0, le=2, description="Hint tier (0-2)")
     implementation_revealed: Optional[bool] = Field(default=None, description="Whether full solution was revealed")
 
@@ -250,7 +252,7 @@ def submit_milestone_attempt(
         milestone_tier=milestone_tier,
     )
 
-    # Execute Tiered Grading Engine (Prompt 17)
+    # Execute Tiered Grading Engine (Prompt 17 & 25)
     try:
         grading_result = grading_engine.grade_attempt(
             job=job,
@@ -258,16 +260,18 @@ def submit_milestone_attempt(
             submitted_code=payload.submitted_code,
             language=payload.language,
             graph_data=job.graph_data,
+            mode=payload.mode or "guess",
+            target_file=payload.target_file,
         )
     except StructuralVerificationError as e:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             detail=str(e),
         )
-    except ExecutionVerifierConnectionError:
+    except ExecutionVerifierConnectionError as e:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Code execution is temporarily unavailable, try again shortly",
+            detail=str(e) or "Code execution sandbox is currently unavailable. Please try again shortly.",
         )
 
     new_status = grading_result["status"]
@@ -376,10 +380,10 @@ def run_milestone_code(
             stdin=payload.stdin or "",
             args=payload.args or [],
         )
-    except ExecutionVerifierConnectionError:
+    except ExecutionVerifierConnectionError as e:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Code execution is temporarily unavailable, try again shortly",
+            detail=str(e) or "Code execution sandbox is currently unavailable. Please try again shortly.",
         )
     except ExecutionVerifierError as e:
         raise HTTPException(
@@ -409,12 +413,13 @@ def run_milestone_code(
 def request_milestone_hint(
     job_id: int,
     milestone_tier: int,
+    mode: Optional[str] = Query(default=None),
     current_user: UserModel = Depends(get_current_user),
     session: Session = Depends(get_db),
 ) -> Dict[str, Any]:
     """
     Progressively unlocks Hint 1 or Hint 2 for an active milestone attempt.
-    Enforces 'try first' rule (locked on untouched milestones).
+    Enforces 'try first' rule (locked on untouched milestones in guess mode; immediate in fill mode).
     Guarded by strict IDOR check.
     """
     job = AnalysisJobRepository.get_job_by_id(session, job_id)
@@ -434,12 +439,23 @@ def request_milestone_hint(
         milestone_tier=milestone_tier,
     )
 
-    # Gated rule: Must have attempted the milestone first
+    # Gated rule: Must have attempted the milestone first (unless fill-the-blanks mode where hints are immediately accessible)
     if not attempt or attempt.status == "not_started":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Hints are locked until you make your first implementation attempt. Try writing and submitting code first!",
-        )
+        if mode == "fill":
+            attempt = MilestoneAttemptRepository.save_or_update_attempt(
+                session=session,
+                user_id=current_user.id,
+                job_id=job_id,
+                milestone_tier=milestone_tier,
+                submitted_code="",
+                status="attempting",
+                hint_level_revealed=0,
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Hints are locked until you make your first implementation attempt. Try writing and submitting code first!",
+            )
 
     # Determine next level
     current_level = attempt.hint_level_revealed or 0
@@ -453,7 +469,7 @@ def request_milestone_hint(
             graph_data=job.graph_data,
             milestone_tier=milestone_tier,
         )
-        ver_res = verifier.verify(attempt.submitted_code, expected_symbols)
+        ver_res = verifier.verify(attempt.submitted_code or "", expected_symbols)
         missing = ver_res.get("missing_symbols", ver_res.get("missing", []))
         hint_2 = HintEngine.get_hint_2(job.graph_data, milestone_tier, missing_symbols=missing)
 
@@ -482,6 +498,7 @@ def request_milestone_hint(
 def reveal_milestone_implementation(
     job_id: int,
     milestone_tier: int,
+    mode: Optional[str] = Query(default=None),
     current_user: UserModel = Depends(get_current_user),
     session: Session = Depends(get_db),
 ) -> Dict[str, Any]:
@@ -507,10 +524,21 @@ def reveal_milestone_implementation(
     )
 
     if not attempt or attempt.status == "not_started":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Reference implementation is locked until you start this milestone. Try writing code first!",
-        )
+        if mode == "fill":
+            attempt = MilestoneAttemptRepository.save_or_update_attempt(
+                session=session,
+                user_id=current_user.id,
+                job_id=job_id,
+                milestone_tier=milestone_tier,
+                submitted_code="",
+                status="attempting",
+                hint_level_revealed=0,
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Reference implementation is locked until you start this milestone. Try writing code first!",
+            )
 
     updated_attempt = MilestoneAttemptRepository.save_or_update_attempt(
         session=session,
@@ -576,3 +604,57 @@ def view_attempt_rendered(
     </html>
     """
     return HTMLResponse(content=html_content)
+
+
+@router.post("/{job_id}/{milestone_tier}/review", summary="Mark Milestone as Reviewed ('Just Read It' Mode)")
+def mark_milestone_reviewed(
+    job_id: int,
+    milestone_tier: int,
+    current_user: UserModel = Depends(get_current_user),
+    session: Session = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    Marks milestone as reviewed and completed without code grading or AST checks.
+    Uses existing 'structurally_verified' milestone status and 'reviewed' grading method.
+    Guarded by strict IDOR check (job ownership).
+    """
+    job = AnalysisJobRepository.get_job_by_id(session, job_id)
+    if not job:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Analysis job not found")
+
+    if job.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access forbidden: You do not own this analysis job",
+        )
+
+    attempt = MilestoneAttemptRepository.get_attempt(
+        session=session,
+        user_id=current_user.id,
+        job_id=job_id,
+        milestone_tier=milestone_tier,
+    )
+
+    submitted_code = attempt.submitted_code if attempt else ""
+    hint_level = attempt.hint_level_revealed if attempt else 0
+    impl_revealed = attempt.implementation_revealed if attempt else False
+
+    updated_attempt = MilestoneAttemptRepository.save_or_update_attempt(
+        session=session,
+        user_id=current_user.id,
+        job_id=job_id,
+        milestone_tier=milestone_tier,
+        submitted_code=submitted_code,
+        status="structurally_verified",
+        hint_level_revealed=hint_level,
+        implementation_revealed=impl_revealed,
+        grading_method="reviewed",
+        last_run_at=utc_now(),
+    )
+
+    return {
+        "status": "structurally_verified",
+        "grading_method": "reviewed",
+        "attempt": _serialize_attempt(updated_attempt, current_user.id, job_id, milestone_tier),
+    }
+

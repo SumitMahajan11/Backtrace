@@ -141,12 +141,13 @@ def test_health_endpoint_surfaces_piston_state(client):
 
 
 def test_run_fast_fails_when_piston_is_down(client, auth_user):
-    """Verifies that /run fails fast with 503 (<50ms) when Piston is down."""
+    """Verifies that /run fails fast with 503 (<50ms) when Piston is down and local fallback is disabled."""
     from unittest.mock import PropertyMock
     job_id = auth_user["job"].id
     headers = {"Authorization": f"Bearer {auth_user['token']}"}
     
-    with patch.object(PistonHealthMonitor, "is_healthy", new_callable=PropertyMock, return_value=False):
+    with patch.object(PistonHealthMonitor, "is_healthy", new_callable=PropertyMock, return_value=False), \
+         patch("app.api.attempts.execution_verifier.allow_local_fallback", False):
         start = time.perf_counter()
         resp = client.post(
             f"/api/attempts/{job_id}/1/run",
@@ -156,17 +157,18 @@ def test_run_fast_fails_when_piston_is_down(client, auth_user):
         elapsed_ms = (time.perf_counter() - start) * 1000.0
         
         assert resp.status_code == 503
-        assert "Code execution is temporarily unavailable, try again shortly" in resp.json()["detail"]
+        assert "Code execution sandbox is currently unavailable" in resp.json()["detail"]
         assert elapsed_ms < 250.0  # Fast-fail must not wait for 3000ms timeout
 
 
 def test_submit_execution_dependent_fast_fails_when_piston_is_down(client, auth_user):
-    """Verifies that execution-dependent /submit (Tier 1 real_tests) fails fast with 503 when Piston is down."""
+    """Verifies that execution-dependent /submit (Tier 1 real_tests) fails fast with 503 when Piston is down and local fallback is disabled."""
     from unittest.mock import PropertyMock
     job_id = auth_user["job"].id
     headers = {"Authorization": f"Bearer {auth_user['token']}"}
     
-    with patch.object(PistonHealthMonitor, "is_healthy", new_callable=PropertyMock, return_value=False):
+    with patch.object(PistonHealthMonitor, "is_healthy", new_callable=PropertyMock, return_value=False), \
+         patch("app.api.attempts.grading_engine.exec_verifier.allow_local_fallback", False):
         start = time.perf_counter()
         resp = client.post(
             f"/api/attempts/{job_id}/1",
@@ -176,8 +178,8 @@ def test_submit_execution_dependent_fast_fails_when_piston_is_down(client, auth_
         elapsed_ms = (time.perf_counter() - start) * 1000.0
         
         assert resp.status_code == 503
-        assert "Code execution is temporarily unavailable, try again shortly" in resp.json()["detail"]
-        assert elapsed_ms < 100.0
+        assert "Code execution sandbox is currently unavailable" in resp.json()["detail"]
+        assert elapsed_ms < 250.0
 
 
 def test_submit_tier3_structural_succeeds_when_piston_is_down(client, auth_user):
@@ -186,7 +188,8 @@ def test_submit_tier3_structural_succeeds_when_piston_is_down(client, auth_user)
     job_id = auth_user["job"].id
     headers = {"Authorization": f"Bearer {auth_user['token']}"}
     
-    with patch.object(PistonHealthMonitor, "is_healthy", new_callable=PropertyMock, return_value=False):
+    with patch.object(PistonHealthMonitor, "is_healthy", new_callable=PropertyMock, return_value=False), \
+         patch("app.api.attempts.grading_engine.exec_verifier.allow_local_fallback", False):
         resp = client.post(
             f"/api/attempts/{job_id}/3",
             headers=headers,

@@ -383,7 +383,7 @@ class PointsEngine:
             {
                 "id": "first_milestone",
                 "name": "First Milestone",
-                "tagline": "Dossier Initiate",
+                "tagline": "Architecture Report Initiate",
                 "description": "Solved your very first architectural milestone.",
                 "icon": "🎯",
                 "category": "milestones",

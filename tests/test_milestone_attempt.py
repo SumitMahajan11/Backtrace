@@ -303,3 +303,86 @@ def test_milestone_attempt_dos_oversized_payload(client, create_user, test_db):
     )
     assert resp.status_code == 413
     assert "exceeds maximum limit" in resp.json()["detail"]
+
+
+def test_mark_milestone_reviewed_api_endpoint(client, create_user, test_db):
+    """Marks milestone as reviewed (Just Read It mode) and verifies status and grading_method."""
+    SessionLocal, _ = test_db
+    user = create_user(github_id=5001, username="reviewer_dev")
+    token = create_access_token(user_id=user.id, github_id=user.github_id, github_username=user.github_username)
+
+    with SessionLocal() as session:
+        job = AnalysisJobRepository.create_job(
+            session=session,
+            user_id=user.id,
+            repo_url="https://github.com/example/review-target",
+            status="completed",
+        )
+        job_id = job.id
+
+    client.cookies.set("access_token", token)
+
+    resp = client.post(f"/api/attempts/{job_id}/0/review")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "structurally_verified"
+    assert data["grading_method"] == "reviewed"
+    assert data["attempt"]["status"] == "structurally_verified"
+
+
+def test_fill_the_blanks_submission_and_immediate_hints(client, create_user, test_db):
+    """Verifies that Fill the Blanks submission evaluates scoped blanks and allows immediate hint access."""
+    SessionLocal, _ = test_db
+    user = create_user(github_id=6001, username="fill_dev")
+    token = create_access_token(user_id=user.id, github_id=user.github_id, github_username=user.github_username)
+
+    sample_source = """def add_numbers(a, b):
+    return a + b
+"""
+    with SessionLocal() as session:
+        job = AnalysisJobRepository.create_job(
+            session=session,
+            user_id=user.id,
+            repo_url="https://github.com/example/fill-target",
+            status="completed",
+        )
+        AnalysisJobRepository.update_job_status(
+            session=session,
+            job_id=job.id,
+            status="completed",
+            graph_data={
+                "nodes": [{"id": "calc.py", "path": "calc.py", "tier": 0, "source_code": sample_source}],
+                "milestones": [{"tier": 0, "included_files": ["calc.py"]}],
+            },
+        )
+        job_id = job.id
+
+    client.cookies.set("access_token", token)
+
+    # 1. Untouched milestone hint in Guess mode is locked (400 Bad Request)
+    resp_guess_hint = client.post(f"/api/attempts/{job_id}/0/hint")
+    assert resp_guess_hint.status_code == 400
+    assert "locked until you make your first implementation attempt" in resp_guess_hint.json()["detail"]
+
+    # 2. Untouched milestone hint in Fill mode is immediately accessible
+    resp_fill_hint = client.post(f"/api/attempts/{job_id}/0/hint?mode=fill")
+    assert resp_fill_hint.status_code == 200
+    data_hint = resp_fill_hint.json()
+    assert data_hint["hint_level_revealed"] == 1
+    assert data_hint["hint_1"] is not None
+
+    # 3. Submit Fill the Blanks submission
+    resp_submit = client.post(
+        f"/api/attempts/{job_id}/0",
+        json={
+            "submitted_code": "def add_numbers(a, b):\n    return a + b\n",
+            "mode": "fill",
+            "target_file": "calc.py",
+        },
+    )
+    assert resp_submit.status_code == 200
+    data_submit = resp_submit.json()
+    assert data_submit["grading_method"] == "fill_the_blanks"
+    assert data_submit["verification"]["structurally_verified"] is True
+
+

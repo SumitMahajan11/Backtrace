@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from app.models.db import UserModel
 from app.services.hint_engine import HintEngine
+from app.services.scaffold_generator import ScaffoldGenerator
 from app.services.structural_verifier import StructuralVerifier
 from app.ui.sanitizer import sanitize_text, render_safe_markdown
 
@@ -32,7 +33,7 @@ def nav_shell(
                 <polyline points="12 6 12 12 16 14"></polyline>
             </svg>
             <span class="brand-title">Backtrace</span>
-            <span class="brand-pill">Dossier Engine</span>
+            <span class="brand-pill">Architecture Report Engine</span>
         </a>
         <div class="nav-right" style="display: flex; align-items: center; gap: 0.75rem;">
             <button id="theme-toggle" class="theme-toggle-btn" onclick="toggleTheme()" type="button" aria-label="Toggle dark/light mode" title="Toggle Light/Dark Theme">
@@ -88,7 +89,7 @@ def nav_shell(
                     <polyline points="12 6 12 12 16 14"></polyline>
                 </svg>
                 <span class="brand-title">Backtrace</span>
-                <span class="brand-pill">Dossier Engine</span>
+                <span class="brand-pill">Architecture Report Engine</span>
             </a>
             {tier_tag}
         </div>
@@ -619,6 +620,109 @@ def page_shell(
             border: 1px solid var(--amber);
         }}
 
+        /* Graph Legend Styles */
+        #dag-legend-panel {{
+            transition: all 150ms ease;
+        }}
+        .legend-chip {{
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            background: var(--panel);
+            border: 1px solid var(--hairline-soft);
+            border-radius: 3px;
+            padding: 0.2rem 0.5rem;
+            transition: all 120ms ease;
+        }}
+        .legend-chip:hover {{
+            border-color: var(--brass);
+            background: var(--panel-raised);
+        }}
+
+        /* Confidence Tooltip & Info Affordance */
+        .tooltip-container {{
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+        }}
+
+        .info-icon-btn {{
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            background: var(--panel-raised);
+            border: 1px solid var(--hairline);
+            color: var(--text-tertiary);
+            font-size: 0.65rem;
+            font-family: 'IBM Plex Mono', monospace;
+            font-weight: 600;
+            cursor: pointer;
+            margin-left: 0.35rem;
+            transition: all 150ms ease;
+            user-select: none;
+            line-height: 1;
+            padding: 0;
+            outline: none;
+        }}
+
+        .info-icon-btn:hover, .info-icon-btn:focus {{
+            color: var(--text-primary);
+            border-color: var(--brass);
+            background: var(--brass-soft);
+        }}
+
+        .confidence-tooltip {{
+            visibility: hidden;
+            opacity: 0;
+            position: absolute;
+            bottom: calc(100% + 8px);
+            left: 50%;
+            transform: translateX(-50%) translateY(4px);
+            width: 290px;
+            background: var(--panel-raised);
+            color: var(--text-secondary);
+            border: 1px solid var(--hairline);
+            border-radius: 6px;
+            padding: 0.75rem 0.85rem;
+            font-size: 0.75rem;
+            font-family: 'IBM Plex Sans', sans-serif;
+            line-height: 1.45;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+            z-index: 1000;
+            pointer-events: none;
+            transition: opacity 150ms ease, transform 150ms ease, visibility 150ms;
+            text-transform: none;
+            letter-spacing: normal;
+            font-weight: normal;
+            text-align: left;
+        }}
+
+        .confidence-tooltip::after {{
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            margin-left: -5px;
+            border-width: 5px;
+            border-style: solid;
+            border-color: var(--panel-raised) transparent transparent transparent;
+        }}
+
+        .tooltip-container:hover .confidence-tooltip,
+        .tooltip-container:focus-within .confidence-tooltip,
+        .info-icon-btn:focus + .confidence-tooltip {{
+            visibility: visible;
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+            pointer-events: auto;
+        }}
+
         /* Form Controls */
         .form-group {{
             margin-bottom: 1.25rem;
@@ -947,6 +1051,8 @@ def dashboard_view(
     billing_status: Dict[str, Any],
     past_jobs: List[Any],
     error: Optional[str] = None,
+    success: Optional[str] = None,
+    too_large_info: Optional[Dict[str, Any]] = None,
 ) -> str:
     """
     Render the Archival Dossier Dashboard.
@@ -954,6 +1060,7 @@ def dashboard_view(
     - Editorial Header & Inquest Ledger Metadata
     - Real Free/Paid Quota Meter & Renewal Date
     - Stratum Card: Reconstruct Repository History with sample URL chip & assurance signals
+    - Dedicated "Repository Too Large" Card when preflight check fails
     - Analysis History Ledger with empty state or populated ledger table/cards
     - Real Retry Action for failed jobs (POST /analyses/{job_id}/retry)
     """
@@ -971,7 +1078,7 @@ def dashboard_view(
 
     if tier == "paid":
         quota_badge = '<span class="badge badge-paid">PRO TIER</span>'
-        consumption_text = "UNLIMITED INQUESTS"
+        consumption_text = "UNLIMITED ANALYSIS JOBS"
         meter_pct = 100
         tier_action = '<a href="/api/billing/portal" class="btn btn-sm btn-secondary">Manage Billing</a>'
     else:
@@ -983,6 +1090,78 @@ def dashboard_view(
         tier_action = '<a href="/api/billing/checkout" class="btn btn-sm btn-primary">Upgrade to Pro</a>'
 
     error_html = f'<div class="alert-error" style="margin-bottom: 1.5rem;">{sanitize_text(error)}</div>' if error else ""
+    success_html = (
+        f'<div style="background: rgba(45, 212, 191, 0.12); border: 1px solid var(--teal); color: var(--teal); padding: 0.85rem 1.15rem; border-radius: 4px; margin-bottom: 1.5rem; font-size: 0.875rem; display: flex; align-items: center; gap: 0.6rem;">'
+        f'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>'
+        f'<span>{sanitize_text(success)}</span>'
+        f'</div>'
+    ) if success else ""
+
+    too_large_card = ""
+    if too_large_info:
+        found_files = too_large_info.get("file_count", 0)
+        file_limit = too_large_info.get("limit", 150)
+        prefill_url = sanitize_text(too_large_info.get("repo_url", ""))
+        prefill_ref = sanitize_text(too_large_info.get("commit_ref", ""))
+        prefill_subpath = sanitize_text(too_large_info.get("subpath", ""))
+
+        too_large_card = f"""
+    <!-- Dedicated Repository Too Large Card -->
+    <div class="stratum-card" id="repo-too-large-card" style="margin-bottom: 2rem; border-color: rgba(224, 90, 71, 0.4); background: linear-gradient(180deg, rgba(224, 90, 71, 0.08) 0%, var(--bg-card) 100%);">
+        <div class="card-header" style="border-bottom: 1px solid rgba(224, 90, 71, 0.25);">
+            <div style="display: flex; align-items: center; gap: 0.65rem;">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--crimson)" stroke-width="2">
+                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                    <line x1="12" y1="9" x2="12" y2="13"></line>
+                    <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                </svg>
+                <h2 style="font-size: 1.35rem; font-weight: 600; color: var(--crimson);">Repository Too Large</h2>
+            </div>
+            <span class="badge" style="background: rgba(224, 90, 71, 0.15); color: var(--crimson); border: 1px solid rgba(224, 90, 71, 0.3); font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem;">
+                EXCEEDS {file_limit} FILE LIMIT
+            </span>
+        </div>
+
+        <div style="padding: 1.25rem 0 0.5rem 0;">
+            <div style="font-size: 1.15rem; font-weight: 600; color: var(--text-primary); margin-bottom: 0.5rem; font-family: 'IBM Plex Mono', monospace;">
+                Found {found_files} supported files (limit: {file_limit} files)
+            </div>
+            <p style="color: var(--text-secondary); font-size: 0.875rem; line-height: 1.5; margin-bottom: 1.25rem;">
+                This repository exceeds Backtrace's single-pass capacity limit. To analyze this project, you can retry with a narrower subdirectory path (e.g. <code>packages/api</code> or <code>src/core</code>) or a specific branch/commit ref to bring the file count under the {file_limit}-file threshold.
+            </p>
+
+            <form action="/analyses/submit" method="POST" id="retry-too-large-form" style="background: var(--bg-surface); padding: 1.25rem; border-radius: 6px; border: 1px solid var(--hairline-soft);">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; margin-bottom: 1rem;">
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label class="form-label" for="retry-repo-url">Target Git Repository HTTPS URL <span style="color: var(--crimson);">*</span></label>
+                        <input type="url" id="retry-repo-url" name="repo_url" required class="form-input" value="{prefill_url}" />
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label class="form-label" for="retry-branch-ref">Branch / Commit Ref <span style="color: var(--text-tertiary);">(Optional)</span></label>
+                        <input type="text" id="retry-branch-ref" name="commit_ref" class="form-input" value="{prefill_ref}" placeholder="main or HEAD" />
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label class="form-label" for="retry-subpath" style="color: var(--brass); font-weight: 600;">Subdirectory Path <span style="color: var(--text-tertiary); font-weight: normal;">(e.g. packages/api)</span></label>
+                        <input type="text" id="retry-subpath" name="subpath" autofocus class="form-input" value="{prefill_subpath}" placeholder="e.g. packages/api or src" style="border-color: var(--brass);" />
+                    </div>
+                </div>
+
+                <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--hairline-soft);">
+                    <a href="/dashboard" class="btn btn-secondary" style="font-size: 0.8125rem;">
+                        Dismiss / Back to Dashboard
+                    </a>
+                    <button type="submit" class="btn btn-primary" style="padding: 0.55rem 1.2rem;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="23 4 23 10 17 10"></polyline>
+                            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                        </svg>
+                        Retry Analysis with Scope
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+    """
 
     # Build job history rows
     rows_html = ""
@@ -991,7 +1170,7 @@ def dashboard_view(
         repo_url = sanitize_text(job.repo_url)
         repo_display = sanitize_text(job.repo_name or (job.repo_url.rstrip("/").split("/")[-1] if "/" in job.repo_url else job.repo_url))
         status = sanitize_text(job.status)
-        created_at = sanitize_text(job.created_at.strftime("%Y-%m-%d %H:%M UTC") if hasattr(job.created_at, "strftime") else str(job.created_at))
+        created_at = sanitize_text(job.created_at.strftime("%Y-%m-%d %H:%M:%S UTC") if hasattr(job.created_at, "strftime") else str(job.created_at))
         duration_str = f"{job.execution_time_seconds:.1f}s" if getattr(job, "execution_time_seconds", 0) else "—"
 
         status_badge_class = f"badge-{status}" if status in ["completed", "running", "failed", "pending"] else "badge-free"
@@ -1007,15 +1186,13 @@ def dashboard_view(
         if total_milestones == 0 and job.markdown_output:
             total_milestones = len(re.findall(r"###\s+Milestone\s+\d+:", job.markdown_output))
 
-        if hasattr(job, "milestone_attempts") and job.milestone_attempts:
-            verified_count = sum(1 for a in job.milestone_attempts if a.status == "structurally_verified")
-        elif hasattr(job, "id") and current_user:
-            try:
-                from app.storage.milestone_attempt_repository import MilestoneAttemptRepository
-                # If session is active or available, could query, else defaults to 0
-                pass
-            except Exception:
-                pass
+        try:
+            if "milestone_attempts" in getattr(job, "__dict__", {}) and job.milestone_attempts:
+                verified_count = sum(1 for a in job.milestone_attempts if getattr(a, "status", None) == "structurally_verified")
+            elif hasattr(job, "milestone_attempts") and job.milestone_attempts:
+                verified_count = sum(1 for a in job.milestone_attempts if getattr(a, "status", None) == "structurally_verified")
+        except Exception:
+            verified_count = 0
 
         if total_milestones == 0 and verified_count > 0:
             total_milestones = verified_count
@@ -1034,7 +1211,7 @@ def dashboard_view(
 
         action_btn = ""
         if status == "completed":
-            action_btn = f'<a href="/report/{job_id}" class="btn btn-sm btn-primary">View Dossier</a>'
+            action_btn = f'<a href="/report/{job_id}" class="btn btn-sm btn-primary">View Architecture Report</a>'
         elif status in ["running", "pending"]:
             action_btn = f'<a href="/progress/{job_id}" class="btn btn-sm btn-secondary">Track Progress</a>'
         else:
@@ -1046,17 +1223,31 @@ def dashboard_view(
                             <polyline points="1 4 1 10 7 10"></polyline>
                             <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
                         </svg>
-                        Retry Inquest
+                        Retry Analysis Job
                     </button>
                 </form>
             </div>
             """
+
+        repo_error_html = ""
+        if status == "failed" and getattr(job, "error_message", None):
+            raw_err_str = str(job.error_message).strip()
+            if raw_err_str:
+                safe_err_full = sanitize_text(raw_err_str)
+                safe_err_summary = sanitize_text(raw_err_str[:85] + ("…" if len(raw_err_str) > 85 else ""))
+                repo_error_html = f"""
+                <div class="job-failure-reason" title="{safe_err_full}" style="margin-top: 0.35rem; font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem; color: var(--crimson); display: flex; align-items: flex-start; gap: 0.35rem; line-height: 1.35; max-width: 420px; cursor: help;">
+                    <span style="font-weight: 600; flex-shrink: 0; color: var(--crimson);">Failure:</span>
+                    <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{safe_err_summary}</span>
+                </div>
+                """
 
         rows_html += f"""
         <tr>
             <td>
                 <div style="font-weight: 600; color: var(--text-primary);">{repo_display}</div>
                 <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--text-tertiary);">{repo_url}</div>
+                {repo_error_html}
             </td>
             <td><span class="badge {status_badge_class}">{status.upper()}</span></td>
             <td>{progress_badge}</td>
@@ -1110,14 +1301,14 @@ def dashboard_view(
             <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem;">
                 <span class="chip-dot brass"></span>
                 <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--brass); text-transform: uppercase; letter-spacing: 0.05em;">
-                    DOSSIER REPOSITORY INGESTION
+                    ARCHITECTURE REPORT REPOSITORY PARSING
                 </span>
             </div>
             <h1 style="font-size: 2.25rem; font-weight: 500; letter-spacing: -0.02em; margin-bottom: 0.5rem;">
-                Root-Cause Inquest Ledger
+                Root-Cause Analysis Ledger
             </h1>
             <p style="color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5;">
-                Submit version-controlled source archives to initiate deep lineage deconstruction, chronological strata synthesis, and automated code regression attribution.
+                Submit version-controlled source archives to initiate deep commit and change history analysis, chronological tier synthesis, and automated root-cause change tracking.
             </p>
         </div>
         
@@ -1142,7 +1333,9 @@ def dashboard_view(
         </div>
     </div>
 
+    {success_html}
     {error_html}
+    {too_large_card}
 
     <!-- Main Stratum Card: Repo Submission Form -->
     <div class="stratum-card" style="margin-bottom: 2.5rem;">
@@ -1158,12 +1351,12 @@ def dashboard_view(
             </div>
             <div class="chip">
                 <span class="chip-dot brass"></span>
-                <span>Zero-Persistence Sandbox</span>
+                <span>Secure Temporary Sandbox</span>
             </div>
         </div>
 
         <form action="/analyses/submit" method="POST" id="reconstruct-form">
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.25rem; margin-bottom: 1.25rem;">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.25rem; margin-bottom: 1.25rem;">
                 <div class="form-group" style="margin-bottom: 0;">
                     <label class="form-label" for="repo-url-input">
                         Target Git Repository HTTPS URL <span style="color: var(--crimson); font-weight: bold;">*</span>
@@ -1191,12 +1384,24 @@ def dashboard_view(
                         placeholder="main or HEAD" 
                     />
                 </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label class="form-label" for="subpath-input">
+                        Subdirectory Path <span style="color: var(--text-tertiary); font-weight: normal;">(Optional, e.g. packages/api)</span>
+                    </label>
+                    <input 
+                        type="text" 
+                        id="subpath-input"
+                        name="subpath" 
+                        class="form-input" 
+                        placeholder="e.g. packages/api or src" 
+                    />
+                </div>
             </div>
 
             <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--hairline-soft);">
                 <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem;">
-                    <span class="chip"><span class="chip-dot teal"></span> Granular AST Parsing</span>
-                    <span class="chip"><span class="chip-dot brass"></span> Deterministic Strata Slicing</span>
+                    <span class="chip"><span class="chip-dot teal"></span> Detailed Syntax Tree Analysis</span>
+                    <span class="chip"><span class="chip-dot brass"></span> Automatic Tier Grouping</span>
                     <button type="button" class="btn btn-sm btn-secondary" onclick="document.getElementById('repo-url-input').value='https://github.com/expressjs/express'; document.getElementById('repo-url-input').focus();" style="font-size: 0.75rem;">
                         Sample: expressjs/express
                     </button>
@@ -1207,7 +1412,7 @@ def dashboard_view(
                         <polyline points="2 17 12 22 22 17"></polyline>
                         <polyline points="2 12 12 17 22 12"></polyline>
                     </svg>
-                    Begin Forensic Reconstruction
+                    Begin Code Validation Reconstruction
                 </button>
             </div>
         </form>
@@ -1218,7 +1423,7 @@ def dashboard_view(
         <div class="card-header">
             <div style="display: flex; align-items: center; gap: 0.65rem;">
                 <h2 style="font-size: 1.35rem; font-weight: 500;">Analysis History Ledger</h2>
-                <span class="chip">{len(past_jobs)} INQUEST RECORDS</span>
+                <span class="chip">{len(past_jobs)} ANALYSIS JOB RECORDS</span>
             </div>
             <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--text-tertiary);">
                 ORDERED BY SUBMISSION CHRONOLOGY
@@ -1244,6 +1449,53 @@ def progress_view(
     """Render the Live Progress view with Server-Sent Events (SSE) updates adhering to Archival Dossier tokens."""
     job_id = sanitize_text(str(job.id))
     repo_url = sanitize_text(job.repo_url)
+    job_status = str(getattr(job, "status", "pending")).lower()
+    raw_job_error = getattr(job, "error_message", None) or ""
+    safe_job_error = sanitize_text(str(raw_job_error))
+    is_failed_initially = (job_status == "failed")
+    failure_banner_display = "flex" if is_failed_initially else "none"
+
+    job_created_ts = 0.0
+    if hasattr(job, "created_at") and job.created_at:
+        try:
+            if hasattr(job.created_at, "timestamp") and callable(job.created_at.timestamp):
+                raw_ts = job.created_at.timestamp()
+                if isinstance(raw_ts, (int, float)):
+                    job_created_ts = float(raw_ts)
+            elif hasattr(job.created_at, "tzinfo") and job.created_at.tzinfo is None:
+                import datetime
+                raw_ts = job.created_at.replace(tzinfo=datetime.timezone.utc).timestamp()
+                if isinstance(raw_ts, (int, float)):
+                    job_created_ts = float(raw_ts)
+        except Exception:
+            job_created_ts = 0.0
+
+    raw_exec_time = getattr(job, "execution_time_seconds", 0.0)
+    try:
+        execution_time_seconds = float(raw_exec_time) if raw_exec_time is not None and isinstance(raw_exec_time, (int, float, str)) else 0.0
+    except (ValueError, TypeError):
+        execution_time_seconds = 0.0
+
+    mins_init = int(execution_time_seconds // 60)
+    secs_init = int(execution_time_seconds % 60)
+    formatted_init_time = f"{mins_init}:{secs_init:02d}"
+
+    if is_failed_initially:
+        initial_timer_text = f"Failed after {formatted_init_time}" if execution_time_seconds > 0 else "Failed"
+    elif job_status == "completed":
+        initial_timer_text = f"Completed in {formatted_init_time}" if execution_time_seconds > 0 else "Completed"
+    else:
+        if job_created_ts > 0:
+            import time
+            cur_elapsed = max(0, int(time.time() - job_created_ts))
+            cur_m = cur_elapsed // 60
+            cur_s = cur_elapsed % 60
+            initial_timer_text = f"Running for {cur_m}:{cur_s:02d}"
+        else:
+            initial_timer_text = "Running for 0:00"
+
+    initial_badge_html = '<span class="badge badge-failed">ANALYSIS JOB FAILED</span>' if is_failed_initially else '<span class="badge" style="background: var(--brass-soft); color: var(--brass); border-color: var(--brass-border);">IN PROGRESS</span>'
+    initial_desc_text = safe_job_error if (is_failed_initially and safe_job_error) else ("Analysis job execution failed." if is_failed_initially else "Initializing 11-Layer Analysis Pipeline...")
 
     stages_data = [
         (
@@ -1291,8 +1543,8 @@ def progress_view(
             "05",
             "Directed Dependency Graph",
             '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>',
-            "Tracing import chains and resolving internal dependencies into a topological directed graph.",
-            "Constructed directed acyclic graph (DAG) and resolved cross-module import relationships.",
+            "Tracing import chains and resolving internal dependencies into a dependency roadmap.",
+            "Constructed dependency graph and resolved cross-module import relationships.",
         ),
         (
             "stage_6",
@@ -1300,12 +1552,12 @@ def progress_view(
             "Architecture Domain Mapping",
             '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>',
             "Grouping modules into architectural subsystems, core domains, and circular dependency clusters.",
-            "Segmented codebase into architectural tiers, cyclic clusters, and entry-point strata.",
+            "Segmented codebase into architectural tiers, cyclic clusters, and entry-point tiers.",
         ),
         (
             "stage_7",
             "07",
-            "LLM Cognitive Narration",
+            "LLM Step-by-Step Narration",
             '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 0 1 10 10c0 5.523-4.477 10-10 10a9.96 9.96 0 0 1-4.887-1.277L2 22l1.277-5.113A9.96 9.96 0 0 1 2 12C2 6.477 6.477 2 12 2z"></path></svg>',
             "Synthesizing an architectural reading order and explaining how components collaborate.",
             "Synthesized chronological reading order, subsystem responsibilities, and structural rationale.",
@@ -1321,9 +1573,9 @@ def progress_view(
         (
             "stage_9",
             "09",
-            "Persistence & Dossier Assembly",
+            "Persistence & Architecture Report Assembly",
             '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>',
-            "Compiling the verified analysis results and structuring the comprehensive dossier.",
+            "Compiling the verified analysis results and structuring the comprehensive architecture report.",
             "Assembled structured schema payload and persisted final report records into the datastore.",
         ),
         (
@@ -1370,6 +1622,8 @@ def progress_view(
     extra_scripts = f"""
     <script>
         const jobId = "{job_id}";
+        const jobStartTime = {job_created_ts * 1000 if job_created_ts > 0 else "Date.now()"};
+        const initialJobStatus = "{job_status}";
         const eventSource = new EventSource(`/api/analyses/${{jobId}}/events`);
         const statusHeader = document.getElementById("overall-status");
         const statusDesc = document.getElementById("current-stage-title");
@@ -1377,6 +1631,26 @@ def progress_view(
         const pctLabel = document.getElementById("percentage-label");
         const progressBar = document.getElementById("progress-fill");
         const logBox = document.getElementById("sse-terminal-log");
+        const timerElement = document.getElementById("elapsed-timer-text");
+
+        function formatDuration(totalSeconds) {{
+            const mins = Math.floor(totalSeconds / 60);
+            const secs = Math.floor(totalSeconds % 60);
+            return `${{mins}}:${{secs < 10 ? '0' : ''}}${{secs}}`;
+        }}
+
+        function updateElapsedTimer() {{
+            if (!timerElement) return;
+            const now = Date.now();
+            const elapsedSecs = Math.max(0, Math.floor((now - jobStartTime) / 1000));
+            timerElement.textContent = `Running for ${{formatDuration(elapsedSecs)}}`;
+        }}
+
+        let timerInterval = null;
+        if (initialJobStatus !== "completed" && initialJobStatus !== "failed") {{
+            updateElapsedTimer();
+            timerInterval = setInterval(updateElapsedTimer, 1000);
+        }}
 
         let completedCount = 0;
         const completedStages = new Set();
@@ -1410,7 +1684,7 @@ def progress_view(
             logBox.scrollTop = logBox.scrollHeight;
         }}
 
-        addLogEntry(`Initializing SSE event stream for Inquest Job #${{jobId}}...`);
+        addLogEntry(`Initializing SSE event stream for Analysis Job #${{jobId}}...`);
 
         eventSource.onmessage = function(event) {{
             try {{
@@ -1475,22 +1749,48 @@ def progress_view(
                         badge.textContent = "VERIFIED";
                     }}
                 }} else if (data.type === "completed") {{
+                    if (timerInterval) {{
+                        clearInterval(timerInterval);
+                        timerInterval = null;
+                    }}
+                    if (timerElement) {{
+                        const finalSecs = Math.max(0, Math.floor((Date.now() - jobStartTime) / 1000));
+                        timerElement.textContent = `Completed in ${{formatDuration(finalSecs)}}`;
+                    }}
                     if (progressBar) progressBar.style.width = "100%";
                     if (pctLabel) pctLabel.textContent = "100%";
                     if (stageCounter) stageCounter.textContent = "11";
-                    if (statusHeader) statusHeader.innerHTML = '<span class="badge badge-completed" style="background: var(--teal-soft); color: var(--teal); border-color: var(--teal-border);">INQUEST COMPLETE</span>';
-                    if (statusDesc) statusDesc.textContent = "All 11 strata layers synthesized. Finalizing dossier...";
+                    if (statusHeader) statusHeader.innerHTML = '<span class="badge badge-completed" style="background: var(--teal-soft); color: var(--teal); border-color: var(--teal-border);">ANALYSIS JOB COMPLETE</span>';
+                    if (statusDesc) statusDesc.textContent = "All 11 tier layers synthesized. Finalizing architecture report...";
                     
-                    addLogEntry(`Inquest synthesis completed successfully. Redirecting to dossier...`, "complete");
+                    addLogEntry(`Analysis job synthesis completed successfully. Redirecting to architecture report...`, "complete");
                     eventSource.close();
                     
                     setTimeout(() => {{
                         window.location.href = `/report/${{jobId}}`;
                     }}, 1200);
                 }} else if (data.type === "failed") {{
-                    if (statusHeader) statusHeader.innerHTML = '<span class="badge badge-failed">INQUEST FAILED</span>';
+                    if (timerInterval) {{
+                        clearInterval(timerInterval);
+                        timerInterval = null;
+                    }}
+                    if (timerElement) {{
+                        const failSecs = Math.max(0, Math.floor((Date.now() - jobStartTime) / 1000));
+                        timerElement.textContent = `Failed after ${{formatDuration(failSecs)}}`;
+                    }}
+                    if (statusHeader) statusHeader.innerHTML = '<span class="badge badge-failed">ANALYSIS JOB FAILED</span>';
                     if (statusDesc) statusDesc.textContent = data.message || "An error occurred during analysis.";
                     addLogEntry(`[ERROR] ${{data.message || 'Pipeline encountered fatal execution failure'}}`, "error");
+                    
+                    const failureBanner = document.getElementById("pipeline-failure-banner");
+                    const failureMsg = document.getElementById("failure-error-message");
+                    if (failureBanner && failureMsg) {{
+                        const msg = data.message || "Pipeline encountered fatal execution failure.";
+                        failureMsg.textContent = msg;
+                        failureMsg.title = msg;
+                        failureBanner.style.display = "flex";
+                    }}
+                    
                     eventSource.close();
                 }}
             }} catch (err) {{
@@ -1511,24 +1811,59 @@ def progress_view(
         </a>
     </div>
 
+    <!-- Prominent Failure Alert Banner -->
+    <div id="pipeline-failure-banner" style="display: {failure_banner_display}; align-items: flex-start; gap: 1rem; padding: 1.25rem 1.5rem; background: rgba(239, 68, 68, 0.07); border: 1px solid var(--crimson); border-left: 4px solid var(--crimson); border-radius: 4px; margin-bottom: 2rem;">
+        <div style="flex-shrink: 0; width: 36px; height: 36px; border-radius: 50%; background: rgba(239, 68, 68, 0.15); display: flex; align-items: center; justify-content: center; color: var(--crimson);">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+        </div>
+        <div style="flex: 1;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.35rem;">
+                <h3 style="font-size: 1.1rem; font-weight: 600; color: var(--crimson); margin: 0; font-family: 'Newsreader', Georgia, serif;">
+                    Analysis Execution Encountered a Fatal Error
+                </h3>
+                <form action="/analyses/{job_id}/retry" method="POST" style="margin: 0; display: inline;">
+                    <button type="submit" class="btn btn-sm btn-secondary" style="color: var(--crimson); border-color: var(--crimson);">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 0.25rem;">
+                            <polyline points="1 4 1 10 7 10"></polyline>
+                            <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+                        </svg>
+                        Retry Analysis Job
+                    </button>
+                </form>
+            </div>
+            <p style="color: var(--text-secondary); font-size: 0.875rem; margin: 0 0 0.65rem 0;">
+                The pipeline was unable to complete repository synthesis due to the following failure reason:
+            </p>
+            <div id="failure-error-message" title="{safe_job_error}" style="padding: 0.75rem 1rem; background: var(--panel-raised); border: 1px solid var(--hairline); border-radius: 4px; font-family: 'IBM Plex Mono', monospace; font-size: 0.8125rem; color: var(--crimson); word-break: break-word; line-height: 1.5;">
+                {safe_job_error if safe_job_error else "Pipeline encountered fatal execution failure."}
+            </div>
+        </div>
+    </div>
+
     <!-- Top Dossier Analytical Header Card -->
     <div class="stratum-card" style="margin-bottom: 2rem; position: relative; overflow: hidden;">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem; border-bottom: 1px solid var(--hairline-soft); padding-bottom: 0.75rem;">
             <div style="display: flex; align-items: center; gap: 0.5rem;">
-                <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--brass); font-weight: 600;">// FORENSIC STRATA SYNTHESIS</span>
+                <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--brass); font-weight: 600;">// CODE VALIDATION &amp; TIER SYNTHESIS</span>
                 <span style="color: var(--hairline);">/</span>
-                <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--text-tertiary);">REAL-TIME INQUEST PIPELINE</span>
+                <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--text-tertiary);">REAL-TIME ANALYSIS PIPELINE</span>
             </div>
-            <div class="tag">
-                <span class="chip-dot brass"></span>
-                <span>ACTIVE INQUEST RUNNER</span>
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+                <div id="elapsed-timer-badge" class="tag" style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--text-secondary); background: var(--panel-raised); border: 1px solid var(--hairline); display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.2rem 0.6rem; border-radius: 3px;">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity: 0.75;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                    <span id="elapsed-timer-text">{initial_timer_text}</span>
+                </div>
+                <div class="tag">
+                    <span class="chip-dot brass"></span>
+                    <span>ACTIVE ANALYSIS RUNNER</span>
+                </div>
             </div>
         </div>
 
         <div style="display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 1.25rem; margin-bottom: 1.5rem;">
             <div>
                 <h1 style="font-size: 2rem; font-weight: 500; letter-spacing: -0.02em; margin-bottom: 0.35rem;">
-                    Inquest Dossier: <span style="font-style: italic; color: var(--brass);">Job #{job_id}</span>
+                    Analysis Job Report: <span style="font-style: italic; color: var(--brass);">Job #{job_id}</span>
                 </h1>
                 <div style="display: flex; align-items: center; gap: 0.75rem; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--text-tertiary); flex-wrap: wrap;">
                     <span>TARGET: <strong style="color: var(--text-secondary);">{repo_url}</strong></span>
@@ -1537,7 +1872,7 @@ def progress_view(
                 </div>
             </div>
             <div id="overall-status">
-                <span class="badge" style="background: var(--brass-soft); color: var(--brass); border-color: var(--brass-border);">IN PROGRESS</span>
+                {initial_badge_html}
             </div>
         </div>
 
@@ -1545,7 +1880,7 @@ def progress_view(
         <div style="background: var(--panel-raised); padding: 1.25rem; border-radius: 4px; border: 1px solid var(--hairline);">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.65rem; flex-wrap: wrap; gap: 0.5rem;">
                 <span id="current-stage-title" style="font-weight: 500; font-size: 0.9375rem; color: var(--text-primary); font-family: 'Newsreader', Georgia, serif;">
-                    Initializing 11-Layer Inquest Pipeline...
+                    {initial_desc_text}
                 </span>
                 <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--brass); font-weight: 600;">
                     <span id="completed-stage-count">0</span> OF 11 STAGES RESOLVED (<span id="percentage-label">5%</span>)
@@ -1571,12 +1906,12 @@ def progress_view(
         <div class="stratum-card">
             <div class="card-header" style="margin-bottom: 1.5rem;">
                 <div>
-                    <h2 style="font-size: 1.35rem; font-weight: 500; margin-bottom: 0.2rem;">Architectural Inquest Stages</h2>
-                    <p style="font-size: 0.8125rem; color: var(--text-tertiary); margin: 0;">Step-by-step forensic strata extraction from raw Git commit trees to synthesized dossier.</p>
+                    <h2 style="font-size: 1.35rem; font-weight: 500; margin-bottom: 0.2rem;">Architectural Analysis Steps</h2>
+                    <p style="font-size: 0.8125rem; color: var(--text-tertiary); margin: 0;">Step-by-step tier extraction from raw Git commit trees to synthesized architecture report.</p>
                 </div>
                 <div class="tag">
                     <span class="chip-dot brass"></span>
-                    <span>11 STRATA SEQUENCE</span>
+                    <span>11 TIER SEQUENCE</span>
                 </div>
             </div>
 
@@ -1619,7 +1954,7 @@ def progress_view(
     </div>
     """
     return page_shell(
-        f"Inquest Progress: Job #{job_id}",
+        f"Analysis Progress: Job #{job_id}",
         content,
         current_user=current_user,
         active_route=f"/progress/{job_id}",
@@ -1679,7 +2014,7 @@ def _parse_report_markdown(raw_markdown: str) -> Dict[str, Any]:
         })
 
     # Confidence Calibration Section
-    calib_section = re.search(r"## 2\. Sequence Reasoning & Confidence Calibration\s*\n([\s\S]*?)(?=\n## 3\.|\Z)", raw_markdown)
+    calib_section = re.search(r"## 2\. (?:Sequence Reasoning & Confidence Calibration|Build Order & Confidence Scoring)\s*\n([\s\S]*?)(?=\n## 3\.|\Z)", raw_markdown)
     if calib_section:
         result["confidence_calibration"] = calib_section.group(1).strip()
 
@@ -1755,6 +2090,55 @@ def _parse_report_markdown(raw_markdown: str) -> Dict[str, Any]:
             })
 
     return result
+
+
+def _render_confidence_badge_with_tooltip(
+    badge_text: str,
+    dominant_conf: Optional[str] = None,
+) -> str:
+    """
+    Renders an accessible confidence badge with an interactive info icon (ⓘ) and tooltip
+    explaining the underlying Layer 6 Stage C sequence scoring logic.
+    """
+    clean_badge = sanitize_text(badge_text) if badge_text else "HIGH CONFIDENCE"
+    upper_badge = clean_badge.upper()
+
+    if "HIGH" in upper_badge:
+        level = "high"
+        badge_cls = "badge-teal"
+        level_title = "HIGH CONFIDENCE"
+        level_desc = "Reconstructed with high certainty using verified leaf-to-root AST import topology and verified Git commit chronology."
+    elif "MEDIUM" in upper_badge:
+        level = "medium"
+        badge_cls = "badge-amber"
+        level_title = "MEDIUM CONFIDENCE"
+        level_desc = "Ordering derived using domain precedence heuristics (config &rarr; database &rarr; core &rarr; endpoints &rarr; tests) or LLM tie-breaking due to identical or absent commit timestamps."
+    else:
+        level = "low"
+        badge_cls = "badge-brass"
+        level_title = "LOW CONFIDENCE"
+        level_desc = "Ordering is an educated structural estimate due to cyclic co-dependencies (circular imports), isolated standalone files, or reduced history confidence."
+
+    return f"""<div class="tooltip-container" style="display: inline-flex; align-items: center; position: relative;"><span class="badge {badge_cls}">{clean_badge}</span><button type="button" class="info-icon-btn" aria-label="Confidence scoring explanation" title="Confidence scoring explanation" onclick="event.stopPropagation();">ⓘ</button><div class="confidence-tooltip" role="tooltip"><div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.25rem; display: flex; align-items: center; justify-content: space-between;"><span>Sequence Confidence</span><span class="badge {badge_cls}" style="font-size: 0.58rem; padding: 0.1rem 0.35rem;">{level_title}</span></div><div style="color: var(--text-secondary); font-size: 0.72rem; margin-bottom: 0.35rem; line-height: 1.4;">{level_desc}</div><div style="border-top: 1px solid var(--hairline-soft); padding-top: 0.35rem; font-size: 0.6875rem; color: var(--text-tertiary); line-height: 1.4;"><div>&bull; <strong style="color: var(--teal);">High:</strong> Strict AST imports &amp; verified commit history</div><div>&bull; <strong style="color: var(--amber);">Medium:</strong> Domain heuristics &amp; LLM tie-breaking</div><div>&bull; <strong style="color: var(--crimson);">Low:</strong> Cyclic clusters, isolated files, squashed history</div></div></div></div>"""
+
+
+def _render_confidence_info_icon(level: str = "high") -> str:
+    """Renders a standalone info icon (ⓘ) with confidence scoring tooltip."""
+    lvl = (level or "high").lower()
+    if lvl == "high":
+        badge_cls = "badge-teal"
+        level_title = "HIGH CONFIDENCE"
+        level_desc = "Reconstructed with high certainty using verified leaf-to-root AST import topology and verified Git commit chronology."
+    elif lvl == "medium":
+        badge_cls = "badge-amber"
+        level_title = "MEDIUM CONFIDENCE"
+        level_desc = "Ordering derived using domain precedence heuristics (config &rarr; database &rarr; core &rarr; endpoints &rarr; tests) or LLM tie-breaking due to identical or absent commit timestamps."
+    else:
+        badge_cls = "badge-brass"
+        level_title = "LOW CONFIDENCE"
+        level_desc = "Ordering is an educated structural estimate due to cyclic co-dependencies (circular imports), isolated standalone files, or reduced history confidence."
+
+    return f"""<div class="tooltip-container" style="display: inline-flex; align-items: center; position: relative;"><button type="button" class="info-icon-btn" aria-label="Confidence scoring explanation" title="Confidence scoring explanation" onclick="event.stopPropagation();">ⓘ</button><div class="confidence-tooltip" role="tooltip"><div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.25rem; display: flex; align-items: center; justify-content: space-between;"><span>Sequence Confidence</span><span class="badge {badge_cls}" style="font-size: 0.58rem; padding: 0.1rem 0.35rem;">{level_title}</span></div><div style="color: var(--text-secondary); font-size: 0.72rem; margin-bottom: 0.35rem; line-height: 1.4;">{level_desc}</div><div style="border-top: 1px solid var(--hairline-soft); padding-top: 0.35rem; font-size: 0.6875rem; color: var(--text-tertiary); line-height: 1.4;"><div>&bull; <strong style="color: var(--teal);">High:</strong> Strict AST imports &amp; verified commit history</div><div>&bull; <strong style="color: var(--amber);">Medium:</strong> Domain heuristics &amp; LLM tie-breaking</div><div>&bull; <strong style="color: var(--crimson);">Low:</strong> Cyclic clusters, isolated files, squashed history</div></div></div></div>"""
 
 
 def _render_server_diff_html(
@@ -1909,6 +2293,7 @@ def report_view(
     current_user: UserModel,
     billing_status: Optional[Dict[str, Any]] = None,
     attempts_by_tier: Optional[Dict[int, Any]] = None,
+    file_contents: Optional[Dict[str, str]] = None,
 ) -> str:
     """
     Render the Archival Dossier Report View.
@@ -1921,7 +2306,7 @@ def report_view(
         job_id = 0
     repo_url = sanitize_text(getattr(job, "repo_url", "") if hasattr(job, "repo_url") else (job.get("repo_url", "") if isinstance(job, dict) else ""))
     repo_name = sanitize_text(job.repo_name or (job.repo_url.rstrip("/").split("/")[-1] if "/" in job.repo_url else job.repo_url))
-    created_at = sanitize_text(job.created_at.strftime("%Y-%m-%d %H:%M UTC") if hasattr(job.created_at, "strftime") else str(job.created_at))
+    created_at = sanitize_text(job.created_at.strftime("%Y-%m-%d %H:%M:%S UTC") if hasattr(job.created_at, "strftime") else str(job.created_at))
     duration = f"{job.execution_time_seconds:.1f}s" if job.execution_time_seconds else "Completed"
     run_id = sanitize_text(job.run_id or f"run_{job_id}")
 
@@ -1986,13 +2371,16 @@ def report_view(
     if calib_raw:
         calib_html = f"""
         <div style="background: var(--panel-raised); border: 1px solid var(--hairline); border-left: 3px solid var(--teal); border-radius: 4px; padding: 1rem 1.25rem; margin-top: 1.25rem;">
-            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem;">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--teal);">
-                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
-                </svg>
-                <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; font-weight: 600; color: var(--teal); text-transform: uppercase; letter-spacing: 0.05em;">
-                    Sequence Reasoning &amp; Confidence Calibration
-                </span>
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.35rem;">
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--teal);">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                    </svg>
+                    <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; font-weight: 600; color: var(--teal); text-transform: uppercase; letter-spacing: 0.05em;">
+                        Build Order &amp; Confidence Scoring
+                    </span>
+                </div>
+                {_render_confidence_info_icon("high")}
             </div>
             <div style="font-size: 0.8125rem; color: var(--text-secondary); line-height: 1.55;">
                 {render_safe_markdown(calib_raw)}
@@ -2000,14 +2388,57 @@ def report_view(
         </div>
         """
 
+    # Sequence Confidence Calculation for Overview KPI Bento Grid
+    total_nodes_count = len(nodes)
+    if total_nodes_count > 0:
+        h_nodes = sum(1 for n in nodes if str(n.get("confidence", "")).lower() == "high")
+        m_nodes = sum(1 for n in nodes if str(n.get("confidence", "")).lower() == "medium")
+        l_nodes = sum(1 for n in nodes if str(n.get("confidence", "")).lower() == "low")
+        h_pct = round((h_nodes / total_nodes_count) * 100)
+        m_pct = round((m_nodes / total_nodes_count) * 100)
+        l_pct = round((l_nodes / total_nodes_count) * 100)
+        if h_pct >= 50:
+            overall_conf_label = f"HIGH ({h_pct}%)"
+            overall_conf_val = "high"
+            overall_conf_color = "var(--teal)"
+        elif h_pct + m_pct >= 50:
+            overall_conf_label = f"MEDIUM ({m_pct}%)"
+            overall_conf_val = "medium"
+            overall_conf_color = "var(--amber)"
+        else:
+            overall_conf_label = f"LOW ({l_pct}%)"
+            overall_conf_val = "low"
+            overall_conf_color = "var(--brass)"
+        conf_sub_text = f"{h_pct}% High &bull; {m_pct}% Med"
+    elif milestones_data:
+        all_confs = [m.get("confidence_badge", "") for m in milestones_data]
+        h_count = sum(1 for c in all_confs if "HIGH" in c.upper())
+        m_count = sum(1 for c in all_confs if "MEDIUM" in c.upper())
+        tot = len(all_confs) or 1
+        h_pct = round((h_count / tot) * 100)
+        if h_pct >= 50:
+            overall_conf_label = f"HIGH ({h_pct}%)"
+            overall_conf_val = "high"
+            overall_conf_color = "var(--teal)"
+        else:
+            overall_conf_label = "MEDIUM"
+            overall_conf_val = "medium"
+            overall_conf_color = "var(--amber)"
+        conf_sub_text = "Milestone Calibration"
+    else:
+        overall_conf_label = "HIGH"
+        overall_conf_val = "high"
+        overall_conf_color = "var(--teal)"
+        conf_sub_text = "Verified AST Topology"
+
     overview_section_html = f"""
     <div class="stratum-card" id="section-overview" style="margin-bottom: 2rem;">
         <div class="card-header">
             <div>
                 <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--brass); text-transform: uppercase; letter-spacing: 0.05em;">
-                    Section 01 // Architectural Synthesis Stratum
+                    Section 01 // Architectural Synthesis Tier
                 </div>
-                <h2 style="font-size: 1.45rem; font-weight: 500; margin-top: 0.15rem;">Executive Codebase Architecture &amp; Topography</h2>
+                <h2 style="font-size: 1.45rem; font-weight: 500; margin-top: 0.15rem;">Codebase Architecture Overview</h2>
             </div>
             <div style="display: flex; align-items: center; gap: 0.5rem;">
                 <span class="chip"><span class="chip-dot teal"></span> Verified Invariants</span>
@@ -2015,22 +2446,30 @@ def report_view(
             </div>
         </div>
 
-        <!-- 6-Card KPI Bento Grid -->
-        <div class="kpi-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.75rem; margin: 1.25rem 0;">
+        <!-- 7-Card KPI Bento Grid -->
+        <div class="kpi-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(135px, 1fr)); gap: 0.75rem; margin: 1.25rem 0;">
             <div class="kpi-card">
                 <div class="kpi-label">PRIMARY LANGUAGE</div>
                 <div class="kpi-value" style="color: var(--brass);">{primary_lang}</div>
-                <div class="kpi-sub">AST Syntax Engine</div>
+                <div class="kpi-sub">Syntax Parser</div>
             </div>
             <div class="kpi-card">
                 <div class="kpi-label">TOTAL ANALYZED FILES</div>
                 <div class="kpi-value" style="color: var(--text-primary);">{total_files}</div>
-                <div class="kpi-sub">Decomposed Modules</div>
+                <div class="kpi-sub">Analyzed Code Files</div>
             </div>
             <div class="kpi-card">
-                <div class="kpi-label">TOPOLOGICAL DEPTH</div>
+                <div class="kpi-label">DEPENDENCY DEPTH</div>
                 <div class="kpi-value" style="color: var(--teal);">{total_tiers} Tiers</div>
-                <div class="kpi-sub">Leaf to Root Sequence</div>
+                <div class="kpi-sub">Bottom-Up Build Sequence</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label" style="display: flex; align-items: center; justify-content: space-between;">
+                    <span>CONFIDENCE SCORE</span>
+                    {_render_confidence_info_icon(overall_conf_val)}
+                </div>
+                <div class="kpi-value" style="color: {overall_conf_color}; font-size: 1.15rem;">{overall_conf_label}</div>
+                <div class="kpi-sub">{conf_sub_text}</div>
             </div>
             <div class="kpi-card">
                 <div class="kpi-label">ENTRY POINTS</div>
@@ -2040,12 +2479,12 @@ def report_view(
             <div class="kpi-card">
                 <div class="kpi-label">GRAPH DEPENDENCIES</div>
                 <div class="kpi-value" style="color: var(--text-primary);">{edge_count}</div>
-                <div class="kpi-sub">Import / Call Edges</div>
+                <div class="kpi-sub">File &amp; Function Connections</div>
             </div>
             <div class="kpi-card">
                 <div class="kpi-label">SUBSYSTEM DOMAINS</div>
                 <div class="kpi-value" style="color: var(--brass);">{len(domain_dist)}</div>
-                <div class="kpi-sub">Categorized Strata</div>
+                <div class="kpi-sub">Categorized Tiers</div>
             </div>
         </div>
 
@@ -2055,7 +2494,7 @@ def report_view(
                 &ldquo;Topologically ordered leaf-to-root architectural synthesis computed from static CST/AST parsing and cross-module import analysis.&rdquo;
             </div>
             <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--text-tertiary);">
-                RECONSTRUCTED INVARIANT LEDGER &bull; ISOLATED FILES: {isolated_count} &bull; CYCLIC CLUSTERS: {cyclic_count}
+                Verified Architecture Summary &bull; ISOLATED FILES: {isolated_count} &bull; CYCLIC CLUSTERS: {cyclic_count}
             </div>
         </div>
 
@@ -2067,7 +2506,7 @@ def report_view(
                     <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">
                         Execution Entry Targets ({len(entry_points)})
                     </span>
-                    <span class="chip" style="font-size: 0.625rem;">ROOT STRATA</span>
+                    <span class="chip" style="font-size: 0.625rem;">ROOT TIERS</span>
                 </div>
                 <div style="display: flex; flex-direction: column; gap: 0.4rem;">
                     {entry_chips_html}
@@ -2078,7 +2517,7 @@ def report_view(
             <div style="background: var(--panel); border: 1px solid var(--hairline); border-radius: 4px; padding: 1.15rem;">
                 <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
                     <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">
-                        Domain Composition
+                        Subsystem Breakdown
                     </span>
                     <span class="chip" style="font-size: 0.625rem;">{len(domain_dist)} DOMAINS</span>
                 </div>
@@ -2149,7 +2588,23 @@ def report_view(
                 raw_path = str(node.get("path", node.get("id", "")))
                 raw_domain = str(node.get("domain", node.get("type", "core"))).upper()
 
+                domain_color_map = {
+                    "core": ("#3B82F6", "Core application code"),
+                    "backend": ("#10B981", "Backend & API services"),
+                    "frontend": ("#8B5CF6", "UI & client components"),
+                    "database": ("#F59E0B", "Database & data models"),
+                    "tests": ("#6B7280", "Test files & suites"),
+                    "config": ("#EC4899", "Configuration & setup"),
+                    "docs": ("#14B8A6", "Documentation assets"),
+                    "build": ("#F97316", "Build & bundling scripts"),
+                    "devops": ("#6366F1", "DevOps & CI/CD workflows"),
+                    "examples": ("#84CC16", "Examples & tutorials"),
+                    "uncategorized": ("#9CA3AF", "General modules"),
+                }
+                node_color = node.get("color") or domain_color_map.get(raw_domain.lower(), ("var(--brass)", ""))[0]
+
                 node_label = sanitize_text(raw_label)
+                full_node_path = sanitize_text(raw_path)
                 node_path = sanitize_text(raw_path[-28:])
                 node_domain = sanitize_text(raw_domain[:7])
                 confidence = sanitize_text(str(node.get("confidence", "high"))).lower()
@@ -2160,17 +2615,18 @@ def report_view(
                 safe_node_id = sanitize_text(node_id).replace("/", "_").replace(".", "_")
 
                 svg_nodes_html += f"""
-                <g class="dag-node" id="dag-node-{safe_node_id}" data-node-id="{sanitize_text(node_id)}" data-tier="{t_val}" data-domain="{node_domain}" onclick="selectDagNode(this.dataset.nodeId)" onmouseenter="hoverDagNode(this.dataset.nodeId)" onmouseleave="unhoverDagNode()" transform="translate({col_x}, {node_y})" style="cursor: pointer; transition: all 150ms ease;">
+                <g class="dag-node" id="dag-node-{safe_node_id}" data-node-id="{sanitize_text(node_id)}" data-tier="{t_val}" data-domain="{node_domain}" title="{full_node_path}" onclick="selectDagNode(this.dataset.nodeId)" onmouseenter="hoverDagNode(this.dataset.nodeId)" onmouseleave="unhoverDagNode()" transform="translate({col_x}, {node_y})" style="cursor: pointer; transition: all 150ms ease;">
+                    <title>{full_node_path}</title>
                     <rect width="{col_width}" height="{node_h}" rx="6" fill="var(--panel)" stroke="var(--hairline)" class="dag-node-box" />
                     <!-- Confidence Indicator Dot -->
                     <circle cx="16" cy="20" r="4" fill="{conf_color}" />
                     <!-- Node Label -->
                     <text x="28" y="24" fill="var(--text-primary)" font-family="'IBM Plex Mono', monospace" font-size="12" font-weight="600">{node_label}</text>
                     <!-- Domain Badge -->
-                    <rect x="{col_width - 62}" y="10" width="50" height="18" rx="3" fill="var(--panel-raised)" stroke="var(--hairline)" />
-                    <text x="{col_width - 37}" y="22" fill="var(--brass)" font-family="'IBM Plex Mono', monospace" font-size="9" font-weight="600" text-anchor="middle">{node_domain}</text>
+                    <rect x="{col_width - 62}" y="10" width="50" height="18" rx="3" fill="var(--panel-raised)" stroke="{node_color}" stroke-opacity="0.4" />
+                    <text x="{col_width - 37}" y="22" fill="{node_color}" font-family="'IBM Plex Mono', monospace" font-size="9" font-weight="600" text-anchor="middle">{node_domain}</text>
                     <!-- File Path Subtitle -->
-                    <text x="16" y="44" fill="var(--text-tertiary)" font-family="'IBM Plex Mono', monospace" font-size="10">{node_path}</text>
+                    <text x="16" y="44" fill="var(--text-tertiary)" font-family="'IBM Plex Mono', monospace" font-size="10" title="{full_node_path}"><title>{full_node_path}</title>{node_path}</text>
                     <!-- Exports / Invariant count -->
                     <text x="16" y="58" fill="var(--text-secondary)" font-family="'IBM Plex Mono', monospace" font-size="9.5">{exports_count} exports &bull; Tier {t_val}</text>
                 </g>
@@ -2231,12 +2687,79 @@ def report_view(
             </tr>
             """
 
+        # Distinct Domain and Confidence Tag Extraction for Dynamic Legend
+        domain_color_defs = {
+            "core": ("#3B82F6", "core application code"),
+            "backend": ("#10B981", "backend & API services"),
+            "frontend": ("#8B5CF6", "UI & client components"),
+            "database": ("#F59E0B", "database & data models"),
+            "tests": ("#6B7280", "test files & suites"),
+            "config": ("#EC4899", "configuration & setup"),
+            "docs": ("#14B8A6", "documentation assets"),
+            "build": ("#F97316", "build & bundling scripts"),
+            "devops": ("#6366F1", "DevOps & CI/CD workflows"),
+            "examples": ("#84CC16", "examples & tutorials"),
+            "uncategorized": ("#9CA3AF", "general modules"),
+        }
+
+        confidence_legend_defs = {
+            "high": ("var(--teal)", "high confidence (strict AST / Git history)"),
+            "medium": ("var(--amber)", "medium confidence (domain heuristics)"),
+            "low": ("var(--crimson)", "low confidence (cyclic / isolated)"),
+        }
+
+        # Dynamic extraction: only include tags actually present in the current graph
+        used_domains: Dict[str, tuple[str, str]] = {}
+        used_confidences: Dict[str, tuple[str, str]] = {}
+
+        for n in nodes:
+            raw_dom = str(n.get("domain", n.get("type", "core"))).lower()
+            if raw_dom not in used_domains:
+                d_color = n.get("color") or domain_color_defs.get(raw_dom, ("#9CA3AF", f"{raw_dom} code"))[0]
+                d_desc = domain_color_defs.get(raw_dom, (d_color, f"{raw_dom} files"))[1]
+                used_domains[raw_dom] = (d_color, d_desc)
+
+            raw_c = str(n.get("confidence", "high")).lower()
+            if raw_c not in used_confidences and raw_c in confidence_legend_defs:
+                used_confidences[raw_c] = confidence_legend_defs[raw_c]
+
+        if not used_domains:
+            used_domains["core"] = domain_color_defs["core"]
+        if not used_confidences:
+            used_confidences["high"] = confidence_legend_defs["high"]
+
+        legend_domain_chips = ""
+        for dom_key, (dom_color, dom_desc) in used_domains.items():
+            dom_tag = sanitize_text(dom_key.upper())
+            safe_desc = sanitize_text(dom_desc)
+            legend_domain_chips += f"""
+            <div class="legend-chip" title="{dom_tag}: {safe_desc}">
+                <span style="display: inline-block; width: 8px; height: 8px; border-radius: 2px; background: {dom_color}; flex-shrink: 0;"></span>
+                <span style="font-weight: 600; color: var(--text-primary);">{dom_tag}</span>
+                <span style="color: var(--text-tertiary); font-family: 'IBM Plex Sans', sans-serif; font-size: 0.72rem;">= {safe_desc}</span>
+            </div>
+            """
+
+        legend_confidence_chips = ""
+        for conf_key in ["high", "medium", "low"]:
+            if conf_key in used_confidences:
+                conf_color, conf_desc = used_confidences[conf_key]
+                conf_lbl = sanitize_text(conf_key.capitalize())
+                safe_desc = sanitize_text(conf_desc)
+                legend_confidence_chips += f"""
+                <div class="legend-chip" title="{conf_lbl} Confidence: {safe_desc}">
+                    <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: {conf_color}; flex-shrink: 0;"></span>
+                    <span style="font-weight: 600; color: var(--text-primary);">{conf_lbl}</span>
+                    <span style="color: var(--text-tertiary); font-family: 'IBM Plex Sans', sans-serif; font-size: 0.72rem;">= {safe_desc}</span>
+                </div>
+                """
+
         graph_section_html = f"""
         <div class="stratum-card" id="section-graph" style="margin-bottom: 2rem;">
             <div class="card-header">
                 <div>
                     <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--brass); text-transform: uppercase; letter-spacing: 0.05em;">
-                        Section 02 // Topological Structure
+                        Section 02 // Dependency Roadmap
                     </div>
                     <h2 style="font-size: 1.45rem; font-weight: 500; margin-top: 0.15rem;">Architecture &amp; Dependency Graph</h2>
                 </div>
@@ -2247,7 +2770,7 @@ def report_view(
             </div>
 
             <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1rem; line-height: 1.5;">
-                Computed from static AST syntax tree parsing and cross-module import resolution. Nodes represent decomposed compilation modules grouped horizontally by topological tier (leaf-to-root).
+                Computed from static AST syntax tree parsing and cross-module import resolution. Nodes represent decomposed compilation modules grouped horizontally by milestone tier (leaf-to-root).
             </p>
 
             <!-- Graph Interactive Toolbar -->
@@ -2259,7 +2782,11 @@ def report_view(
                     </svg>
                     <input type="text" id="dag-search-input" placeholder="Search node or file..." oninput="filterDagNodes(this.value)" style="background: transparent; border: none; color: var(--text-primary); font-family: 'IBM Plex Sans', sans-serif; font-size: 0.8125rem; outline: none; width: 100%;" />
                 </div>
-                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                    <button type="button" class="btn btn-sm btn-secondary" onclick="toggleDagLegend()" id="toggle-legend-btn" title="Toggle Graph Legend">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                        Legend
+                    </button>
                     <button type="button" class="btn btn-sm btn-secondary" onclick="resetDagZoom()" title="Reset Graph View">
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>
                         Reset
@@ -2267,6 +2794,25 @@ def report_view(
                     <button type="button" class="btn btn-sm btn-secondary" onclick="toggleGraphViewMode()" id="toggle-view-btn">
                         Table Catalog
                     </button>
+                    <button type="button" class="btn btn-sm btn-secondary" onclick="toggleGraphFullscreen()" id="dag-fullscreen-btn" title="Toggle Fullscreen">
+                        ⛶ Maximize
+                    </button>
+                </div>
+            </div>
+
+            <!-- Graph Legend Strip / Panel -->
+            <div id="dag-legend-panel" style="margin-bottom: 0.85rem; padding: 0.65rem 0.85rem; background: var(--panel-raised); border: 1px solid var(--hairline); border-radius: 4px; display: flex; flex-direction: column; gap: 0.45rem; font-size: 0.75rem;">
+                <div id="dag-legend-content" style="display: flex; flex-direction: column; gap: 0.4rem;">
+                    <!-- Domain tags row -->
+                    <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 0.4rem;">
+                        <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.65rem; font-weight: 600; color: var(--text-tertiary); text-transform: uppercase; margin-right: 0.2rem;">Node Domains:</span>
+                        {legend_domain_chips}
+                    </div>
+                    <!-- Confidence indicators row -->
+                    <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 0.4rem; border-top: 1px solid var(--hairline-soft); padding-top: 0.35rem;">
+                        <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.65rem; font-weight: 600; color: var(--text-tertiary); text-transform: uppercase; margin-right: 0.2rem;">Confidence:</span>
+                        {legend_confidence_chips}
+                    </div>
                 </div>
             </div>
 
@@ -2343,6 +2889,7 @@ def report_view(
     # 3. Step-by-Step Architectural Milestones Timeline Spine & In-App Code Editor
     # -------------------------------------------------------------
     milestones_spine_html = ""
+    all_fill_files_map: Dict[int, List[Dict[str, Any]]] = {}
     if milestones_data:
         items_html = ""
         for m in milestones_data:
@@ -2517,10 +3064,229 @@ def report_view(
                 g_items = "".join(f'<div style="margin-bottom: 0.25rem; color: var(--amber);">&bull; {sanitize_text(g)}</div>' for g in m_gotchas)
                 notes_html = f"""
                 <div style="margin-top: 0.65rem; padding: 0.65rem 0.85rem; background: var(--panel-raised); border: 1px solid var(--hairline-soft); border-radius: 3px; font-size: 0.75rem; color: var(--text-secondary); line-height: 1.45;">
-                    {f'<div style="margin-bottom: 0.35rem;"><span style="font-weight: 600; color: var(--text-primary);">Pedagogical Invariant:</span> {p_items}</div>' if p_items else ''}
+                    {f'<div style="margin-bottom: 0.35rem;"><span style="font-weight: 600; color: var(--text-primary);">Key Architectural Concept:</span> {p_items}</div>' if p_items else ''}
                     {f'<div><span style="font-weight: 600; color: var(--amber);">Implementation Gotcha:</span> {g_items}</div>' if g_items else ''}
                 </div>
                 """
+
+            # Prepare read-only file contents for "Just Read It" mode
+            read_files_data = []
+            if m_files:
+                for idx, f_path in enumerate(m_files):
+                    f_content = ""
+                    if file_contents:
+                        if f_path in file_contents:
+                            f_content = file_contents[f_path]
+                        else:
+                            norm_f = f_path.replace("\\", "/").strip("/")
+                            for k, v in file_contents.items():
+                                norm_k = k.replace("\\", "/").strip("/")
+                                if norm_k == norm_f or norm_k.endswith("/" + norm_f) or norm_f.endswith("/" + norm_k):
+                                    f_content = v
+                                    break
+
+                    if not f_content and graph_data and "nodes" in graph_data:
+                        for n in graph_data.get("nodes", []):
+                            n_path = n.get("path") or n.get("id") or ""
+                            if n_path == f_path or n_path.endswith(f_path) or f_path.endswith(n_path):
+                                if n.get("source_code"):
+                                    f_content = n.get("source_code")
+                                    break
+                                elif n.get("content"):
+                                    f_content = n.get("content")
+                                    break
+
+                    if not f_content:
+                        try:
+                            ref_info = HintEngine.get_reference_implementation(graph_data or {}, m_tier)
+                            f_content = ref_info.get("reference_code", "")
+                        except Exception:
+                            f_content = ""
+
+                    if not f_content:
+                        f_content = f"# Milestone {m_tier} implementation: {f_path}\n# No source content available in repository snapshot."
+
+                    read_files_data.append({
+                        "path": f_path,
+                        "filename": f_path.replace("\\", "/").split("/")[-1],
+                        "content": f_content,
+                    })
+            else:
+                try:
+                    ref_info = HintEngine.get_reference_implementation(graph_data or {}, m_tier)
+                    default_code = ref_info.get("reference_code", "# Reference implementation")
+                except Exception:
+                    default_code = f"# Milestone {m_tier} reference implementation"
+                read_files_data.append({
+                    "path": f"milestone_{m_tier}_implementation.py",
+                    "filename": f"milestone_{m_tier}_implementation.py",
+                    "content": default_code,
+                })
+
+            read_file_tabs_html = ""
+            read_file_panes_html = ""
+            for f_idx, r_file in enumerate(read_files_data):
+                active_cls = "active" if f_idx == 0 else ""
+                pane_display = "block" if f_idx == 0 else "none"
+                escaped_f_content = html.escape(r_file["content"])
+                f_name_safe = sanitize_text(r_file["filename"])
+                f_path_safe = sanitize_text(r_file["path"])
+
+                if len(read_files_data) > 1:
+                    tab_bg = "var(--panel)" if f_idx == 0 else "transparent"
+                    tab_color = "var(--teal)" if f_idx == 0 else "var(--text-secondary)"
+                    tab_border = "var(--teal-border)" if f_idx == 0 else "var(--hairline)"
+                    read_file_tabs_html += f"""
+                    <button type="button" id="read-tab-btn-{m_tier}-{f_idx}" class="read-file-tab-btn {active_cls}" onclick="switchMilestoneReadFile({m_tier}, {f_idx})" title="{f_path_safe}" style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.25rem 0.6rem; font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem; border-radius: 3px; border: 1px solid {tab_border}; background: {tab_bg}; color: {tab_color}; cursor: pointer; transition: all 120ms ease;">
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
+                            <polyline points="13 2 13 9 20 9"></polyline>
+                        </svg>
+                        {f_name_safe}
+                    </button>
+                    """
+
+                read_file_panes_html += f"""
+                <div id="read-file-pane-{m_tier}-{f_idx}" class="read-file-pane" style="display: {pane_display};">
+                    <div style="display: flex; justify-content: space-between; align-items: center; background: #12141a; padding: 0.4rem 0.85rem; border: 1px solid var(--hairline); border-bottom: none; border-top-left-radius: 4px; border-top-right-radius: 4px; font-family: 'IBM Plex Mono', monospace; font-size: 0.7rem; color: var(--text-tertiary);">
+                        <div style="display: flex; align-items: center; gap: 0.4rem;">
+                            <span class="chip-dot teal"></span>
+                            <span style="color: var(--text-secondary); font-weight: 500;">{f_path_safe}</span>
+                        </div>
+                        <span class="tag" style="font-size: 0.625rem;">READ-ONLY SOURCE</span>
+                    </div>
+                    <pre class="read-code-pre" style="background: #181a20; padding: 1rem 1.15rem; border-bottom-left-radius: 4px; border-bottom-right-radius: 4px; border: 1px solid var(--hairline); overflow-x: auto; margin: 0; max-height: 480px; font-family: 'IBM Plex Mono', monospace; font-size: 0.8rem; line-height: 1.5; color: #f8f8f2;"><code id="read-code-content-{m_tier}-{f_idx}">{escaped_f_content}</code></pre>
+                </div>
+                """
+
+            # Prepare Scaffold Data for "Fill the Blanks" mode
+            fill_files_data = []
+            has_any_scaffold = False
+            for f_idx, r_file in enumerate(read_files_data):
+                s_res = ScaffoldGenerator.generate_scaffold(
+                    code=r_file["content"],
+                    language="python",
+                    file_path=r_file["path"],
+                )
+                if s_res.get("has_scaffold", False):
+                    has_any_scaffold = True
+                fill_files_data.append({
+                    "path": r_file["path"],
+                    "filename": r_file["filename"],
+                    "scaffold_code": s_res.get("scaffold_code", r_file["content"]),
+                    "has_scaffold": s_res.get("has_scaffold", False),
+                    "blanked_functions": s_res.get("blanked_functions", []),
+                    "blanked_count": s_res.get("blanked_count", 0),
+                    "reason": s_res.get("reason"),
+                })
+
+            all_fill_files_map[m_tier] = fill_files_data
+
+            # Guess It Mode: Multi-file picker & Task Instructions
+            first_target_file = sanitize_text(m_files[0]) if m_files else f"milestone_{m_tier}.py"
+            role_context = sanitize_text(m_role) if m_role else (sanitize_text(m_title) if m_title else f"Milestone {m_tier}")
+
+            guess_file_tabs_html = ""
+            for f_idx, g_file in enumerate(m_files):
+                active_cls = "active" if f_idx == 0 else ""
+                f_path_safe = sanitize_text(g_file)
+                f_name_safe = sanitize_text(g_file.replace("\\", "/").split("/")[-1])
+                tab_bg = "var(--panel)" if f_idx == 0 else "transparent"
+                tab_color = "var(--brass)" if f_idx == 0 else "var(--text-secondary)"
+                tab_border = "var(--brass-border)" if f_idx == 0 else "var(--hairline)"
+                guess_file_tabs_html += f"""
+                <button type="button" id="guess-tab-btn-{m_tier}-{f_idx}" class="guess-file-tab-btn {active_cls}" onclick="switchMilestoneGuessFile({m_tier}, {f_idx}, '{f_path_safe}')" title="{f_path_safe}" style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.25rem 0.6rem; font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem; border-radius: 3px; border: 1px solid {tab_border}; background: {tab_bg}; color: {tab_color}; cursor: pointer; transition: all 120ms ease;">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
+                        <polyline points="13 2 13 9 20 9"></polyline>
+                    </svg>
+                    {f_name_safe}
+                </button>
+                """
+
+            guess_file_picker_container_html = ""
+            if len(m_files) > 1:
+                guess_file_picker_container_html = f"""
+                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; flex-wrap: wrap;">
+                    <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; font-weight: 600; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.04em;">Target File:</span>
+                    <div id="guess-file-tabs-{m_tier}" style="display: flex; gap: 0.35rem; flex-wrap: wrap;">
+                        {guess_file_tabs_html}
+                    </div>
+                </div>
+                """
+
+            # Fill the Blanks Mode: Multi-file picker & Chips
+            first_fill_file = fill_files_data[0]
+            first_fill_name = sanitize_text(first_fill_file["filename"])
+            first_fill_path = sanitize_text(first_fill_file["path"])
+            escaped_scaffold_code = html.escape(first_fill_file["scaffold_code"])
+
+            fill_file_tabs_html = ""
+            for f_idx, f_file in enumerate(fill_files_data):
+                active_cls = "active" if f_idx == 0 else ""
+                f_path_safe = sanitize_text(f_file["path"])
+                f_name_safe = sanitize_text(f_file["filename"])
+                tab_bg = "var(--panel)" if f_idx == 0 else "transparent"
+                tab_color = "var(--teal)" if f_idx == 0 else "var(--text-secondary)"
+                tab_border = "var(--teal-border)" if f_idx == 0 else "var(--hairline)"
+                no_blanks_tag = "" if f_file["has_scaffold"] else ' <span class="tag" style="font-size: 0.55rem; padding: 0 0.2rem;">No blanks</span>'
+                fill_file_tabs_html += f"""
+                <button type="button" id="fill-tab-btn-{m_tier}-{f_idx}" class="fill-file-tab-btn {active_cls}" onclick="switchMilestoneFillFile({m_tier}, {f_idx}, '{f_path_safe}')" title="{f_path_safe}" style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.25rem 0.6rem; font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem; border-radius: 3px; border: 1px solid {tab_border}; background: {tab_bg}; color: {tab_color}; cursor: pointer; transition: all 120ms ease;">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
+                        <polyline points="13 2 13 9 20 9"></polyline>
+                    </svg>
+                    {f_name_safe}{no_blanks_tag}
+                </button>
+                """
+
+            fill_file_picker_container_html = ""
+            if len(fill_files_data) > 1:
+                fill_file_picker_container_html = f"""
+                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; flex-wrap: wrap;">
+                    <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; font-weight: 600; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.04em;">Target File:</span>
+                    <div id="fill-file-tabs-{m_tier}" style="display: flex; gap: 0.35rem; flex-wrap: wrap;">
+                        {fill_file_tabs_html}
+                    </div>
+                </div>
+                """
+
+            initial_blanked = first_fill_file["blanked_functions"]
+            if initial_blanked:
+                fill_chips_html = "".join([
+                    f'<span class="mono" style="display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.15rem 0.45rem; background: var(--panel); border: 1px solid var(--hairline); border-radius: 3px; font-size: 0.72rem; color: var(--teal);">🧩 {html.escape(bf["full_name"] if bf.get("class_name") else bf["name"])}()</span> '
+                    for bf in initial_blanked
+                ])
+            else:
+                fill_chips_html = f'<span style="font-size: 0.75rem; color: var(--text-tertiary); font-style: italic;">{html.escape(first_fill_file.get("reason") or "File contains no function bodies to blank.")}</span>'
+
+            # Mode Switcher button for Fill the Blanks
+            if has_any_scaffold:
+                fill_mode_btn_html = f"""
+                <button type="button" id="mode-btn-fill-{m_tier}" class="milestone-mode-tab-btn" onclick="switchMilestoneMode({m_tier}, 'fill')" style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.35rem 0.75rem; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; font-weight: 500; border-radius: 3px; border: none; cursor: pointer; transition: all 120ms ease; background: transparent; color: var(--text-secondary);">
+                    <span>🧩</span> Fill the Blanks
+                </button>
+                """
+            else:
+                disable_note = html.escape(first_fill_file.get("reason") or "File contains only constants, type declarations, or exports with no function bodies to scaffold.")
+                fill_mode_btn_html = f"""
+                <button type="button" id="mode-btn-fill-{m_tier}" class="milestone-mode-tab-btn disabled" disabled title="{disable_note}" style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.35rem 0.75rem; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; font-weight: 500; border-radius: 3px; border: none; cursor: not-allowed; opacity: 0.45; background: transparent; color: var(--text-tertiary);">
+                    <span>🧩</span> Fill the Blanks <span class="tag" style="font-size: 0.6rem; padding: 0.05rem 0.3rem;">No Blanks</span>
+                </button>
+                """
+
+            read_file_picker_container_html = ""
+            if len(read_files_data) > 1:
+                read_file_picker_container_html = f"""
+                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.65rem; flex-wrap: wrap;">
+                    <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; font-weight: 600; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.04em;">Target File:</span>
+                    <div id="read-file-tabs-{m_tier}" style="display: flex; gap: 0.35rem; flex-wrap: wrap;">
+                        {read_file_tabs_html}
+                    </div>
+                </div>
+                """
+
+            reviewed_btn_text = "Reviewed &amp; Verified ✓" if attempt_status == "structurally_verified" else "Mark as Reviewed"
 
             items_html += f"""
             <div class="milestone-item" id="milestone-stratum-{m_tier}" style="display: flex; gap: 1.25rem; align-items: flex-start; position: relative; margin-bottom: 2rem;">
@@ -2541,7 +3307,7 @@ def report_view(
                         </div>
                         <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
                             {status_chip}
-                            <span class="badge {conf_badge_cls}">{m_conf_badge}</span>
+                            {_render_confidence_badge_with_tooltip(m_conf_badge)}
                         </div>
                     </div>
 
@@ -2565,176 +3331,330 @@ def report_view(
                     {citations_html}
                     {notes_html}
 
-                    <!-- Prompt 12: In-App Code Editor Component & Prompt 13 Progressive Hint Gate & Prompt 16 Execution -->
+                    <!-- Milestone Implementation & Engagement Workspace -->
                     <div class="milestone-editor-wrapper" id="milestone-editor-card-{m_tier}" style="margin-top: 1.25rem; border-top: 1px solid var(--hairline-soft); padding-top: 1.15rem;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.65rem; flex-wrap: wrap; gap: 0.5rem;">
-                            <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--brass);">
-                                    <polyline points="16 18 22 12 16 6"></polyline>
-                                    <polyline points="8 6 2 12 8 18"></polyline>
-                                </svg>
-                                <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; font-weight: 600; color: var(--text-primary); text-transform: uppercase; letter-spacing: 0.05em;">
-                                    Milestone {m_tier} Implementation Workspace
-                                </span>
-                            </div>
-                            <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                <span class="tag" style="font-size: 0.6875rem;">AST &amp; RUNTIME VERIFIED</span>
-                            </div>
-                        </div>
-
-                        <!-- Expected Invariant Target Pills -->
-                        <div style="margin-bottom: 0.75rem; background: var(--panel-raised); border: 1px solid var(--hairline-soft); border-radius: 4px; padding: 0.6rem 0.85rem;">
-                            <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--text-tertiary); margin-bottom: 0.35rem; font-weight: 600; text-transform: uppercase;">
-                                Target Invariants &amp; Expected Symbols:
-                            </div>
-                            <div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">
-                                {expected_pills_html}
-                            </div>
-                        </div>
-
-                        <!-- CodeMirror Embedded Surface -->
-                        <div class="editor-surface-container" style="border: 1px solid var(--hairline); border-radius: 4px; overflow: hidden; background: #282a36;">
-                            <textarea id="code-editor-{m_tier}" name="code_editor_{m_tier}" style="display: none;">{escaped_code}</textarea>
-                        </div>
-
-                        <!-- Actions & Submission Toolbar (Prompt 16: Run vs Submit) -->
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
-                            <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-                                <!-- Run Action Button (Unmetered, no grading, real stdout/stderr/exit code) -->
-                                <button type="button" id="btn-run-{m_tier}" onclick="runMilestoneCode('{job_id}', {m_tier})" class="btn btn-sm btn-secondary" style="font-family: 'IBM Plex Mono', monospace; letter-spacing: 0.02em; border-color: var(--brass-border); color: var(--brass);">
-                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none">
-                                        <polygon points="5 3 19 12 5 21 5 3"></polygon>
-                                    </svg>
-                                    Run Code
+                        <!-- Mode Switcher Control -->
+                        <div class="milestone-mode-switcher" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; border-bottom: 1px solid var(--hairline-soft); padding-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
+                            <div style="display: flex; align-items: center; gap: 0.35rem; background: var(--panel-raised); border: 1px solid var(--hairline); border-radius: 4px; padding: 0.2rem;">
+                                <button type="button" id="mode-btn-guess-{m_tier}" class="milestone-mode-tab-btn active" onclick="switchMilestoneMode({m_tier}, 'guess')" style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.35rem 0.75rem; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; font-weight: 600; border-radius: 3px; border: none; cursor: pointer; transition: all 120ms ease; background: var(--panel); color: var(--brass); box-shadow: 0 1px 3px rgba(0,0,0,0.2);">
+                                    <span>✏️</span> Guess It
                                 </button>
-                                <span id="indicator-spinner-run-{m_tier}" style="display: none; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--text-secondary); align-items: center; gap: 0.3rem;">
-                                    <span class="chip-dot brass pulse"></span> Executing in Sandbox...
-                                </span>
-
-                                <!-- Submit Action Button (Structural Check + Runtime Execution + Graded Attempt State) -->
-                                <button type="button" id="btn-submit-{m_tier}" onclick="submitMilestoneCode('{job_id}', {m_tier})" class="btn btn-sm btn-primary" style="font-family: 'IBM Plex Mono', monospace; letter-spacing: 0.02em;">
-                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <polyline points="20 6 9 17 4 12"></polyline>
-                                    </svg>
-                                    Submit Verification
+                                {fill_mode_btn_html}
+                                <button type="button" id="mode-btn-read-{m_tier}" class="milestone-mode-tab-btn" onclick="switchMilestoneMode({m_tier}, 'read')" style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.35rem 0.75rem; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; font-weight: 500; border-radius: 3px; border: none; cursor: pointer; transition: all 120ms ease; background: transparent; color: var(--text-secondary);">
+                                    <span>📖</span> Just Read It
                                 </button>
-                                <span id="indicator-spinner-{m_tier}" style="display: none; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--text-secondary); align-items: center; gap: 0.3rem;">
-                                    <span class="chip-dot teal pulse"></span> Verifying &amp; Running...
-                                </span>
-
-                                <!-- Hint Action Button (Unlocked after 1st submission) -->
-                                <button type="button" id="btn-hint-{m_tier}" data-hint-level="{hint_level}" onclick="openHintConfirmModal('{job_id}', {m_tier})" class="btn btn-sm btn-secondary" style="{hint_btn_display} font-family: 'IBM Plex Mono', monospace; font-size: 0.8rem; border-color: var(--brass-border); color: var(--brass);" {hint_btn_disabled}>
-                                    💡 <span id="btn-hint-text-{m_tier}">{hint_btn_text}</span>
-                                </button>
-
-                                <!-- Reveal Implementation Action Button (Separate, explicitly distinct action) -->
-                                <button type="button" id="btn-reveal-{m_tier}" onclick="openRevealConfirmModal('{job_id}', {m_tier})" class="btn btn-sm btn-ghost" style="{reveal_btn_display} font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--text-tertiary); text-decoration: underline;">
-                                    <span id="btn-reveal-text-{m_tier}">{reveal_btn_text}</span>
-                                </button>
-
-                                <!-- Untouched Milestone Hint Locked Notice -->
-                                <span id="hint-locked-notice-{m_tier}" style="{locked_notice_display} font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem; color: var(--text-tertiary); align-items: center; gap: 0.3rem;">
-                                    🔒 Submit first attempt to unlock hints
-                                </span>
                             </div>
                             <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--text-tertiary);">
-                                Run: Sandbox execution &bull; Submit: Graded AST diff
+                                ENGAGEMENT MODE
                             </div>
                         </div>
 
-                        <!-- Prompt 16: Live Execution Console Output Panel (Run & Submit Results) -->
-                        <div id="console-output-panel-{m_tier}" class="console-output-panel" style="{console_initial_display} margin-top: 0.85rem; padding: 0.85rem 1rem; background: #0e1015; border: 1px solid var(--hairline-soft); border-radius: 4px;">
-                            {console_rendered_html}
-                        </div>
+                        <!-- Mode 1 Workspace: Guess It (Interactive Code Box & Graded AST Engine) -->
+                        <div id="workspace-guess-{m_tier}" class="milestone-mode-workspace guess-mode">
+                            <!-- Task Instructions Banner -->
+                            <div class="guess-instruction-banner" style="margin-bottom: 0.85rem; padding: 0.75rem 1rem; background: var(--panel-raised); border-left: 3px solid var(--brass); border-radius: 3px; font-family: 'IBM Plex Sans', sans-serif; font-size: 0.825rem; line-height: 1.5; color: var(--text-secondary);">
+                                <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.2rem; display: flex; align-items: center; gap: 0.35rem;">
+                                    <span>🎯</span> <strong>Task Instructions:</strong>
+                                </div>
+                                <div>
+                                    Try to reconstruct <span class="mono" id="guess-target-filename-{m_tier}" style="color: var(--brass); font-weight: 600; font-size: 0.8rem; background: var(--panel); padding: 0.1rem 0.4rem; border-radius: 3px; border: 1px solid var(--hairline);">{first_target_file}</span> based on the expected symbols and this milestone's role in the codebase ({role_context}), before seeing the real implementation.
+                                </div>
+                            </div>
 
-                        <!-- Live Inline Structural Diff Result Panel -->
-                        <div id="diff-output-panel-{m_tier}" class="diff-output-panel" style="{diff_initial_display} margin-top: 0.85rem; padding: 0.85rem 1rem; background: var(--panel-raised); border: 1px solid var(--hairline); border-radius: 4px;">
-                            {diff_rendered_html}
-                        </div>
+                            {guess_file_picker_container_html}
 
-                        <!-- Prompt 13: Confirmation Screen for Hint -->
-                        <div id="hint-confirm-box-{m_tier}" class="hint-confirm-box" style="display: none; margin-top: 0.85rem; padding: 1rem 1.25rem; background: var(--panel); border: 1px solid var(--brass-border); border-radius: 4px; box-shadow: 0 4px 16px rgba(0,0,0,0.2);">
-                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
-                                <div style="display: flex; align-items: center; gap: 0.4rem;">
-                                    <span class="chip-dot brass"></span>
-                                    <span id="hint-confirm-title-{m_tier}" style="font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; font-weight: 600; color: var(--brass); text-transform: uppercase; letter-spacing: 0.05em;">
-                                        Pedagogical Confirmation Gate
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.65rem; flex-wrap: gap: 0.5rem;">
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--brass);">
+                                        <polyline points="16 18 22 12 16 6"></polyline>
+                                        <polyline points="8 6 2 12 8 18"></polyline>
+                                    </svg>
+                                    <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; font-weight: 600; color: var(--text-primary); text-transform: uppercase; letter-spacing: 0.05em;">
+                                        Milestone {m_tier} Implementation Workspace
                                     </span>
                                 </div>
-                                <span class="tag" style="font-size: 0.65rem;">FIRM NOT MOCKING</span>
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <span class="tag" style="font-size: 0.6875rem;">AST &amp; RUNTIME VERIFIED</span>
+                                </div>
                             </div>
-                            <p id="hint-confirm-text-{m_tier}" style="font-size: 0.875rem; color: var(--text-primary); line-height: 1.5; margin-bottom: 1rem;">
-                                {HintEngine.SELECTED_HINT_1_CONFIRM}
-                            </p>
-                            <div style="display: flex; align-items: center; gap: 0.65rem;">
-                                <button type="button" class="btn btn-sm btn-secondary" onclick="cancelHintConfirm({m_tier})">
-                                    I'll Keep Trying
-                                </button>
-                                <button type="button" id="btn-confirm-hint-action-{m_tier}" class="btn btn-sm btn-primary" onclick="confirmAndFetchHint('{job_id}', {m_tier})">
-                                    Yes, Reveal Hint
-                                </button>
-                            </div>
-                        </div>
 
-                        <!-- Prompt 13: Confirmation Screen for Reveal Implementation -->
-                        <div id="reveal-confirm-box-{m_tier}" class="reveal-confirm-box" style="display: none; margin-top: 0.85rem; padding: 1rem 1.25rem; background: var(--panel); border: 1px solid var(--crimson); border-radius: 4px; box-shadow: 0 4px 16px rgba(0,0,0,0.2);">
-                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
-                                <div style="display: flex; align-items: center; gap: 0.4rem;">
-                                    <span class="chip-dot crimson"></span>
-                                    <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; font-weight: 600; color: var(--crimson); text-transform: uppercase; letter-spacing: 0.05em;">
-                                        Reference Reveal Gate
+                            <!-- Expected Invariant Target Pills -->
+                            <div style="margin-bottom: 0.75rem; background: var(--panel-raised); border: 1px solid var(--hairline-soft); border-radius: 4px; padding: 0.6rem 0.85rem;">
+                                <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--text-tertiary); margin-bottom: 0.35rem; font-weight: 600; text-transform: uppercase;">
+                                    Expected Functions &amp; Signatures:
+                                </div>
+                                <div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">
+                                    {expected_pills_html}
+                                </div>
+                            </div>
+
+                            <!-- CodeMirror Embedded Surface -->
+                            <div class="editor-surface-container" style="border: 1px solid var(--hairline); border-radius: 4px; overflow: hidden; background: #282a36;">
+                                <textarea id="code-editor-{m_tier}" name="code_editor_{m_tier}" style="display: none;">{escaped_code}</textarea>
+                            </div>
+
+                            <!-- Actions & Submission Toolbar (Prompt 16: Run vs Submit) -->
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
+                                <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                                    <!-- Run Action Button (Unmetered, no grading, real stdout/stderr/exit code) -->
+                                    <button type="button" id="btn-run-{m_tier}" onclick="runMilestoneCode('{job_id}', {m_tier})" class="btn btn-sm btn-secondary" style="font-family: 'IBM Plex Mono', monospace; letter-spacing: 0.02em; border-color: var(--brass-border); color: var(--brass);">
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+                                            <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                                        </svg>
+                                        Run Code
+                                    </button>
+                                    <span id="indicator-spinner-run-{m_tier}" style="display: none; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--text-secondary); align-items: center; gap: 0.3rem;">
+                                        <span class="chip-dot brass pulse"></span> Executing in Sandbox...
+                                    </span>
+
+                                    <!-- Submit Action Button (Structural Check + Runtime Execution + Graded Attempt State) -->
+                                    <button type="button" id="btn-submit-{m_tier}" onclick="submitMilestoneCode('{job_id}', {m_tier})" class="btn btn-sm btn-primary" style="font-family: 'IBM Plex Mono', monospace; letter-spacing: 0.02em;">
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <polyline points="20 6 9 17 4 12"></polyline>
+                                        </svg>
+                                        Submit Verification
+                                    </button>
+                                    <span id="indicator-spinner-{m_tier}" style="display: none; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--text-secondary); align-items: center; gap: 0.3rem;">
+                                        <span class="chip-dot teal pulse"></span> Verifying &amp; Running...
+                                    </span>
+
+                                    <!-- Hint Action Button (Unlocked after 1st submission) -->
+                                    <button type="button" id="btn-hint-{m_tier}" data-hint-level="{hint_level}" onclick="openHintConfirmModal('{job_id}', {m_tier})" class="btn btn-sm btn-secondary" style="{hint_btn_display} font-family: 'IBM Plex Mono', monospace; font-size: 0.8rem; border-color: var(--brass-border); color: var(--brass);" {hint_btn_disabled}>
+                                        💡 <span id="btn-hint-text-{m_tier}">{hint_btn_text}</span>
+                                    </button>
+
+                                    <!-- Reveal Implementation Action Button (Separate, explicitly distinct action) -->
+                                    <button type="button" id="btn-reveal-{m_tier}" onclick="openRevealConfirmModal('{job_id}', {m_tier})" class="btn btn-sm btn-ghost" style="{reveal_btn_display} font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--text-tertiary); text-decoration: underline;">
+                                        <span id="btn-reveal-text-{m_tier}">{reveal_btn_text}</span>
+                                    </button>
+
+                                    <!-- Untouched Milestone Hint Locked Notice -->
+                                    <span id="hint-locked-notice-{m_tier}" style="{locked_notice_display} font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem; color: var(--text-tertiary); align-items: center; gap: 0.3rem;">
+                                        🔒 Submit first attempt to unlock hints
                                     </span>
                                 </div>
-                                <span class="badge badge-crimson" style="font-size: 0.65rem;">PERMANENT ACTION</span>
+                                <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--text-tertiary);">
+                                    Run: Sandbox execution &bull; Submit: Graded AST diff
+                                </div>
                             </div>
-                            <p style="font-size: 0.875rem; color: var(--text-primary); line-height: 1.5; margin-bottom: 1rem;">
-                                {HintEngine.CONFIRM_REVEAL_COPY}
-                            </p>
-                            <div style="display: flex; align-items: center; gap: 0.65rem;">
-                                <button type="button" class="btn btn-sm btn-secondary" onclick="cancelRevealConfirm({m_tier})">
-                                    Cancel
-                                </button>
-                                <button type="button" id="btn-confirm-reveal-action-{m_tier}" class="btn btn-sm btn-danger" onclick="confirmAndRevealImplementation('{job_id}', {m_tier})">
-                                    Confirm &amp; Reveal Reference Implementation
-                                </button>
-                            </div>
-                        </div>
 
-                        <!-- Progressive Hint 1 Tray -->
-                        <div id="hint-1-panel-{m_tier}" class="hint-panel" style="{h1_style} margin-top: 0.85rem; padding: 0.85rem 1rem; background: var(--panel-raised); border-left: 3px solid var(--brass); border-radius: 2px;">
-                            <div style="display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.35rem;">
-                                <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.7rem; font-weight: 700; color: var(--brass); text-transform: uppercase; letter-spacing: 0.05em;">
-                                    Hint 1 // Conceptual Architecture (No Code Leaked)
-                                </span>
+                            <!-- Live Execution Console Output Panel (Run & Submit Results) -->
+                            <div id="console-output-panel-{m_tier}" class="console-output-panel" style="{console_initial_display} margin-top: 0.85rem; padding: 0.85rem 1rem; background: #0e1015; border: 1px solid var(--hairline-soft); border-radius: 4px;">
+                                {console_rendered_html}
                             </div>
-                            <div id="hint-1-text-{m_tier}" style="font-size: 0.8125rem; color: var(--text-primary); line-height: 1.55;">
-                                {sanitize_text(h1_text)}
-                            </div>
-                        </div>
 
-                        <!-- Progressive Hint 2 Tray -->
-                        <div id="hint-2-panel-{m_tier}" class="hint-panel" style="{h2_style} margin-top: 0.85rem; padding: 0.85rem 1rem; background: var(--panel-raised); border-left: 3px solid var(--amber); border-radius: 2px;">
-                            <div style="display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.35rem;">
-                                <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.7rem; font-weight: 700; color: var(--amber); text-transform: uppercase; letter-spacing: 0.05em;">
-                                    Hint 2 // Target Files &amp; Required AST Contracts (Zero Literal Code)
-                                </span>
+                            <!-- Live Inline Structural Diff Result Panel -->
+                            <div id="diff-output-panel-{m_tier}" class="diff-output-panel" style="{diff_initial_display} margin-top: 0.85rem; padding: 0.85rem 1rem; background: var(--panel-raised); border: 1px solid var(--hairline); border-radius: 4px;">
+                                {diff_rendered_html}
                             </div>
-                            <div id="hint-2-text-{m_tier}" style="font-size: 0.8125rem; color: var(--text-primary); line-height: 1.55;">
-                                {sanitize_text(h2_text)}
-                            </div>
-                        </div>
 
-                        <!-- Revealed Reference Implementation Panel -->
-                        <div id="reference-panel-{m_tier}" class="reference-panel" style="{ref_style} margin-top: 0.85rem; padding: 0.85rem 1rem; background: var(--panel-raised); border-left: 3px solid var(--teal); border-radius: 2px;">
-                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.45rem;">
-                                <div style="display: flex; align-items: center; gap: 0.4rem;">
-                                    <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.7rem; font-weight: 700; color: var(--teal); text-transform: uppercase; letter-spacing: 0.05em;">
-                                        Reference Structural Architecture
+                            <!-- Confirmation Screen for Hint -->
+                            <div id="hint-confirm-box-{m_tier}" class="hint-confirm-box" style="display: none; margin-top: 0.85rem; padding: 1rem 1.25rem; background: var(--panel); border: 1px solid var(--brass-border); border-radius: 4px; box-shadow: 0 4px 16px rgba(0,0,0,0.2);">
+                                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+                                    <div style="display: flex; align-items: center; gap: 0.4rem;">
+                                        <span class="chip-dot brass"></span>
+                                        <span id="hint-confirm-title-{m_tier}" style="font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; font-weight: 600; color: var(--brass); text-transform: uppercase; letter-spacing: 0.05em;">
+                                            Hint Confirmation
+                                        </span>
+                                    </div>
+                                    <span class="tag" style="font-size: 0.65rem;">FIRM NOT MOCKING</span>
+                                </div>
+                                <p id="hint-confirm-text-{m_tier}" style="font-size: 0.875rem; color: var(--text-primary); line-height: 1.5; margin-bottom: 1rem;">
+                                    {HintEngine.SELECTED_HINT_1_CONFIRM}
+                                </p>
+                                <div style="display: flex; align-items: center; gap: 0.65rem;">
+                                    <button type="button" class="btn btn-sm btn-secondary" onclick="cancelHintConfirm({m_tier})">
+                                        I'll Keep Trying
+                                    </button>
+                                    <button type="button" id="btn-confirm-hint-action-{m_tier}" class="btn btn-sm btn-primary" onclick="confirmAndFetchHint('{job_id}', {m_tier})">
+                                        Yes, Reveal Hint
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Confirmation Screen for Reveal Implementation -->
+                            <div id="reveal-confirm-box-{m_tier}" class="reveal-confirm-box" style="display: none; margin-top: 0.85rem; padding: 1rem 1.25rem; background: var(--panel); border: 1px solid var(--crimson); border-radius: 4px; box-shadow: 0 4px 16px rgba(0,0,0,0.2);">
+                                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+                                    <div style="display: flex; align-items: center; gap: 0.4rem;">
+                                        <span class="chip-dot crimson"></span>
+                                        <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; font-weight: 600; color: var(--crimson); text-transform: uppercase; letter-spacing: 0.05em;">
+                                            Reference Reveal Gate
+                                        </span>
+                                    </div>
+                                    <span class="badge badge-crimson" style="font-size: 0.65rem;">PERMANENT ACTION</span>
+                                </div>
+                                <p style="font-size: 0.875rem; color: var(--text-primary); line-height: 1.5; margin-bottom: 1rem;">
+                                    {HintEngine.CONFIRM_REVEAL_COPY}
+                                </p>
+                                <div style="display: flex; align-items: center; gap: 0.65rem;">
+                                    <button type="button" class="btn btn-sm btn-secondary" onclick="cancelRevealConfirm({m_tier})">
+                                        Cancel
+                                    </button>
+                                    <button type="button" id="btn-confirm-reveal-action-{m_tier}" class="btn btn-sm btn-danger" onclick="confirmAndRevealImplementation('{job_id}', {m_tier})">
+                                        Confirm &amp; Reveal Reference Implementation
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Progressive Hint 1 Tray -->
+                            <div id="hint-1-panel-{m_tier}" class="hint-panel" style="{h1_style} margin-top: 0.85rem; padding: 0.85rem 1rem; background: var(--panel-raised); border-left: 3px solid var(--brass); border-radius: 2px;">
+                                <div style="display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.35rem;">
+                                    <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.7rem; font-weight: 700; color: var(--brass); text-transform: uppercase; letter-spacing: 0.05em;">
+                                        Hint 1 // Conceptual Architecture (No Code Leaked)
                                     </span>
                                 </div>
-                                <span class="tag" style="font-size: 0.65rem;">STATIC AST SKELETON</span>
+                                <div id="hint-1-text-{m_tier}" style="font-size: 0.8125rem; color: var(--text-primary); line-height: 1.55;">
+                                    {sanitize_text(h1_text)}
+                                </div>
                             </div>
-                            <pre style="background: #181a20; padding: 0.75rem 1rem; border-radius: 4px; overflow-x: auto; border: 1px solid var(--hairline); margin: 0;"><code id="reference-code-{m_tier}" class="mono" style="font-size: 0.78rem; color: var(--text-primary);">{ref_code_rendered}</code></pre>
+
+                            <!-- Progressive Hint 2 Tray -->
+                            <div id="hint-2-panel-{m_tier}" class="hint-panel" style="{h2_style} margin-top: 0.85rem; padding: 0.85rem 1rem; background: var(--panel-raised); border-left: 3px solid var(--amber); border-radius: 2px;">
+                                <div style="display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.35rem;">
+                                    <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.7rem; font-weight: 700; color: var(--amber); text-transform: uppercase; letter-spacing: 0.05em;">
+                                        Hint 2 // Target Files &amp; Required AST Contracts (Zero Literal Code)
+                                    </span>
+                                </div>
+                                <div id="hint-2-text-{m_tier}" style="font-size: 0.8125rem; color: var(--text-primary); line-height: 1.55;">
+                                    {sanitize_text(h2_text)}
+                                </div>
+                            </div>
+
+                            <!-- Revealed Reference Implementation Panel -->
+                            <div id="reference-panel-{m_tier}" class="reference-panel" style="{ref_style} margin-top: 0.85rem; padding: 0.85rem 1rem; background: var(--panel-raised); border-left: 3px solid var(--teal); border-radius: 2px;">
+                                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.45rem;">
+                                    <div style="display: flex; align-items: center; gap: 0.4rem;">
+                                        <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.7rem; font-weight: 700; color: var(--teal); text-transform: uppercase; letter-spacing: 0.05em;">
+                                            Reference Structural Architecture
+                                        </span>
+                                    </div>
+                                    <span class="tag" style="font-size: 0.65rem;">STATIC AST SKELETON</span>
+                                </div>
+                                <pre style="background: #181a20; padding: 0.75rem 1rem; border-radius: 4px; overflow-x: auto; border: 1px solid var(--hairline); margin: 0;"><code id="reference-code-{m_tier}" class="mono" style="font-size: 0.78rem; color: var(--text-primary);">{ref_code_rendered}</code></pre>
+                            </div>
+                        </div>
+
+                        <!-- Mode 3 Workspace: Fill the Blanks (Scaffolded File View & Scoped Grading) -->
+                        <div id="workspace-fill-{m_tier}" class="milestone-mode-workspace fill-mode" style="display: none;">
+                            <!-- Task Instructions Banner -->
+                            <div class="fill-instruction-banner" style="margin-bottom: 0.85rem; padding: 0.75rem 1rem; background: var(--panel-raised); border-left: 3px solid var(--teal); border-radius: 3px; font-family: 'IBM Plex Sans', sans-serif; font-size: 0.825rem; line-height: 1.5; color: var(--text-secondary);">
+                                <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.2rem; display: flex; align-items: center; gap: 0.35rem;">
+                                    <span>🧩</span> <strong>Fill the Blanks Instructions:</strong>
+                                </div>
+                                <div>
+                                    Fill in the missing function/method implementations (<code style="color: var(--teal); background: var(--panel); padding: 0.1rem 0.3rem; border-radius: 2px;">pass</code> / <code style="color: var(--teal); background: var(--panel); padding: 0.1rem 0.3rem; border-radius: 2px;"># TODO</code> stubs) for <span class="mono" id="fill-target-filename-{m_tier}" style="color: var(--teal); font-weight: 600; font-size: 0.8rem; background: var(--panel); padding: 0.1rem 0.4rem; border-radius: 3px; border: 1px solid var(--hairline);">{first_fill_name}</span>. Signatures, docstrings, imports, and top-level definitions are preserved.
+                                </div>
+                            </div>
+
+                            {fill_file_picker_container_html}
+
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.65rem; flex-wrap: wrap; gap: 0.5rem;">
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--teal);">
+                                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                                        <line x1="9" y1="3" x2="9" y2="21"></line>
+                                    </svg>
+                                    <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; font-weight: 600; color: var(--text-primary); text-transform: uppercase; letter-spacing: 0.05em;">
+                                        Scaffolded Implementation Surface
+                                    </span>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <span class="tag" style="font-size: 0.6875rem; border-color: var(--teal-border); color: var(--teal);">SCOPED BLANK EVALUATION</span>
+                                </div>
+                            </div>
+
+                            <!-- Blanked Function Target Pills -->
+                            <div style="margin-bottom: 0.75rem; background: var(--panel-raised); border: 1px solid var(--hairline-soft); border-radius: 4px; padding: 0.6rem 0.85rem;">
+                                <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--text-tertiary); margin-bottom: 0.35rem; font-weight: 600; text-transform: uppercase;">
+                                    Functions To Implement:
+                                </div>
+                                <div id="fill-blanked-chips-{m_tier}" style="display: flex; flex-wrap: wrap; gap: 0.35rem;">
+                                    {fill_chips_html}
+                                </div>
+                            </div>
+
+                            <!-- CodeMirror Embedded Surface for Fill Mode -->
+                            <div class="editor-surface-container" style="border: 1px solid var(--hairline); border-radius: 4px; overflow: hidden; background: #282a36;">
+                                <textarea id="code-editor-fill-{m_tier}" name="code_editor_fill_{m_tier}" style="display: none;">{escaped_scaffold_code}</textarea>
+                            </div>
+
+                            <!-- Actions Toolbar (Run / Submit / Immediate Hints / Reveal) -->
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
+                                <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                                    <!-- Run Action Button -->
+                                    <button type="button" id="btn-run-fill-{m_tier}" onclick="runMilestoneFillCode('{job_id}', {m_tier})" class="btn btn-sm btn-secondary" style="font-family: 'IBM Plex Mono', monospace; letter-spacing: 0.02em; border-color: var(--teal-border); color: var(--teal);">
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+                                            <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                                        </svg>
+                                        Run Code
+                                    </button>
+                                    <span id="indicator-spinner-run-fill-{m_tier}" style="display: none; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--text-secondary); align-items: center; gap: 0.3rem;">
+                                        <span class="chip-dot teal pulse"></span> Executing in Sandbox...
+                                    </span>
+
+                                    <!-- Submit Verification Button -->
+                                    <button type="button" id="btn-submit-fill-{m_tier}" onclick="submitMilestoneFillCode('{job_id}', {m_tier})" class="btn btn-sm btn-primary" style="font-family: 'IBM Plex Mono', monospace; letter-spacing: 0.02em; background: var(--teal); color: #0f172a; border-color: var(--teal-border);">
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <polyline points="20 6 9 17 4 12"></polyline>
+                                        </svg>
+                                        Submit Verification
+                                    </button>
+                                    <span id="indicator-spinner-fill-{m_tier}" style="display: none; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--text-secondary); align-items: center; gap: 0.3rem;">
+                                        <span class="chip-dot teal pulse"></span> Verifying Blanks...
+                                    </span>
+
+                                    <!-- Immediate Hint Action Button (Always available immediately in Fill mode) -->
+                                    <button type="button" id="btn-hint-fill-{m_tier}" data-hint-level="{hint_level}" onclick="openHintConfirmModal('{job_id}', {m_tier}, 'fill')" class="btn btn-sm btn-secondary" style="display: inline-flex; font-family: 'IBM Plex Mono', monospace; font-size: 0.8rem; border-color: var(--brass-border); color: var(--brass);">
+                                        💡 <span id="btn-hint-fill-text-{m_tier}">{hint_btn_text}</span>
+                                    </button>
+
+                                    <!-- Reveal Implementation Action Button -->
+                                    <button type="button" id="btn-reveal-fill-{m_tier}" onclick="openRevealConfirmModal('{job_id}', {m_tier}, 'fill')" class="btn btn-sm btn-ghost" style="display: inline-flex; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--text-tertiary); text-decoration: underline;">
+                                        <span id="btn-reveal-fill-text-{m_tier}">{reveal_btn_text}</span>
+                                    </button>
+                                </div>
+                                <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--text-tertiary);">
+                                    Hints unlocked &bull; Only blanked functions evaluated
+                                </div>
+                            </div>
+
+                            <!-- Live Execution Console Output Panel -->
+                            <div id="console-output-panel-fill-{m_tier}" class="console-output-panel" style="display: none; margin-top: 0.85rem; padding: 0.85rem 1rem; background: #0e1015; border: 1px solid var(--hairline-soft); border-radius: 4px;">
+                            </div>
+
+                            <!-- Live Inline Structural Diff Result Panel -->
+                            <div id="diff-output-panel-fill-{m_tier}" class="diff-output-panel" style="display: none; margin-top: 0.85rem; padding: 0.85rem 1rem; background: var(--panel-raised); border: 1px solid var(--hairline); border-radius: 4px;">
+                            </div>
+                        </div>
+
+                        <!-- Mode 2 Workspace: Just Read It (Read-Only Real File Implementation View) -->
+                        <div id="workspace-read-{m_tier}" class="milestone-mode-workspace read-mode" style="display: none;">
+                            <div style="font-family: 'IBM Plex Sans', sans-serif; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.4rem;">
+                                <span style="color: var(--teal); font-weight: 600;">ℹ</span> Read through this milestone's actual implementation
+                            </div>
+
+                            {read_file_picker_container_html}
+
+                            <div class="read-file-panes-container" style="border-radius: 4px; overflow: hidden;">
+                                {read_file_panes_html}
+                            </div>
+
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.85rem; flex-wrap: wrap; gap: 0.5rem;">
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <button type="button" id="btn-review-{m_tier}" onclick="markMilestoneAsReviewed('{job_id}', {m_tier})" class="btn btn-sm" style="font-family: 'IBM Plex Mono', monospace; letter-spacing: 0.02em; display: inline-flex; align-items: center; gap: 0.4rem; background: var(--teal); color: #0f172a; font-weight: 600; border: 1px solid var(--teal-border); border-radius: 4px; padding: 0.35rem 0.85rem; cursor: pointer;">
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                            <polyline points="20 6 9 17 4 12"></polyline>
+                                        </svg>
+                                        <span id="btn-review-text-{m_tier}">{reviewed_btn_text}</span>
+                                    </button>
+                                    <span id="indicator-spinner-review-{m_tier}" style="display: none; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--text-secondary); align-items: center; gap: 0.3rem;">
+                                        <span class="chip-dot teal pulse"></span> Marking as Reviewed...
+                                    </span>
+                                </div>
+                                <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--text-tertiary);">
+                                    Read-only exploration &bull; No code grading required
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -2748,7 +3668,7 @@ def report_view(
                     <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--brass); text-transform: uppercase; letter-spacing: 0.05em;">
                         Section 03 // Architectural Reading Sequence
                     </div>
-                    <h2 style="font-size: 1.45rem; font-weight: 500; margin-top: 0.15rem;">Step-by-Step Milestones &amp; Reading Spine</h2>
+                    <h2 style="font-size: 1.45rem; font-weight: 500; margin-top: 0.15rem;">Step-by-Step Milestones &amp; Learning Guide</h2>
                 </div>
                 <div style="display: flex; align-items: center; gap: 0.5rem;">
                     <span class="chip"><span class="chip-dot brass"></span> {len(milestones_data)} Milestones</span>
@@ -2763,12 +3683,26 @@ def report_view(
             </div>
         </div>
         """
+    else:
+        milestones_spine_html = f"""
+        <div class="stratum-card" id="section-milestones" style="margin-bottom: 2rem;">
+            <div class="card-header">
+                <div>
+                    <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--brass); text-transform: uppercase; letter-spacing: 0.05em;">
+                        Section 03 // Architectural Reading Sequence
+                    </div>
+                    <h2 style="font-size: 1.45rem; font-weight: 500; margin-top: 0.15rem;">Step-by-Step Milestones &amp; Learning Guide</h2>
+                </div>
+            </div>
+            <p style="color: var(--text-secondary); font-size: 0.85rem;">No structured milestone steps found in this report.</p>
+        </div>
+        """
 
     # -------------------------------------------------------------
     # 4. Codebase Mastery Quiz Section
     # -------------------------------------------------------------
     quiz_html = ""
-    if quiz_data and "questions" in quiz_data:
+    if quiz_data and "questions" in quiz_data and quiz_data.get("questions"):
         questions = quiz_data.get("questions", [])
         quiz_items_rendered = ""
         for i, q in enumerate(questions, 1):
@@ -2808,7 +3742,7 @@ def report_view(
                     <div id="quiz-feedback-{i}" style="display: none; font-size: 0.75rem; font-family: 'IBM Plex Mono', monospace; padding: 0.35rem 0.65rem; border-radius: 3px;"></div>
                 </div>
                 <div id="quiz-explanation-{i}" style="display: none; margin-top: 0.65rem; padding: 0.65rem 0.85rem; background: var(--panel-raised); border-left: 2px solid var(--teal); border-radius: 2px; font-size: 0.75rem; color: var(--text-secondary); line-height: 1.45;">
-                    <span style="font-weight: 600; color: var(--text-primary);">Pedagogical Invariant:</span> {q_exp}
+                    <span style="font-weight: 600; color: var(--text-primary);">Key Architectural Concept:</span> {q_exp}
                 </div>
             </div>
             """
@@ -2820,7 +3754,7 @@ def report_view(
                     <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--brass); text-transform: uppercase; letter-spacing: 0.05em;">
                         Section 04 // Interactive Validation
                     </div>
-                    <h2 style="font-size: 1.45rem; font-weight: 500; margin-top: 0.15rem;">Codebase Structural Invariants Quiz</h2>
+                    <h2 style="font-size: 1.45rem; font-weight: 500; margin-top: 0.15rem;">Codebase Architecture Comprehension Quiz</h2>
                 </div>
                 <div style="display: flex; align-items: center; gap: 0.5rem;">
                     <span class="chip"><span class="chip-dot teal"></span> {len(questions)} Validation Items</span>
@@ -2832,6 +3766,20 @@ def report_view(
             <div>
                 {quiz_items_rendered}
             </div>
+        </div>
+        """
+    else:
+        quiz_html = f"""
+        <div class="stratum-card" id="section-quiz" style="margin-bottom: 2rem;">
+            <div class="card-header">
+                <div>
+                    <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--brass); text-transform: uppercase; letter-spacing: 0.05em;">
+                        Section 04 // Interactive Validation
+                    </div>
+                    <h2 style="font-size: 1.45rem; font-weight: 500; margin-top: 0.15rem;">Codebase Architecture Comprehension Quiz</h2>
+                </div>
+            </div>
+            <p style="color: var(--text-secondary); font-size: 0.85rem;">No quiz questions available for this analysis report.</p>
         </div>
         """
 
@@ -2855,6 +3803,7 @@ def report_view(
     # Extra Interactive Scripts & Graph Logic
     graph_nodes_json = json.dumps(nodes).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
     graph_edges_json = json.dumps(edges).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
+    fill_files_map_json = json.dumps(all_fill_files_map).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
 
     extra_scripts = f"""
     <!-- CodeMirror Assets -->
@@ -2866,10 +3815,18 @@ def report_view(
     <script>
         const GRAPH_NODES = {graph_nodes_json};
         const GRAPH_EDGES = {graph_edges_json};
+        const ALL_FILL_FILES = {fill_files_map_json};
+        window.fillFilesData = ALL_FILL_FILES;
         window.cmEditors = {{}};
+        window.cmFillEditors = {{}};
+        window.guessFileDrafts = {{}};
+        window.activeGuessFileIdx = {{}};
+        window.fillFileDrafts = {{}};
+        window.activeFillFileIdx = {{}};
 
         function initCodeEditors() {{
-            document.querySelectorAll('textarea[id^="code-editor-"]').forEach(function(ta) {{
+            // 1. Initialize Guess It CodeMirror Editors
+            document.querySelectorAll('textarea[id^="code-editor-"]:not([id^="code-editor-fill-"])').forEach(function(ta) {{
                 const tierId = ta.id.replace('code-editor-', '');
                 if (window.cmEditors[tierId]) return;
                 
@@ -2891,10 +3848,44 @@ def report_view(
                         ta.style.minHeight = '180px';
                     }}
                 }} catch(e) {{
-                    console.warn('CodeMirror init failed, falling back to textarea', e);
+                    console.warn('CodeMirror guess init failed, falling back to textarea', e);
                     ta.style.display = 'block';
                     ta.style.width = '100%';
                     ta.style.minHeight = '180px';
+                    ta.style.background = '#1e1f29';
+                    ta.style.color = '#f8f8f2';
+                    ta.style.fontFamily = 'monospace';
+                    ta.style.padding = '8px';
+                }}
+            }});
+
+            // 2. Initialize Fill the Blanks CodeMirror Editors
+            document.querySelectorAll('textarea[id^="code-editor-fill-"]').forEach(function(ta) {{
+                const tierId = ta.id.replace('code-editor-fill-', '');
+                if (window.cmFillEditors[tierId]) return;
+                
+                try {{
+                    if (typeof CodeMirror !== 'undefined') {{
+                        const editor = CodeMirror.fromTextArea(ta, {{
+                            lineNumbers: true,
+                            mode: 'python',
+                            theme: 'dracula',
+                            tabSize: 4,
+                            indentUnit: 4,
+                            lineWrapping: true,
+                            viewportMargin: Infinity
+                        }});
+                        window.cmFillEditors[tierId] = editor;
+                    }} else {{
+                        ta.style.display = 'block';
+                        ta.style.width = '100%';
+                        ta.style.minHeight = '240px';
+                    }}
+                }} catch(e) {{
+                    console.warn('CodeMirror fill init failed, falling back to textarea', e);
+                    ta.style.display = 'block';
+                    ta.style.width = '100%';
+                    ta.style.minHeight = '240px';
                     ta.style.background = '#1e1f29';
                     ta.style.color = '#f8f8f2';
                     ta.style.fontFamily = 'monospace';
@@ -2925,6 +3916,8 @@ def report_view(
                 tierTag = '<span class="badge badge-teal" style="font-size: 0.65rem; letter-spacing: 0.04em;">TIER 1 // REAL REPO TEST SUITE</span>';
             }} else if (gradingMethod === 'expected_output') {{
                 tierTag = '<span class="badge badge-amber" style="font-size: 0.65rem; letter-spacing: 0.04em;">TIER 2 // EXPECTED OUTPUT</span>';
+            }} else if (gradingMethod === 'fill_the_blanks') {{
+                tierTag = '<span class="badge badge-teal" style="font-size: 0.65rem; letter-spacing: 0.04em;">TIER 3 // FILL THE BLANKS (SCOPED EVALUATION)</span>';
             }}
 
             let banner = '';
@@ -2935,15 +3928,47 @@ def report_view(
             }}
 
             const diff = (result && result.diff) ? result.diff : (result || {{}});
-            const present = diff.present_symbols || diff.present || [];
-            const missing = diff.missing_symbols || diff.missing || [];
-            const extra = diff.extra_symbols || diff.extra || [];
-            const err = errorMsg || diff.error_message || diff.error;
+            const err = errorMsg || diff.error_message || diff.error || diff.grading_error;
 
             let errHtml = '';
             if (err) {{
                 errHtml = '<div style="color: var(--crimson); font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.75rem; margin-bottom: 0.5rem; background: rgba(244,63,94,0.08); padding: 0.5rem; border-radius: 3px;">' + escapeHtml(err) + '</div>';
             }}
+
+            // Handle Fill the Blanks grading results specially
+            if (gradingMethod === 'fill_the_blanks' || diff.blank_details || diff.blanked_evaluated !== undefined) {{
+                const blankDetails = diff.blank_details || [];
+                const blankedCount = diff.blanked_evaluated !== undefined ? diff.blanked_evaluated : blankDetails.length;
+                const implementedCount = diff.implemented_count !== undefined ? diff.implemented_count : blankDetails.filter(b => b.status === 'implemented').length;
+
+                let implementedPills = '';
+                let stubPills = '';
+
+                blankDetails.forEach(function(b) {{
+                    const name = escapeHtml(b.name || 'function');
+                    if (b.status === 'implemented') {{
+                        implementedPills += '<span style="display: inline-flex; align-items: center; gap: 0.3rem; background: rgba(45, 212, 191, 0.12); border: 1px solid var(--teal-border); color: var(--teal); padding: 0.2rem 0.5rem; border-radius: 3px; font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.75rem;">✓ ' + name + '() <span style="opacity: 0.75; font-size: 0.6875rem;">(implemented)</span></span> ';
+                    }} else {{
+                        const reason = escapeHtml(b.reason || 'unimplemented stub');
+                        stubPills += '<span style="display: inline-flex; align-items: center; gap: 0.3rem; background: rgba(244, 63, 94, 0.12); border: 1px solid rgba(244, 63, 94, 0.35); color: var(--crimson); padding: 0.2rem 0.5rem; border-radius: 3px; font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.75rem;">✗ ' + name + '() <span style="opacity: 0.75; font-size: 0.6875rem;">(' + reason + ')</span></span> ';
+                    }}
+                }});
+
+                let fillSectionsHtml = '<div style="font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.4rem;">Scoped blanks evaluated: <strong>' + implementedCount + ' / ' + blankedCount + '</strong> completed.</div>';
+                if (implementedPills) {{
+                    fillSectionsHtml += '<div><div style="font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.6875rem; color: var(--teal); font-weight: 600; margin-bottom: 0.25rem;">IMPLEMENTED BLANKS:</div><div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">' + implementedPills + '</div></div>';
+                }}
+                if (stubPills) {{
+                    fillSectionsHtml += '<div><div style="font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.6875rem; color: var(--crimson); font-weight: 600; margin-bottom: 0.25rem;">UNIMPLEMENTED / STUB BLANKS:</div><div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">' + stubPills + '</div></div>';
+                }}
+
+                return banner + errHtml + '<div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem;">' + fillSectionsHtml + '</div>';
+            }}
+
+            // Standard Guess It AST Diff rendering
+            const present = diff.present_symbols || diff.present || [];
+            const missing = diff.missing_symbols || diff.missing || [];
+            const extra = diff.extra_symbols || diff.extra || [];
 
             let presentPills = '';
             present.forEach(function(s) {{
@@ -3102,7 +4127,8 @@ def report_view(
                         'Content-Type': 'application/json'
                     }},
                     body: JSON.stringify({{
-                        submitted_code: submittedCode
+                        submitted_code: submittedCode,
+                        mode: 'guess'
                     }})
                 }});
 
@@ -3175,12 +4201,166 @@ def report_view(
             }}
         }}
 
+        async function runMilestoneFillCode(jobId, tier) {{
+            const btn = document.getElementById('btn-run-fill-' + tier);
+            const spinner = document.getElementById('indicator-spinner-run-fill-' + tier);
+            const consolePanel = document.getElementById('console-output-panel-fill-' + tier);
+
+            let codeToRun = '';
+            if (window.cmFillEditors && window.cmFillEditors[tier]) {{
+                codeToRun = window.cmFillEditors[tier].getValue();
+            }} else {{
+                const ta = document.getElementById('code-editor-fill-' + tier);
+                codeToRun = ta ? ta.value : '';
+            }}
+
+            if (btn) btn.disabled = true;
+            if (spinner) spinner.style.display = 'inline-flex';
+
+            try {{
+                const resp = await fetch('/api/attempts/' + jobId + '/' + tier + '/run', {{
+                    method: 'POST',
+                    headers: {{
+                        'Content-Type': 'application/json'
+                    }},
+                    body: JSON.stringify({{
+                        submitted_code: codeToRun,
+                        code: codeToRun,
+                        language: 'python'
+                    }})
+                }});
+
+                if (!resp.ok) {{
+                    const errData = await resp.json().catch(() => ({{}}));
+                    const msg = errData.detail || ('HTTP ' + resp.status + ' execution error');
+                    if (consolePanel) {{
+                        consolePanel.style.display = 'block';
+                        consolePanel.innerHTML = '<div style="color: var(--crimson); font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.8125rem;">Execution Error: ' + escapeHtml(msg) + '</div>';
+                    }}
+                    return;
+                }}
+
+                const data = await resp.json();
+                if (consolePanel) {{
+                    consolePanel.style.display = 'block';
+                    consolePanel.innerHTML = renderConsoleHtmlInJs(data);
+                }}
+            }} catch(e) {{
+                console.error('Fill execution run failed', e);
+                if (consolePanel) {{
+                    consolePanel.style.display = 'block';
+                    consolePanel.innerHTML = '<div style="color: var(--crimson); font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.8125rem;">Execution Network Error: ' + escapeHtml(e.message) + '</div>';
+                }}
+            }} finally {{
+                if (btn) btn.disabled = false;
+                if (spinner) spinner.style.display = 'none';
+            }}
+        }}
+
+        async function submitMilestoneFillCode(jobId, tier) {{
+            const btn = document.getElementById('btn-submit-fill-' + tier);
+            const spinner = document.getElementById('indicator-spinner-fill-' + tier);
+            const diffPanel = document.getElementById('diff-output-panel-fill-' + tier);
+            const consolePanel = document.getElementById('console-output-panel-fill-' + tier);
+            const vessel = document.getElementById('milestone-vessel-' + tier);
+            const vesselText = document.getElementById('milestone-vessel-text-' + tier);
+            const statusBadge = document.getElementById('status-badge-' + tier);
+
+            let submittedCode = '';
+            if (window.cmFillEditors && window.cmFillEditors[tier]) {{
+                submittedCode = window.cmFillEditors[tier].getValue();
+            }} else {{
+                const ta = document.getElementById('code-editor-fill-' + tier);
+                submittedCode = ta ? ta.value : '';
+            }}
+
+            const currentIdx = (window.activeFillFileIdx && window.activeFillFileIdx[tier] !== undefined) ? window.activeFillFileIdx[tier] : 0;
+            const targetFile = (window.fillFilesData && window.fillFilesData[tier] && window.fillFilesData[tier][currentIdx]) ? window.fillFilesData[tier][currentIdx].path : undefined;
+
+            if (btn) btn.disabled = true;
+            if (spinner) spinner.style.display = 'inline-flex';
+
+            try {{
+                const resp = await fetch('/api/attempts/' + jobId + '/' + tier, {{
+                    method: 'POST',
+                    headers: {{
+                        'Content-Type': 'application/json'
+                    }},
+                    body: JSON.stringify({{
+                        submitted_code: submittedCode,
+                        mode: 'fill',
+                        target_file: targetFile
+                    }})
+                }});
+
+                if (!resp.ok) {{
+                    const errData = await resp.json().catch(() => ({{}}));
+                    const msg = errData.detail || ('HTTP ' + resp.status + ' error occurred');
+                    if (diffPanel) {{
+                        diffPanel.style.display = 'block';
+                        diffPanel.innerHTML = '<div style="color: var(--crimson); font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.8125rem;">Verification Error: ' + escapeHtml(msg) + '</div>';
+                    }}
+                    return;
+                }}
+
+                const data = await resp.json();
+                const ver = data.verification || data;
+                const isVerified = (ver.structurally_verified !== undefined) ? ver.structurally_verified : (ver.is_verified || (data.status === 'structurally_verified'));
+                const diff = ver;
+                const err = ver.error_message || ver.error || ver.grading_error;
+                const gradingMethod = data.grading_method || (ver && ver.grading_method) || 'fill_the_blanks';
+
+                if (diffPanel) {{
+                    diffPanel.style.display = 'block';
+                    diffPanel.innerHTML = renderDiffHtmlInJs(diff, isVerified, err, gradingMethod);
+                }}
+
+                // Render Sandbox Execution Result if returned
+                if (data.execution && consolePanel) {{
+                    consolePanel.style.display = 'block';
+                    consolePanel.innerHTML = renderConsoleHtmlInJs(data.execution);
+                }}
+
+                // Update Visual Vessel State
+                if (vessel) {{
+                    if (isVerified) {{
+                        vessel.className = 'milestone-vessel verified';
+                        if (vesselText) vesselText.textContent = '✓';
+                    }} else {{
+                        vessel.className = 'milestone-vessel attempting';
+                        if (vesselText) vesselText.textContent = String(tier).padStart(2, '0');
+                    }}
+                }}
+
+                // Update Status Chip
+                if (statusBadge) {{
+                    if (isVerified) {{
+                        statusBadge.className = 'badge badge-teal';
+                        statusBadge.innerHTML = '<span class="chip-dot teal"></span> STRUCTURALLY VERIFIED';
+                    }} else {{
+                        statusBadge.className = 'badge badge-amber';
+                        statusBadge.innerHTML = '<span class="chip-dot amber"></span> ATTEMPTING';
+                    }}
+                }}
+            }} catch(e) {{
+                console.error('Fill submission failed', e);
+                if (diffPanel) {{
+                    diffPanel.style.display = 'block';
+                    diffPanel.innerHTML = '<div style="color: var(--crimson); font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.8125rem;">Network Error: ' + escapeHtml(e.message) + '</div>';
+                }}
+            }} finally {{
+                if (btn) btn.disabled = false;
+                if (spinner) spinner.style.display = 'none';
+            }}
+        }}
+
         const HINT_CONFIRM_COPY_1 = "{HintEngine.SELECTED_HINT_1_CONFIRM}";
         const HINT_CONFIRM_COPY_2 = "{HintEngine.CONFIRM_HINT_2_COPY}";
         const REVEAL_CONFIRM_COPY = "{HintEngine.CONFIRM_REVEAL_COPY}";
 
-        function openHintConfirmModal(jobId, tier) {{
-            const hintBtn = document.getElementById('btn-hint-' + tier);
+        function openHintConfirmModal(jobId, tier, mode) {{
+            const btnId = (mode === 'fill') ? ('btn-hint-fill-' + tier) : ('btn-hint-' + tier);
+            const hintBtn = document.getElementById(btnId) || document.getElementById('btn-hint-' + tier);
             const level = parseInt(hintBtn ? hintBtn.getAttribute('data-hint-level') || '0' : '0', 10);
             const box = document.getElementById('hint-confirm-box-' + tier);
             const titleEl = document.getElementById('hint-confirm-title-' + tier);
@@ -3189,8 +4369,12 @@ def report_view(
 
             if (level >= 2) return;
 
+            if (actionBtn) {{
+                actionBtn.setAttribute('data-target-mode', mode || 'guess');
+            }}
+
             if (level === 0) {{
-                if (titleEl) titleEl.textContent = 'Pedagogical Confirmation Gate // Hint 1';
+                if (titleEl) titleEl.textContent = 'Hint Confirmation // Hint 1';
                 if (textEl) textEl.textContent = HINT_CONFIRM_COPY_1;
                 if (actionBtn) actionBtn.textContent = 'Yes, Reveal Conceptual Hint';
             }} else {{
@@ -3210,13 +4394,17 @@ def report_view(
         async function confirmAndFetchHint(jobId, tier) {{
             const box = document.getElementById('hint-confirm-box-' + tier);
             const actionBtn = document.getElementById('btn-confirm-hint-action-' + tier);
+            const mode = (actionBtn ? actionBtn.getAttribute('data-target-mode') : 'guess') || 'guess';
             const hintBtn = document.getElementById('btn-hint-' + tier);
             const hintBtnText = document.getElementById('btn-hint-text-' + tier);
+            const hintFillBtn = document.getElementById('btn-hint-fill-' + tier);
+            const hintFillBtnText = document.getElementById('btn-hint-fill-text-' + tier);
 
             if (actionBtn) actionBtn.disabled = true;
 
             try {{
-                const resp = await fetch('/api/attempts/' + jobId + '/' + tier + '/hint', {{
+                const url = '/api/attempts/' + jobId + '/' + tier + '/hint' + (mode === 'fill' ? '?mode=fill' : '');
+                const resp = await fetch(url, {{
                     method: 'POST',
                     headers: {{ 'Content-Type': 'application/json' }}
                 }});
@@ -3246,14 +4434,19 @@ def report_view(
                     if (t2) t2.textContent = data.hint_2;
                 }}
 
-                if (hintBtn) {{
-                    hintBtn.setAttribute('data-hint-level', String(level));
-                    if (level === 1) {{
-                        if (hintBtnText) hintBtnText.textContent = 'Request Next Hint (Hint 2)';
-                    }} else if (level >= 2) {{
-                        if (hintBtnText) hintBtnText.textContent = 'Hints Unlocked (2/2)';
-                        hintBtn.disabled = true;
+                [hintBtn, hintFillBtn].forEach(function(btn) {{
+                    if (btn) {{
+                        btn.setAttribute('data-hint-level', String(level));
+                        if (level >= 2) btn.disabled = true;
                     }}
+                }});
+
+                if (level === 1) {{
+                    if (hintBtnText) hintBtnText.textContent = 'Request Next Hint (Hint 2)';
+                    if (hintFillBtnText) hintFillBtnText.textContent = 'Request Next Hint (Hint 2)';
+                }} else if (level >= 2) {{
+                    if (hintBtnText) hintBtnText.textContent = 'Hints Unlocked (2/2)';
+                    if (hintFillBtnText) hintFillBtnText.textContent = 'Hints Unlocked (2/2)';
                 }}
             }} catch(e) {{
                 console.error('Failed to retrieve hint', e);
@@ -3263,8 +4456,12 @@ def report_view(
             }}
         }}
 
-        function openRevealConfirmModal(jobId, tier) {{
+        function openRevealConfirmModal(jobId, tier, mode) {{
             const box = document.getElementById('reveal-confirm-box-' + tier);
+            const actionBtn = document.getElementById('btn-confirm-reveal-action-' + tier);
+            if (actionBtn) {{
+                actionBtn.setAttribute('data-target-mode', mode || 'guess');
+            }}
             if (box) box.style.display = 'block';
         }}
 
@@ -3276,13 +4473,17 @@ def report_view(
         async function confirmAndRevealImplementation(jobId, tier) {{
             const box = document.getElementById('reveal-confirm-box-' + tier);
             const actionBtn = document.getElementById('btn-confirm-reveal-action-' + tier);
+            const mode = (actionBtn ? actionBtn.getAttribute('data-target-mode') : 'guess') || 'guess';
             const revealBtn = document.getElementById('btn-reveal-' + tier);
             const revealBtnText = document.getElementById('btn-reveal-text-' + tier);
+            const revealFillBtn = document.getElementById('btn-reveal-fill-' + tier);
+            const revealFillBtnText = document.getElementById('btn-reveal-fill-text-' + tier);
 
             if (actionBtn) actionBtn.disabled = true;
 
             try {{
-                const resp = await fetch('/api/attempts/' + jobId + '/' + tier + '/reveal', {{
+                const url = '/api/attempts/' + jobId + '/' + tier + '/reveal' + (mode === 'fill' ? '?mode=fill' : '');
+                const resp = await fetch(url, {{
                     method: 'POST',
                     headers: {{ 'Content-Type': 'application/json' }}
                 }});
@@ -3306,11 +4507,295 @@ def report_view(
                 if (revealBtnText) {{
                     revealBtnText.textContent = 'Reference Revealed';
                 }}
+                if (revealFillBtnText) {{
+                    revealFillBtnText.textContent = 'Reference Revealed';
+                }}
             }} catch(e) {{
                 console.error('Failed to reveal implementation', e);
                 alert('Network error while revealing implementation');
             }} finally {{
                 if (actionBtn) actionBtn.disabled = false;
+            }}
+        }}
+
+        async function markMilestoneAsReviewed(jobId, tier) {{
+            const btn = document.getElementById('btn-review-' + tier);
+            const btnText = document.getElementById('btn-review-text-' + tier);
+            const spinner = document.getElementById('indicator-spinner-review-' + tier);
+            const vessel = document.getElementById('milestone-vessel-' + tier);
+            const vesselText = document.getElementById('milestone-vessel-text-' + tier);
+            const statusBadge = document.getElementById('status-badge-' + tier);
+
+            if (btn) btn.disabled = true;
+            if (spinner) spinner.style.display = 'inline-flex';
+
+            try {{
+                const resp = await fetch('/api/attempts/' + jobId + '/' + tier + '/review', {{
+                    method: 'POST',
+                    headers: {{
+                        'Content-Type': 'application/json'
+                    }}
+                }});
+
+                if (!resp.ok) {{
+                    const errData = await resp.json().catch(() => ({{}}));
+                    const msg = errData.detail || ('HTTP ' + resp.status + ' review error');
+                    alert('Failed to mark milestone as reviewed: ' + msg);
+                    return;
+                }}
+
+                const data = await resp.json();
+                
+                // Update Visual Vessel State
+                if (vessel) {{
+                    vessel.className = 'milestone-vessel verified';
+                    if (vesselText) vesselText.textContent = '✓';
+                }}
+
+                // Update Status Badge
+                if (statusBadge) {{
+                    statusBadge.className = 'badge badge-teal';
+                    statusBadge.innerHTML = '<span class="chip-dot teal"></span> STRUCTURALLY VERIFIED';
+                }}
+
+                // Update button text
+                if (btnText) {{
+                    btnText.textContent = 'Reviewed & Verified ✓';
+                }}
+            }} catch(e) {{
+                console.error('Mark as reviewed failed', e);
+                alert('Network error while marking milestone as reviewed: ' + e.message);
+            }} finally {{
+                if (btn) btn.disabled = false;
+                if (spinner) spinner.style.display = 'none';
+            }}
+        }}
+
+        function switchMilestoneMode(tier, mode) {{
+            const fillBtn = document.getElementById('mode-btn-fill-' + tier);
+            if (mode === 'fill' && fillBtn && fillBtn.disabled) {{
+                return;
+            }}
+
+            try {{
+                localStorage.setItem('backtrace_milestone_mode', mode);
+            }} catch(e) {{}}
+
+            const guessWorkspace = document.getElementById('workspace-guess-' + tier);
+            const readWorkspace = document.getElementById('workspace-read-' + tier);
+            const fillWorkspace = document.getElementById('workspace-fill-' + tier);
+            const guessBtn = document.getElementById('mode-btn-guess-' + tier);
+            const readBtn = document.getElementById('mode-btn-read-' + tier);
+
+            // Reset all 3 buttons
+            [guessBtn, fillBtn, readBtn].forEach(b => {{
+                if (b && !b.disabled) {{
+                    b.style.background = 'transparent';
+                    b.style.color = 'var(--text-secondary)';
+                    b.style.boxShadow = 'none';
+                    b.classList.remove('active');
+                }}
+            }});
+
+            if (mode === 'read') {{
+                if (guessWorkspace) guessWorkspace.style.display = 'none';
+                if (fillWorkspace) fillWorkspace.style.display = 'none';
+                if (readWorkspace) readWorkspace.style.display = 'block';
+                if (readBtn) {{
+                    readBtn.style.background = 'var(--panel)';
+                    readBtn.style.color = 'var(--teal)';
+                    readBtn.style.boxShadow = '0 1px 3px rgba(0,0,0,0.2)';
+                    readBtn.classList.add('active');
+                }}
+            }} else if (mode === 'fill') {{
+                if (guessWorkspace) guessWorkspace.style.display = 'none';
+                if (readWorkspace) readWorkspace.style.display = 'none';
+                if (fillWorkspace) fillWorkspace.style.display = 'block';
+                if (fillBtn) {{
+                    fillBtn.style.background = 'var(--panel)';
+                    fillBtn.style.color = 'var(--teal)';
+                    fillBtn.style.boxShadow = '0 1px 3px rgba(0,0,0,0.2)';
+                    fillBtn.classList.add('active');
+                }}
+                if (window.cmFillEditors && window.cmFillEditors[tier] && typeof window.cmFillEditors[tier].refresh === 'function') {{
+                    setTimeout(() => {{ window.cmFillEditors[tier].refresh(); }}, 20);
+                }}
+            }} else {{
+                if (readWorkspace) readWorkspace.style.display = 'none';
+                if (fillWorkspace) fillWorkspace.style.display = 'none';
+                if (guessWorkspace) guessWorkspace.style.display = 'block';
+                if (guessBtn) {{
+                    guessBtn.style.background = 'var(--panel)';
+                    guessBtn.style.color = 'var(--brass)';
+                    guessBtn.style.boxShadow = '0 1px 3px rgba(0,0,0,0.2)';
+                    guessBtn.classList.add('active');
+                }}
+                if (window.cmEditors && window.cmEditors[tier] && typeof window.cmEditors[tier].refresh === 'function') {{
+                    setTimeout(() => {{ window.cmEditors[tier].refresh(); }}, 20);
+                }}
+            }}
+        }}
+
+        function switchMilestoneGuessFile(tier, fileIdx, filePath) {{
+            window.guessFileDrafts[tier] = window.guessFileDrafts[tier] || {{}};
+            const prevIdx = (window.activeGuessFileIdx[tier] !== undefined) ? window.activeGuessFileIdx[tier] : 0;
+
+            // Save currently active draft
+            let currentCode = '';
+            if (window.cmEditors && window.cmEditors[tier]) {{
+                currentCode = window.cmEditors[tier].getValue();
+            }} else {{
+                const ta = document.getElementById('code-editor-' + tier);
+                currentCode = ta ? ta.value : '';
+            }}
+            window.guessFileDrafts[tier][prevIdx] = currentCode;
+
+            // Update active tab buttons
+            const tabs = document.querySelectorAll('[id^="guess-tab-btn-' + tier + '-"]');
+            tabs.forEach(t => {{
+                t.style.background = 'transparent';
+                t.style.color = 'var(--text-secondary)';
+                t.style.borderColor = 'var(--hairline)';
+                t.classList.remove('active');
+            }});
+
+            const activeTab = document.getElementById('guess-tab-btn-' + tier + '-' + fileIdx);
+            if (activeTab) {{
+                activeTab.style.background = 'var(--panel)';
+                activeTab.style.color = 'var(--brass)';
+                activeTab.style.borderColor = 'var(--brass-border)';
+                activeTab.classList.add('active');
+            }}
+
+            // Update target filename label in task instructions banner
+            const targetNameEl = document.getElementById('guess-target-filename-' + tier);
+            if (targetNameEl && filePath) {{
+                targetNameEl.textContent = filePath;
+            }}
+
+            // Restore draft for the newly selected file
+            const newDraft = (window.guessFileDrafts[tier][fileIdx] !== undefined) ? window.guessFileDrafts[tier][fileIdx] : '';
+            if (window.cmEditors && window.cmEditors[tier]) {{
+                window.cmEditors[tier].setValue(newDraft);
+                setTimeout(() => {{ window.cmEditors[tier].refresh(); }}, 20);
+            }}
+            const ta = document.getElementById('code-editor-' + tier);
+            if (ta) ta.value = newDraft;
+
+            window.activeGuessFileIdx[tier] = fileIdx;
+        }}
+
+        function switchMilestoneFillFile(tier, fileIdx, filePath) {{
+            window.fillFileDrafts[tier] = window.fillFileDrafts[tier] || {{}};
+            const prevIdx = (window.activeFillFileIdx[tier] !== undefined) ? window.activeFillFileIdx[tier] : 0;
+
+            // Save currently active draft
+            let currentCode = '';
+            if (window.cmFillEditors && window.cmFillEditors[tier]) {{
+                currentCode = window.cmFillEditors[tier].getValue();
+            }} else {{
+                const ta = document.getElementById('code-editor-fill-' + tier);
+                currentCode = ta ? ta.value : '';
+            }}
+            window.fillFileDrafts[tier][prevIdx] = currentCode;
+
+            // Update active tab buttons
+            const tabs = document.querySelectorAll('[id^="fill-tab-btn-' + tier + '-"]');
+            tabs.forEach(t => {{
+                t.style.background = 'transparent';
+                t.style.color = 'var(--text-secondary)';
+                t.style.borderColor = 'var(--hairline)';
+                t.classList.remove('active');
+            }});
+
+            const activeTab = document.getElementById('fill-tab-btn-' + tier + '-' + fileIdx);
+            if (activeTab) {{
+                activeTab.style.background = 'var(--panel)';
+                activeTab.style.color = 'var(--teal)';
+                activeTab.style.borderColor = 'var(--teal-border)';
+                activeTab.classList.add('active');
+            }}
+
+            // Look up target file data
+            const fileData = (window.fillFilesData && window.fillFilesData[tier] && window.fillFilesData[tier][fileIdx]) ? window.fillFilesData[tier][fileIdx] : null;
+
+            // Update target filename label in task instructions banner
+            const targetNameEl = document.getElementById('fill-target-filename-' + tier);
+            if (targetNameEl && fileData) {{
+                targetNameEl.textContent = fileData.filename || filePath;
+            }}
+
+            // Update blanked chips
+            const chipsEl = document.getElementById('fill-blanked-chips-' + tier);
+            if (chipsEl && fileData) {{
+                if (fileData.blanked_functions && fileData.blanked_functions.length > 0) {{
+                    let chipsHtml = '';
+                    fileData.blanked_functions.forEach(bf => {{
+                        const fnName = escapeHtml(bf.full_name || bf.name);
+                        chipsHtml += '<span class="mono" style="display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.15rem 0.45rem; background: var(--panel); border: 1px solid var(--hairline); border-radius: 3px; font-size: 0.72rem; color: var(--teal);">🧩 ' + fnName + '()</span> ';
+                    }});
+                    chipsEl.innerHTML = chipsHtml;
+                }} else {{
+                    chipsEl.innerHTML = '<span style="font-size: 0.75rem; color: var(--text-tertiary); font-style: italic;">' + escapeHtml(fileData.reason || 'File contains no function bodies to blank.') + '</span>';
+                }}
+            }}
+
+            // Restore draft or initial scaffold code
+            let targetCode = '';
+            if (window.fillFileDrafts[tier][fileIdx] !== undefined) {{
+                targetCode = window.fillFileDrafts[tier][fileIdx];
+            }} else if (fileData && fileData.scaffold_code) {{
+                targetCode = fileData.scaffold_code;
+            }}
+
+            if (window.cmFillEditors && window.cmFillEditors[tier]) {{
+                window.cmFillEditors[tier].setValue(targetCode);
+                setTimeout(() => {{ window.cmFillEditors[tier].refresh(); }}, 20);
+            }}
+            const ta = document.getElementById('code-editor-fill-' + tier);
+            if (ta) ta.value = targetCode;
+
+            window.activeFillFileIdx[tier] = fileIdx;
+        }}
+
+        function switchMilestoneReadFile(tier, fileIdx) {{
+            const panes = document.querySelectorAll('[id^="read-file-pane-' + tier + '-"]');
+            panes.forEach(p => {{ p.style.display = 'none'; }});
+
+            const targetPane = document.getElementById('read-file-pane-' + tier + '-' + fileIdx);
+            if (targetPane) targetPane.style.display = 'block';
+
+            const tabs = document.querySelectorAll('[id^="read-tab-btn-' + tier + '-"]');
+            tabs.forEach(t => {{
+                t.style.background = 'transparent';
+                t.style.color = 'var(--text-secondary)';
+                t.style.borderColor = 'var(--hairline)';
+                t.classList.remove('active');
+            }});
+
+            const activeTab = document.getElementById('read-tab-btn-' + tier + '-' + fileIdx);
+            if (activeTab) {{
+                activeTab.style.background = 'var(--panel)';
+                activeTab.style.color = 'var(--teal)';
+                activeTab.style.borderColor = 'var(--teal-border)';
+                activeTab.classList.add('active');
+            }}
+        }}
+
+        function initMilestoneModes() {{
+            let savedMode = 'guess';
+            try {{
+                savedMode = localStorage.getItem('backtrace_milestone_mode') || 'guess';
+            }} catch(e) {{}}
+
+            if (savedMode === 'read' || savedMode === 'fill') {{
+                document.querySelectorAll('[id^="milestone-editor-card-"]').forEach(el => {{
+                    const tierStr = el.id.replace('milestone-editor-card-', '');
+                    const tier = parseInt(tierStr, 10);
+                    if (!isNaN(tier)) {{
+                        switchMilestoneMode(tier, savedMode);
+                    }}
+                }});
             }}
         }}
 
@@ -3467,6 +4952,72 @@ def report_view(
             }}
         }}
 
+        function toggleDagLegend() {{
+            const panel = document.getElementById('dag-legend-panel');
+            const btn = document.getElementById('toggle-legend-btn');
+            if (!panel || !btn) return;
+            if (panel.style.display === 'none') {{
+                panel.style.display = 'flex';
+                btn.classList.remove('btn-primary');
+                btn.classList.add('btn-secondary');
+            }} else {{
+                panel.style.display = 'none';
+                btn.classList.remove('btn-secondary');
+                btn.classList.add('btn-primary');
+            }}
+        }}
+
+        // Fullscreen toggle for Dependency Graph
+        function toggleGraphFullscreen(forceState) {{
+            const card = document.getElementById('section-graph');
+            const btn = document.getElementById('dag-fullscreen-btn');
+            const container = document.getElementById('dag-visual-container');
+            if (!card || !btn) return;
+
+            // Capture scroll position before toggle to preserve pan state
+            const scrollLeft = container ? container.scrollLeft : 0;
+            const scrollTop = container ? container.scrollTop : 0;
+
+            if (typeof forceState === 'boolean') {{
+                if (forceState) {{
+                    card.classList.add('graph-fullscreen');
+                }} else {{
+                    card.classList.remove('graph-fullscreen');
+                }}
+            }} else {{
+                card.classList.toggle('graph-fullscreen');
+            }}
+
+            const isFullscreen = card.classList.contains('graph-fullscreen');
+
+            btn.innerHTML = isFullscreen ? '✕ Minimize' : '⛶ Maximize';
+            btn.title = isFullscreen ? 'Exit Fullscreen' : 'Toggle Fullscreen';
+
+            // Restore scroll position after layout reflow to preserve pan/zoom
+            requestAnimationFrame(() => {{
+                if (container) {{
+                    container.scrollLeft = scrollLeft;
+                    container.scrollTop = scrollTop;
+                }}
+            }});
+        }}
+
+        document.addEventListener('keydown', function(e) {{
+            if (e.key === 'Escape') {{
+                const card = document.getElementById('section-graph');
+                if (card && card.classList.contains('graph-fullscreen')) {{
+                    toggleGraphFullscreen(false);
+                }}
+            }}
+        }});
+
+        window.addEventListener('pagehide', function() {{
+            const card = document.getElementById('section-graph');
+            if (card && card.classList.contains('graph-fullscreen')) {{
+                toggleGraphFullscreen(false);
+            }}
+        }});
+
         // Quiz answer verification
         function verifyQuizAnswer(qNum, correctIdx) {{
             const radios = document.getElementsByName('quiz_q_' + qNum);
@@ -3505,6 +5056,84 @@ def report_view(
                 explanation.style.display = 'block';
             }}
         }}
+
+        // Report Tab Navigation
+        const VALID_REPORT_TABS = ['overview', 'graph', 'milestones', 'quiz'];
+
+        function switchReportTab(tabKey, updateHash = true) {{
+            if (!VALID_REPORT_TABS.includes(tabKey)) {{
+                tabKey = 'overview';
+            }}
+
+            // If switching away from graph, exit fullscreen cleanly first
+            if (tabKey !== 'graph') {{
+                const graphCard = document.getElementById('section-graph');
+                if (graphCard && graphCard.classList.contains('graph-fullscreen')) {{
+                    toggleGraphFullscreen(false);
+                }}
+            }}
+
+            VALID_REPORT_TABS.forEach(t => {{
+                const btn = document.getElementById('tab-btn-' + t);
+                const pane = document.getElementById('tab-pane-' + t);
+                if (btn) {{
+                    if (t === tabKey) {{
+                        btn.classList.add('active');
+                        btn.setAttribute('aria-selected', 'true');
+                    }} else {{
+                        btn.classList.remove('active');
+                        btn.setAttribute('aria-selected', 'false');
+                    }}
+                }}
+                if (pane) {{
+                    pane.style.display = (t === tabKey) ? 'block' : 'none';
+                }}
+            }});
+
+            if (updateHash && window.location.hash !== '#' + tabKey) {{
+                history.pushState(null, '', '#' + tabKey);
+            }}
+
+            // If switching to milestones, ensure CodeMirror editors refresh/init cleanly
+            if (tabKey === 'milestones') {{
+                setTimeout(() => {{
+                    initCodeEditors();
+                    initMilestoneModes();
+                    if (window.cmEditors) {{
+                        Object.values(window.cmEditors).forEach(cm => {{
+                            if (cm && typeof cm.refresh === 'function') {{
+                                cm.refresh();
+                            }}
+                        }});
+                    }}
+                }}, 50);
+            }}
+        }}
+
+        function handleReportHashChange() {{
+            const rawHash = window.location.hash.replace(/^#/, '').toLowerCase();
+            let tab = rawHash;
+            if (tab === 'section-overview' || tab === 'section-raw-markdown') tab = 'overview';
+            else if (tab === 'section-graph') tab = 'graph';
+            else if (tab === 'section-milestones' || tab.startsWith('milestone-')) tab = 'milestones';
+            else if (tab === 'section-quiz') tab = 'quiz';
+
+            if (VALID_REPORT_TABS.includes(tab)) {{
+                switchReportTab(tab, false);
+            }} else {{
+                switchReportTab('overview', false);
+            }}
+            initMilestoneModes();
+        }}
+
+        window.addEventListener('popstate', handleReportHashChange);
+        window.addEventListener('hashchange', handleReportHashChange);
+
+        if (document.readyState === 'loading') {{
+            document.addEventListener('DOMContentLoaded', handleReportHashChange);
+        }} else {{
+            handleReportHashChange();
+        }}
     </script>
     """
 
@@ -3512,6 +5141,67 @@ def report_view(
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
     <style>
+        /* Tabbed Report Navigation Styles */
+        .report-tabs-nav {
+            display: flex;
+            gap: 0.5rem;
+            border-bottom: 1px solid var(--hairline);
+            margin-bottom: 1.75rem;
+            overflow-x: auto;
+            padding-bottom: 0.25rem;
+            scrollbar-width: thin;
+        }
+        .report-tab-btn {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.65rem 1.15rem;
+            background: var(--panel);
+            color: var(--text-secondary);
+            border: 1px solid var(--hairline);
+            border-radius: 4px;
+            font-family: 'IBM Plex Sans', sans-serif;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 120ms ease;
+            white-space: nowrap;
+        }
+        .report-tab-btn:hover {
+            color: var(--text-primary);
+            background: var(--panel-raised);
+            border-color: var(--brass-border);
+        }
+        .report-tab-btn.active {
+            color: var(--brass);
+            background: var(--panel-raised);
+            border-color: var(--brass);
+            box-shadow: 0 0 0 1px var(--brass);
+            font-weight: 600;
+        }
+        .report-tab-pane {
+            animation: fadeInTab 150ms ease-out;
+        }
+        @keyframes fadeInTab {
+            from { opacity: 0; transform: translateY(3px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Milestone Mode Switcher & Read-Only Viewer Styles */
+        .milestone-mode-tab-btn:hover:not(:disabled) {
+            color: var(--text-primary) !important;
+            background: var(--panel-raised) !important;
+        }
+        .read-file-tab-btn:hover {
+            border-color: var(--teal) !important;
+            color: var(--teal) !important;
+        }
+        .read-file-tab-btn.active {
+            border-color: var(--teal-border) !important;
+            background: var(--panel) !important;
+            color: var(--teal) !important;
+            box-shadow: 0 0 0 1px var(--teal-border);
+        }
+
         .kpi-card {
             background: var(--panel-raised);
             border: 1px solid var(--hairline);
@@ -3565,6 +5255,40 @@ def report_view(
             stroke-width: 2px;
             filter: drop-shadow(0 0 6px rgba(212, 163, 89, 0.25));
         }
+
+        /* Fullscreen Graph Mode */
+        #section-graph.graph-fullscreen {
+            position: fixed !important;
+            inset: 0 !important;
+            z-index: 9999 !important;
+            margin: 0 !important;
+            border-radius: 0 !important;
+            background: var(--ink) !important;
+            display: flex !important;
+            flex-direction: column !important;
+            overflow: hidden !important;
+        }
+        #section-graph.graph-fullscreen .card-header,
+        #section-graph.graph-fullscreen > p {
+            flex-shrink: 0;
+        }
+        #section-graph.graph-fullscreen #dag-visual-container {
+            max-height: none !important;
+            flex: 1 1 auto !important;
+            border-radius: 0 !important;
+        }
+        #section-graph.graph-fullscreen #dag-legend-panel {
+            flex-shrink: 0;
+            border-radius: 0;
+            margin-bottom: 0.5rem;
+        }
+        #section-graph.graph-fullscreen #dag-table-container {
+            max-height: none !important;
+            flex: 1 1 auto !important;
+        }
+        #section-graph.graph-fullscreen #dag-node-inspector {
+            flex-shrink: 0;
+        }
         .milestone-item:last-child {
             margin-bottom: 0 !important;
         }
@@ -3614,13 +5338,13 @@ def report_view(
     content = f"""
     <div style="max-width: 1040px; margin: 0 auto;">
         <!-- Top Dossier Navigation & Meta Bar -->
-        <div style="margin-bottom: 1.75rem; display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
+        <div style="margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
             <div>
                 <a href="/dashboard" style="display: inline-flex; align-items: center; gap: 0.4rem; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
                     &larr; BACK TO DASHBOARD LEDGER
                 </a>
                 <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
-                    <h1 style="font-size: 2.15rem; font-weight: 500; letter-spacing: -0.02em;">Repository Dossier: <span style="font-style: italic; color: var(--brass);">{repo_name}</span></h1>
+                    <h1 style="font-size: 2.15rem; font-weight: 500; letter-spacing: -0.02em;">Repository Architecture Report: <span style="font-style: italic; color: var(--brass);">{repo_name}</span></h1>
                 </div>
                 <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.2rem;">
                     Codebase Intelligence Report &bull; Structural Syntax Tree &amp; Dependency Reconstruction
@@ -3640,29 +5364,55 @@ def report_view(
                         <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
                         <rect x="6" y="14" width="12" height="8"></rect>
                     </svg>
-                    Print Dossier
+                    Print Architecture Report
                 </button>
             </div>
         </div>
 
-        <!-- Section 01: Executive Architecture Stratum (KPI Bento Grid & Callouts) -->
-        {overview_section_html}
+        <!-- Tabbed Report Navigation Bar -->
+        <div class="report-tabs-nav" role="tablist" aria-label="Architecture Report Sections">
+            <button type="button" class="report-tab-btn active" id="tab-btn-overview" onclick="switchReportTab('overview')" role="tab" aria-selected="true" aria-controls="tab-pane-overview">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 0.45rem;"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                Overview
+            </button>
+            <button type="button" class="report-tab-btn" id="tab-btn-graph" onclick="switchReportTab('graph')" role="tab" aria-selected="false" aria-controls="tab-pane-graph">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 0.45rem;"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
+                Dependency Graph
+            </button>
+            <button type="button" class="report-tab-btn" id="tab-btn-milestones" onclick="switchReportTab('milestones')" role="tab" aria-selected="false" aria-controls="tab-pane-milestones">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 0.45rem;"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+                Milestones
+            </button>
+            <button type="button" class="report-tab-btn" id="tab-btn-quiz" onclick="switchReportTab('quiz')" role="tab" aria-selected="false" aria-controls="tab-pane-quiz">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 0.45rem;"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                Quiz
+            </button>
+        </div>
 
-        <!-- Section 02: Visual Topological Dependency Graph (SVG Interactive DAG) -->
-        {graph_section_html}
+        <!-- Tab 1: Overview Section -->
+        <div class="report-tab-pane" id="tab-pane-overview" role="tabpanel" aria-labelledby="tab-btn-overview">
+            {overview_section_html}
+            {raw_markdown_drawer}
+        </div>
 
-        <!-- Section 03: Step-by-Step Milestones Timeline Spine -->
-        {milestones_spine_html}
+        <!-- Tab 2: Visual Dependency Graph Section -->
+        <div class="report-tab-pane" id="tab-pane-graph" role="tabpanel" aria-labelledby="tab-btn-graph" style="display: none;">
+            {graph_section_html}
+        </div>
 
-        <!-- Section 04: Codebase Mastery Quiz -->
-        {quiz_html}
+        <!-- Tab 3: Milestones & Code Workspace Section -->
+        <div class="report-tab-pane" id="tab-pane-milestones" role="tabpanel" aria-labelledby="tab-btn-milestones" style="display: none;">
+            {milestones_spine_html}
+        </div>
 
-        <!-- Section 05: Raw Markdown Transcript Drawer -->
-        {raw_markdown_drawer}
+        <!-- Tab 4: Codebase Mastery Quiz Section -->
+        <div class="report-tab-pane" id="tab-pane-quiz" role="tabpanel" aria-labelledby="tab-btn-quiz" style="display: none;">
+            {quiz_html}
+        </div>
     </div>
     """
     return page_shell(
-        "Repository Dossier",
+        "Repository Architecture Report",
         content,
         current_user=current_user,
         active_route="/report",
@@ -3709,7 +5459,7 @@ def settings_view(
     user_avatar = sanitize_text(current_user.avatar_url) if current_user.avatar_url else ""
     username = sanitize_text(current_user.github_username or "archaeologist")
     email = sanitize_text(current_user.email or "No email synced")
-    created_at = sanitize_text(current_user.created_at.strftime("%Y-%m-%d %H:%M UTC") if hasattr(current_user.created_at, "strftime") else str(current_user.created_at))
+    created_at = sanitize_text(current_user.created_at.strftime("%Y-%m-%d %H:%M:%S UTC") if hasattr(current_user.created_at, "strftime") else str(current_user.created_at))
 
     amount_formatted = sanitize_text(pricing_details.get("amount_formatted", "Upgrade"))
     interval = sanitize_text(pricing_details.get("interval", "month"))
@@ -3740,7 +5490,7 @@ def settings_view(
             <div style="background: var(--panel-inset); padding: 1.25rem; border-radius: 4px; border: 1px solid var(--hairline); margin-bottom: 1.25rem;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
                     <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase;">Active Subscription</span>
-                    <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.8125rem; font-weight: 600; color: var(--teal);">UNLIMITED INQUESTS</span>
+                    <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.8125rem; font-weight: 600; color: var(--teal);">UNLIMITED ANALYSIS JOBS</span>
                 </div>
                 <div class="meter" style="margin-bottom: 0.75rem;">
                     <div class="meter-fill high" style="width: 100%;"></div>
@@ -3752,7 +5502,7 @@ def settings_view(
             </div>
 
             <div style="background: var(--panel-raised); border: 1px solid var(--hairline); border-radius: 4px; padding: 1.25rem;">
-                <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.35rem;">Enterprise Forensic Suite</div>
+                <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.35rem;">Enterprise Code Validation Suite</div>
                 <p style="color: var(--text-secondary); font-size: 0.85rem; line-height: 1.45; margin-bottom: 1rem;">
                     Your account has unmetered access to the 11-Layer Reverse Intelligence engine, priority AST parsing, and interactive dependency graphs.
                 </p>
@@ -3790,7 +5540,7 @@ def settings_view(
                 <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem;">
                     <div>
                         <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--brass); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;">
-                            ENTERPRISE FORENSIC SUITE
+                            ENTERPRISE CODE VALIDATION SUITE
                         </div>
                         <div style="display: flex; align-items: baseline; gap: 0.4rem; margin-top: 0.35rem;">
                             <span style="font-family: 'Newsreader', serif; font-size: 2.25rem; font-weight: 500; color: var(--text-primary);">{amount_formatted}</span>
@@ -3807,7 +5557,7 @@ def settings_view(
                     </div>
                     <div style="display: flex; align-items: center; gap: 0.5rem;">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                        <span>Priority AST parsing &amp; deterministic strata slicing queue</span>
+                        <span>Priority syntax parsing &amp; automatic tier grouping queue</span>
                     </div>
                     <div style="display: flex; align-items: center; gap: 0.5rem;">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
@@ -3897,7 +5647,7 @@ def settings_view(
                     <!-- Dark Option -->
                     <button type="button" id="theme-card-dark" onclick="applyThemePreference('dark')" style="text-align: left; padding: 1rem; border-radius: 4px; background: var(--panel-inset); border: 2px solid var(--brass); cursor: pointer; transition: all 150ms ease;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                            <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; font-weight: 600; color: var(--brass); text-transform: uppercase;">Dark Dossier</span>
+                            <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; font-weight: 600; color: var(--brass); text-transform: uppercase;">Dark Architecture Report</span>
                             <span id="theme-check-dark" style="color: var(--brass); font-weight: bold; font-size: 0.875rem;">✓</span>
                         </div>
                         <div style="height: 24px; background: #0c0e11; border-radius: 2px; border: 1px solid #282a2d; margin-bottom: 0.5rem; display: flex; align-items: center; padding: 0 0.5rem; gap: 0.35rem;">
@@ -4135,7 +5885,7 @@ def rewards_view(
         pts = e.points_awarded
         pts_color = "#10b981" if pts > 0 else ("#ef4444" if pts < 0 else "var(--text-tertiary)")
         pts_prefix = "+" if pts > 0 else ""
-        created_str = e.created_at.strftime("%Y-%m-%d %H:%M UTC") if hasattr(e.created_at, "strftime") else str(e.created_at)[:19]
+        created_str = e.created_at.strftime("%Y-%m-%d %H:%M:%S UTC") if hasattr(e.created_at, "strftime") else str(e.created_at)[:19]
 
         ledger_rows += f"""
         <tr style="border-bottom: 1px solid var(--hairline-soft);">
@@ -4200,7 +5950,7 @@ def rewards_view(
             </div>
 
             <div class="card" style="padding: 1.25rem; background: var(--panel);">
-                <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--text-tertiary); text-transform: uppercase; margin-bottom: 0.35rem;">Prestige Badges</div>
+                <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--text-tertiary); text-transform: uppercase; margin-bottom: 0.35rem;">Achievement Badges</div>
                 <div style="font-family: 'Newsreader', Georgia, serif; font-size: 2.5rem; font-weight: 600; color: var(--brass); line-height: 1.1; margin-bottom: 0.35rem;">
                     {earned_badges_count} <span style="font-size: 1.125rem; font-family: 'IBM Plex Mono', monospace; font-weight: 500;">/ {total_badges}</span>
                 </div>
@@ -4259,7 +6009,7 @@ def rewards_view(
         <!-- Badges Section -->
         <div style="margin-bottom: 2.5rem;">
             <div style="margin-bottom: 1rem;">
-                <h2 style="font-size: 1.5rem; margin-bottom: 0.25rem;">Dossier Prestige Badges</h2>
+                <h2 style="font-size: 1.5rem; margin-bottom: 0.25rem;">Architecture Report Achievement Badges</h2>
                 <p style="font-size: 0.875rem; color: var(--text-secondary);">Earn badges by demonstrating mastery, speed, and breadth across repository architectures.</p>
             </div>
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem;">

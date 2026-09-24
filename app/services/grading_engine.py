@@ -124,12 +124,83 @@ class GradingEngine:
         submitted_code: str,
         language: str = "python",
         graph_data: Optional[Dict[str, Any]] = None,
+        mode: str = "guess",
+        target_file: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
-        Executes grading against user-submitted code following the 3-tier hierarchy.
+        Executes grading against user-submitted code following the 3-tier hierarchy or scoped fill-the-blanks mode.
         Returns complete grading payload including grading_method, status, verification, and execution.
         """
         g_data = graph_data or (job.graph_data if hasattr(job, "graph_data") else {}) or {}
+
+        # =================================================================
+        # FILL THE BLANKS MODE: Scoped verification of blanked regions only
+        # =================================================================
+        if mode == "fill":
+            from app.services.scaffold_generator import ScaffoldGenerator
+            from app.services.hint_engine import HintEngine
+
+            ref_info = HintEngine.get_reference_implementation(g_data, milestone_tier)
+            ref_code = ref_info.get("reference_code", "")
+
+            # If target_file provided, try finding source code for that node
+            if target_file and "nodes" in g_data:
+                for n in g_data.get("nodes", []):
+                    n_path = n.get("path") or n.get("id") or ""
+                    if n_path == target_file or n_path.endswith(target_file) or target_file.endswith(n_path):
+                        if n.get("source_code") or n.get("content"):
+                            ref_code = n.get("source_code") or n.get("content")
+                            break
+
+            scaffold_info = ScaffoldGenerator.generate_scaffold(ref_code, language=language)
+            fill_result = ScaffoldGenerator.grade_fill_blanks(
+                submitted_code=submitted_code,
+                scaffold_info=scaffold_info,
+                language=language,
+            )
+
+            passed = fill_result.get("passed", False)
+            status_str = "structurally_verified" if passed else "attempting"
+
+            # Execute code in isolated runner for console output
+            exec_result = {}
+            try:
+                exec_result = self.exec_verifier.execute(
+                    submitted_code=submitted_code,
+                    language=language,
+                )
+            except Exception:
+                exec_result = {
+                    "stdout": "",
+                    "stderr": "",
+                    "exit_code": 0 if passed else 1,
+                    "status": "success" if passed else "error",
+                }
+
+            grading_details = {
+                "grading_method": "fill_the_blanks",
+                "passed": passed,
+                "total_blanked": fill_result.get("total_blanked", 0),
+                "implemented_count": fill_result.get("implemented_count", 0),
+                "summary": (
+                    f"Fill the Blanks: All {fill_result.get('total_blanked', 0)} blanked functions implemented successfully"
+                    if passed
+                    else f"Fill the Blanks: {fill_result.get('implemented_count', 0)} of {fill_result.get('total_blanked', 0)} blanked functions implemented"
+                ),
+            }
+
+            fill_result["grading_method"] = "fill_the_blanks"
+            fill_result["grading_tier_label"] = "FILL THE BLANKS // SCOPED REGIONS"
+
+            return {
+                "grading_method": "fill_the_blanks",
+                "status": status_str,
+                "passed": passed,
+                "verification": fill_result,
+                "execution": exec_result,
+                "details": grading_details,
+            }
+
         grading_tier, context_info = self.determine_grading_tier(job, milestone_tier, g_data)
 
         # Extract expected symbols for AST diff reporting

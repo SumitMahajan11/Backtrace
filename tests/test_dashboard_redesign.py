@@ -88,8 +88,8 @@ def test_dashboard_free_user_empty_state(client, create_user):
     html = resp.text
 
     # Editorial Header
-    assert "Root-Cause Inquest Ledger" in html
-    assert "DOSSIER REPOSITORY INGESTION" in html
+    assert "Root-Cause Analysis Ledger" in html
+    assert "ARCHITECTURE REPORT REPOSITORY PARSING" in html
     assert "Submit version-controlled source archives" in html
 
     # Quota Status & Renewal
@@ -100,8 +100,8 @@ def test_dashboard_free_user_empty_state(client, create_user):
 
     # Main Stratum Card
     assert "Reconstruct Repository History" in html
-    assert "Granular AST Parsing" in html
-    assert "Deterministic Strata Slicing" in html
+    assert "Detailed Syntax Tree Analysis" in html
+    assert "Automatic Tier Grouping" in html
     assert "https://github.com/expressjs/express" in html
 
     # Empty State Copy
@@ -146,11 +146,11 @@ def test_dashboard_populated_state(client, create_user, test_db):
 
     # Verify rows & actions
     assert f"/report/{j1_id}" in html
-    assert "View Dossier" in html
+    assert "View Architecture Report" in html
     assert f"/progress/{j2_id}" in html
     assert "Track Progress" in html
     assert f"/analyses/{j3_id}/retry" in html
-    assert "Retry Inquest" in html
+    assert "Retry Analysis Job" in html
 
 
 def test_dashboard_paid_user_state(client, create_user, test_db):
@@ -178,7 +178,7 @@ def test_dashboard_paid_user_state(client, create_user, test_db):
     html = resp.text
 
     assert "PRO TIER" in html
-    assert "UNLIMITED INQUESTS" in html
+    assert "UNLIMITED ANALYSIS JOBS" in html
     assert "Manage Billing" in html
 
 

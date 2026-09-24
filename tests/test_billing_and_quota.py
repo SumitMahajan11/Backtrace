@@ -447,3 +447,90 @@ def test_billing_status_endpoint(client, test_db):
     assert data["monthly_usage"] == 0
     assert data["monthly_quota"] == 5
     assert data["is_quota_exceeded"] is False
+
+
+def test_redirect_checkout_fulfillment_synchronous_upgrade(client, test_db, monkeypatch):
+    """
+    Acceptance Criteria: Landing on /dashboard?session_id=... synchronously fulfills the checkout session
+    and upgrades the user to Pro immediately without waiting for a webhook.
+    """
+    SessionLocal, _ = test_db
+    with SessionLocal() as db_session:
+        user = UserRepository.upsert_github_user(db_session, github_id=501, github_username="redirect_user")
+        db_session.commit()
+        user_id = user.id
+
+    token = create_access_token(user_id, 501, "redirect_user")
+
+    # Mock Stripe Session retrieve for a live/test session ID
+    mock_session_obj = MagicMock()
+    mock_session_obj.customer = MagicMock(id="cus_test_redirect_501")
+    mock_session_obj.subscription = MagicMock(
+        id="sub_test_redirect_501",
+        status="active",
+        current_period_end=int(time.time()) + 86400 * 30,
+    )
+
+    with patch("stripe.checkout.Session.retrieve", return_value=mock_session_obj):
+        resp = client.get(
+            "/dashboard?session_id=cs_test_redirect_valid_123",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert resp.status_code == 200
+        # Should render PRO TIER in HTML response immediately
+        assert "PRO TIER" in resp.text
+        assert "UNLIMITED ANALYSIS JOBS" in resp.text
+
+    # Verify DB subscription state is active and tier is paid
+    with SessionLocal() as db_session:
+        status_info = BillingService.get_user_billing_status(user, db_session)
+        assert status_info["tier"] == "paid"
+        assert status_info["subscription_status"] == "active"
+        sub = BillingRepository.get_subscription_by_user_id(db_session, user_id)
+        assert sub is not None
+        assert sub.stripe_customer_id == "cus_test_redirect_501"
+        assert sub.stripe_subscription_id == "sub_test_redirect_501"
+
+
+def test_redirect_checkout_fulfillment_idempotent(client, test_db):
+    """
+    Acceptance Criteria: Multiple visits with the same session_id (e.g. browser refresh or webhook duplicate)
+    do not create duplicate subscription records.
+    """
+    SessionLocal, _ = test_db
+    with SessionLocal() as db_session:
+        user = UserRepository.upsert_github_user(db_session, github_id=502, github_username="refresh_user")
+        db_session.commit()
+        user_id = user.id
+
+    token = create_access_token(user_id, 502, "refresh_user")
+
+    mock_session_obj = MagicMock()
+    mock_session_obj.customer = MagicMock(id="cus_refresh_502")
+    mock_session_obj.subscription = MagicMock(
+        id="sub_refresh_502",
+        status="active",
+        current_period_end=int(time.time()) + 86400 * 30,
+    )
+
+    with patch("stripe.checkout.Session.retrieve", return_value=mock_session_obj):
+        # 1st visit
+        resp1 = client.get(
+            "/dashboard?session_id=cs_refresh_123",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert resp1.status_code == 200
+
+        # 2nd visit (simulating page refresh)
+        resp2 = client.get(
+            "/dashboard?session_id=cs_refresh_123",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert resp2.status_code == 200
+
+    # Ensure exactly 1 subscription record exists
+    with SessionLocal() as db_session:
+        subs = db_session.query(SubscriptionModel).filter_by(user_id=user_id).all()
+        assert len(subs) == 1
+        assert subs[0].stripe_customer_id == "cus_refresh_502"
+

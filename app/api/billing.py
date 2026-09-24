@@ -1,5 +1,7 @@
 """Billing and Subscription API Router for Stripe Hosted Checkout and Customer Portal."""
 
+import os
+from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import RedirectResponse
@@ -9,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.api.dependencies import get_current_user, get_db
 from app.models.db import UserModel
 from app.services.billing_service import BillingService, BillingServiceError
+from app.storage.billing_repository import BillingRepository
 
 router = APIRouter(prefix="/billing", tags=["Billing"])
 
@@ -156,3 +159,47 @@ def get_billing_status(
     """
     status_data = BillingService.get_user_billing_status(user=current_user, session=session)
     return BillingStatusResponse(**status_data)
+
+
+@router.post(
+    "/dev/force-upgrade",
+    summary="[DEV ONLY] Force-upgrade current user to Pro without Stripe",
+    include_in_schema=True,
+)
+def dev_force_upgrade(
+    current_user: UserModel = Depends(get_current_user),
+    session: Session = Depends(get_db),
+):
+    """
+    Development-only endpoint that directly writes an active subscription record,
+    bypassing Stripe webhooks (which cannot reach localhost).
+
+    DISABLED in production (ENVIRONMENT != 'development').
+    """
+    env = os.getenv("ENVIRONMENT", "development").lower()
+    if env not in ("development", "dev"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This endpoint is only available in development environments.",
+        )
+
+    # Create a subscription valid for 1 year from now
+    period_end = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=365)
+
+    sub = BillingRepository.upsert_subscription(
+        session=session,
+        user_id=current_user.id,
+        stripe_customer_id=f"dev_customer_{current_user.id}",
+        stripe_subscription_id=f"dev_sub_{current_user.id}",
+        status="active",
+        current_period_end=period_end,
+    )
+    session.commit()
+
+    return {
+        "message": "User successfully upgraded to Pro (dev mode)",
+        "user_id": current_user.id,
+        "github_username": current_user.github_username,
+        "subscription_status": sub.status,
+        "current_period_end": sub.current_period_end.isoformat(),
+    }

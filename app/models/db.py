@@ -196,6 +196,8 @@ class AnalysisJobModel(Base):
     user_id: int = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     repo_name: str = Column(String(255), nullable=False, index=True)
     github_url: str = Column(String(255), nullable=False)
+    commit_ref: Optional[str] = Column(String(255), nullable=True, default=None)
+    subpath: Optional[str] = Column(String(500), nullable=True, default=None)
     status: str = Column(String(32), nullable=False, default="pending")  # pending, processing, complete, failed
     run_id: str = Column(String(64), nullable=False, index=True)
     error_message: Optional[str] = Column(Text, nullable=True)

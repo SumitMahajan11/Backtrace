@@ -74,11 +74,11 @@ class HintEngine:
             hint_text = (
                 f"Milestone {milestone_tier} forms the foundation layer{role_desc} operating in the {domain_str} domain. "
                 f"Modules in this layer should have minimal or no external dependencies within the project, acting as "
-                f"leaf nodes that higher strata rely on. Focus on defining the primary configuration structures and core "
+                f"leaf nodes that higher tiers rely on. Focus on defining the primary configuration structures and core "
                 f"initialization abstractions required by upstream orchestrators."
             )
         else:
-            in_str = f"higher strata (such as Tier {milestone_tier + 1})" if inbound_sources else "top-level entry points"
+            in_str = f"higher tiers (such as Tier {milestone_tier + 1})" if inbound_sources else "top-level entry points"
             hint_text = (
                 f"Milestone {milestone_tier}{role_desc} operates primarily within the {domain_str} domain. "
                 f"It bridges lower foundation tiers (Tier {milestone_tier - 1}) into {in_str}. "

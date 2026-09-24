@@ -2,7 +2,7 @@
 
 import os
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, Optional, Tuple
 
 import stripe
@@ -447,3 +447,97 @@ class BillingService:
         session.flush()
         new_usage = BillingRepository.get_monthly_usage_count(session, user.id)
         return True, new_usage, quota_limit, "free"
+
+    @classmethod
+    def fulfill_checkout_session(
+        cls,
+        session_id: str,
+        user: UserModel,
+        session: Session,
+    ) -> Dict[str, Any]:
+        """
+        Verifies and fulfills a Stripe Checkout Session upon user redirect return.
+        Enables seamless Pro Tier activation in production when webhooks are pending/delayed,
+        and provides zero-friction local development Pro upgrading.
+        """
+        if not session_id or not session_id.strip():
+            return {"success": False, "message": "No session ID provided"}
+
+        api_key = _get_billing_setting("STRIPE_SECRET_KEY", os.getenv("STRIPE_API_KEY", STRIPE_API_KEY))
+        if api_key:
+            stripe.api_key = api_key
+
+        try:
+            # 1. Attempt to retrieve from Stripe API
+            checkout_session = stripe.checkout.Session.retrieve(
+                session_id,
+                expand=["subscription", "customer"],
+            )
+
+            # Extract customer ID
+            cust = getattr(checkout_session, "customer", None)
+            stripe_customer_id = cust.id if hasattr(cust, "id") else (str(cust) if cust else None)
+
+            # Extract subscription ID and period end
+            sub_obj = getattr(checkout_session, "subscription", None)
+            stripe_subscription_id = sub_obj.id if hasattr(sub_obj, "id") else (str(sub_obj) if sub_obj else None)
+
+            period_end_dt = None
+            if sub_obj and hasattr(sub_obj, "current_period_end") and sub_obj.current_period_end:
+                period_end_dt = datetime.fromtimestamp(sub_obj.current_period_end, timezone.utc).replace(tzinfo=None)
+            else:
+                period_end_dt = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=365)
+
+            status_str = "active"
+            if sub_obj and hasattr(sub_obj, "status") and sub_obj.status:
+                status_str = sub_obj.status
+
+            BillingRepository.upsert_subscription(
+                session=session,
+                user_id=user.id,
+                stripe_customer_id=stripe_customer_id or f"cus_{user.id}",
+                stripe_subscription_id=stripe_subscription_id or f"sub_{user.id}",
+                status=status_str,
+                current_period_end=period_end_dt,
+            )
+            session.commit()
+
+            try:
+                from app.monitoring.posthog import analytics
+                analytics.capture_subscription_started(user_id=user.id, tier="paid", plan="monthly")
+            except Exception:
+                pass
+
+            return {
+                "success": True,
+                "message": "Subscription successfully activated! Welcome to Backtrace Pro.",
+                "tier": "paid",
+            }
+        except Exception as exc:
+            # In development/test mode, fulfill as dev subscription to avoid localhost webhook blockers
+            from app.core.config import get_settings
+            cfg = get_settings()
+            if not cfg.is_production:
+                period_end = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=365)
+                sub_id_suffix = session_id[-10:] if len(session_id) >= 10 else str(user.id)
+                BillingRepository.upsert_subscription(
+                    session=session,
+                    user_id=user.id,
+                    stripe_customer_id=f"dev_customer_{user.id}",
+                    stripe_subscription_id=f"sub_dev_{sub_id_suffix}",
+                    status="active",
+                    current_period_end=period_end,
+                )
+                session.commit()
+                try:
+                    from app.monitoring.posthog import analytics
+                    analytics.capture_subscription_started(user_id=user.id, tier="paid", plan="monthly")
+                except Exception:
+                    pass
+                return {
+                    "success": True,
+                    "message": "Pro Tier subscription successfully activated! Unlimited repository analyses enabled.",
+                    "tier": "paid",
+                }
+            return {"success": False, "message": f"Unable to verify Stripe checkout session: {exc}"}
+

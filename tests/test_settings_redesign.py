@@ -108,7 +108,7 @@ def test_settings_free_user_view(client, create_user, test_db):
 
         # 2. Themes
         assert "Archival Visual Standard" in html
-        assert "Dark Dossier" in html
+        assert "Dark Architecture Report" in html
         assert "Light Archival" in html
         assert "Detect OS Scheme" in html
 
@@ -152,7 +152,7 @@ def test_settings_paid_user_view(client, create_user, test_db):
     html = resp.text
 
     assert "PRO TIER" in html
-    assert "UNLIMITED INQUESTS" in html
+    assert "UNLIMITED ANALYSIS JOBS" in html
     assert "Manage Subscription &amp; Invoices" in html
     assert "/api/billing/portal" in html
 
