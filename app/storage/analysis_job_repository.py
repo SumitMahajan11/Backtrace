@@ -22,9 +22,12 @@ class AnalysisJobRepository:
         github_url: Optional[str] = None,
         repo_name: Optional[str] = None,
         commit_ref: Optional[str] = None,
+        resolved_sha: Optional[str] = None,
         subpath: Optional[str] = None,
         status: str = "pending",
         run_id: Optional[str] = None,
+        failed_stage: Optional[str] = None,
+        error_message: Optional[str] = None,
     ) -> AnalysisJobModel:
         """Creates and persists a new analysis job record."""
         target_url = github_url or repo_url
@@ -36,9 +39,12 @@ class AnalysisJobRepository:
             repo_name=target_name,
             github_url=target_url,
             commit_ref=commit_ref,
+            resolved_sha=resolved_sha,
             subpath=subpath,
             run_id=target_run_id,
             status=status,
+            failed_stage=failed_stage,
+            error_message=error_message,
             created_at=utc_now(),
             updated_at=utc_now(),
         )
@@ -83,11 +89,17 @@ class AnalysisJobRepository:
         graph_data: Optional[Dict[str, Any]] = None,
         quiz_data: Optional[Dict[str, Any]] = None,
         execution_time_seconds: Optional[float] = None,
+        resolved_sha: Optional[str] = None,
+        failed_stage: Optional[str] = None,
     ) -> Optional[AnalysisJobModel]:
-        """Updates job status, markdown output, graph, quiz results, and execution duration."""
+        """Updates job status, markdown output, graph, quiz results, resolved SHA, failed stage, and execution duration."""
         job = AnalysisJobRepository.get_job_by_id(session, job_id)
         if job:
             job.status = status
+            if resolved_sha is not None:
+                job.resolved_sha = resolved_sha
+            if failed_stage is not None:
+                job.failed_stage = failed_stage
             if error_message is not None:
                 job.error_message = error_message
             if report_markdown is not None:
@@ -111,11 +123,14 @@ class AnalysisJobRepository:
         graph_output_json: str,
         quiz_output_json: str,
         execution_time_seconds: float = 0.0,
+        resolved_sha: Optional[str] = None,
     ) -> Optional[AnalysisJobModel]:
         """Persists the complete analysis outputs upon successful pipeline completion."""
         job = AnalysisJobRepository.get_job_by_id(session, job_id)
         if job:
             job.status = "completed"
+            if resolved_sha is not None:
+                job.resolved_sha = resolved_sha
             job.markdown_output = markdown_output
             job.graph_output_json = graph_output_json
             job.quiz_output_json = quiz_output_json

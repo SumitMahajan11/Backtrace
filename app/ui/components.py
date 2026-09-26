@@ -9,13 +9,15 @@ from __future__ import annotations
 import html
 import json
 import re
+from collections import Counter
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
+from app.formatters.graph_formatter import DOMAIN_COLOR_DEFS, DOMAIN_HEX_COLORS
 from app.models.db import UserModel
 from app.services.hint_engine import HintEngine
 from app.services.scaffold_generator import ScaffoldGenerator
 from app.services.structural_verifier import StructuralVerifier
-from app.ui.sanitizer import sanitize_text, render_safe_markdown
+from app.ui.sanitizer import sanitize_text, render_safe_markdown, truncate_text_clean
 
 
 def nav_shell(
@@ -170,10 +172,10 @@ def page_shell(
             --text-secondary: #94a3b8;
             --text-tertiary: #8295ab;
             
-            --brass: #d4a359;
-            --brass-hover: #deb46f;
-            --brass-soft: rgba(212, 163, 89, 0.12);
-            --brass-border: rgba(212, 163, 89, 0.35);
+            --brass: #6ee7b7;
+            --brass-hover: #86efac;
+            --brass-soft: rgba(110, 231, 183, 0.12);
+            --brass-border: rgba(110, 231, 183, 0.35);
 
             --teal: #2dd4bf;
             --teal-dim: #115e59;
@@ -186,7 +188,7 @@ def page_shell(
             --crimson: #f43f5e;
             --crimson-soft: rgba(244, 63, 94, 0.12);
             
-            --focus-ring: rgba(212, 163, 89, 0.5);
+            --focus-ring: rgba(110, 231, 183, 0.45);
             color-scheme: dark;
         }}
 
@@ -203,10 +205,10 @@ def page_shell(
             --text-secondary: #475569;
             --text-tertiary: #52637a;
             
-            --brass: #875a14;
-            --brass-hover: #9e6b1a;
-            --brass-soft: rgba(135, 90, 20, 0.12);
-            --brass-border: rgba(135, 90, 20, 0.3);
+            --brass: #1b6d4b;
+            --brass-hover: #14532d;
+            --brass-soft: rgba(27, 109, 75, 0.10);
+            --brass-border: rgba(27, 109, 75, 0.28);
 
             --teal: #0d9488;
             --teal-dim: #134e4a;
@@ -219,7 +221,7 @@ def page_shell(
             --crimson: #e11d48;
             --crimson-soft: rgba(225, 29, 72, 0.12);
 
-            --focus-ring: rgba(135, 90, 20, 0.4);
+            --focus-ring: rgba(27, 109, 75, 0.35);
             color-scheme: light;
         }}
 
@@ -229,6 +231,56 @@ def page_shell(
             margin: 0;
             padding: 0;
         }}
+
+        /* High-Contrast Scrollbar for Code Viewers & Editors */
+        .read-code-pre,
+        .CodeMirror,
+        .CodeMirror-scroll,
+        .CodeMirror-vscrollbar,
+        .CodeMirror-hscrollbar,
+        pre.read-code-pre,
+        pre,
+        textarea {{{{
+            scrollbar-width: thin;
+            scrollbar-color: #525e75 #13171f;
+        }}}}
+        .read-code-pre::-webkit-scrollbar,
+        .CodeMirror-scroll::-webkit-scrollbar,
+        .CodeMirror-vscrollbar::-webkit-scrollbar,
+        .CodeMirror-hscrollbar::-webkit-scrollbar,
+        pre::-webkit-scrollbar,
+        textarea::-webkit-scrollbar {{{{
+            width: 9px;
+            height: 9px;
+        }}}}
+        .read-code-pre::-webkit-scrollbar-track,
+        .CodeMirror-scroll::-webkit-scrollbar-track,
+        .CodeMirror-vscrollbar::-webkit-scrollbar-track,
+        .CodeMirror-hscrollbar::-webkit-scrollbar-track,
+        pre::-webkit-scrollbar-track,
+        textarea::-webkit-scrollbar-track {{{{
+            background: #111317;
+            border-radius: 4px;
+        }}}}
+        .read-code-pre::-webkit-scrollbar-thumb,
+        .CodeMirror-scroll::-webkit-scrollbar-thumb,
+        .CodeMirror-vscrollbar::-webkit-scrollbar-thumb,
+        .CodeMirror-hscrollbar::-webkit-scrollbar-thumb,
+        pre::-webkit-scrollbar-thumb,
+        textarea::-webkit-scrollbar-thumb {{{{
+            background: #525e75;
+            border: 1px solid #2d3748;
+            border-radius: 4px;
+        }}}}
+        .read-code-pre::-webkit-scrollbar-thumb:hover,
+        .CodeMirror-scroll::-webkit-scrollbar-thumb:hover,
+        .CodeMirror-vscrollbar::-webkit-scrollbar-thumb:hover,
+        .CodeMirror-hscrollbar::-webkit-scrollbar-thumb:hover,
+        pre::-webkit-scrollbar-thumb:hover,
+        textarea::-webkit-scrollbar-thumb:hover {{{{
+            background: var(--brass);
+            border-color: var(--brass-border);
+        }}}}
 
         body {{
             background-color: var(--ink);
@@ -477,6 +529,14 @@ def page_shell(
             background: var(--brass-hover);
             border-color: var(--brass-hover);
             color: #0d0f12 !important;
+        }}
+
+        :root[data-theme="light"] .btn-primary {{
+            color: #ffffff !important;
+        }}
+
+        :root[data-theme="light"] .btn-primary:hover {{
+            color: #ffffff !important;
         }}
 
         .btn-secondary {{
@@ -1163,6 +1223,13 @@ def dashboard_view(
     </div>
     """
 
+    # Pre-calculate repo submission frequencies to flag repeated repositories
+    repo_counts = Counter(
+        (getattr(j, "repo_url", "") or "").strip().rstrip("/").lower()
+        for j in past_jobs
+        if getattr(j, "repo_url", None)
+    )
+
     # Build job history rows
     rows_html = ""
     for job in past_jobs:
@@ -1174,6 +1241,25 @@ def dashboard_view(
         duration_str = f"{job.execution_time_seconds:.1f}s" if getattr(job, "execution_time_seconds", 0) else "—"
 
         status_badge_class = f"badge-{status}" if status in ["completed", "running", "failed", "pending"] else "badge-free"
+
+        # Check for repeated repository submissions across history
+        norm_url = (job.repo_url or "").strip().rstrip("/").lower()
+        sub_count = repo_counts.get(norm_url, 0)
+        repeated_badge = ""
+        if sub_count > 1:
+            repeated_badge = (
+                f'<span class="badge badge-free repo-repeat-indicator" '
+                f'title="Repository analyzed {sub_count} times in history" '
+                f'style="font-family: \'IBM Plex Mono\', monospace; font-size: 0.65rem; padding: 0.12rem 0.4rem; '
+                f'display: inline-flex; align-items: center; gap: 0.25rem; vertical-align: middle; '
+                f'color: var(--text-secondary); background: var(--panel-raised); border: 1px solid var(--hairline);">'
+                f'<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink: 0;">'
+                f'<polyline points="1 4 1 10 7 10"></polyline>'
+                f'<path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>'
+                f'</svg>'
+                f'Re-analyzed ({sub_count}x)'
+                f'</span>'
+            )
 
         # Compute Learning Progress (X/Y Milestones Verified)
         verified_count = 0
@@ -1230,22 +1316,55 @@ def dashboard_view(
             """
 
         repo_error_html = ""
-        if status == "failed" and getattr(job, "error_message", None):
-            raw_err_str = str(job.error_message).strip()
+        if status == "failed" and (getattr(job, "error_message", None) or getattr(job, "failed_stage", None)):
+            raw_err_str = str(getattr(job, "error_message", "") or "").strip()
+            raw_failed_stage = str(getattr(job, "failed_stage", "") or "").strip()
+
+            stage_display_names = {
+                "stage_0": "Consent & Auth Gate",
+                "stage_1": "Shallow Clone",
+                "stage_2": "Discovery & File Hierarchy",
+                "stage_3": "Code Structure Parsing",
+                "stage_4": "Global Symbol Table",
+                "stage_5": "Directed Dependency Graph",
+                "stage_6": "Architecture Domain Mapping",
+                "stage_7": "LLM Step-by-Step Narration",
+                "stage_8": "Graph & Quiz Generation",
+                "stage_9": "Persistence",
+                "stage_10": "Telemetry & Quota Allocation",
+                "ingestion": "Ingestion",
+                "parsing": "AST Parsing",
+                "understanding": "Architecture Mapping",
+                "reasoning": "Sequence Reasoning",
+                "synthesis": "Synthesis",
+            }
+            stage_label_text = stage_display_names.get(raw_failed_stage, raw_failed_stage)
+            prefix_label = f"Failed at {sanitize_text(stage_label_text)}:" if stage_label_text else "Failure:"
+
             if raw_err_str:
                 safe_err_full = sanitize_text(raw_err_str)
-                safe_err_summary = sanitize_text(raw_err_str[:85] + ("…" if len(raw_err_str) > 85 else ""))
+                safe_err_summary = sanitize_text(truncate_text_clean(raw_err_str, 85))
                 repo_error_html = f"""
                 <div class="job-failure-reason" title="{safe_err_full}" style="margin-top: 0.35rem; font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem; color: var(--crimson); display: flex; align-items: flex-start; gap: 0.35rem; line-height: 1.35; max-width: 420px; cursor: help;">
-                    <span style="font-weight: 600; flex-shrink: 0; color: var(--crimson);">Failure:</span>
+                    <span style="font-weight: 600; flex-shrink: 0; color: var(--crimson);">{prefix_label}</span>
                     <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{safe_err_summary}</span>
+                </div>
+                """
+            elif stage_label_text:
+                repo_error_html = f"""
+                <div class="job-failure-reason" style="margin-top: 0.35rem; font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem; color: var(--crimson); display: flex; align-items: flex-start; gap: 0.35rem; line-height: 1.35; max-width: 420px;">
+                    <span style="font-weight: 600; flex-shrink: 0; color: var(--crimson);">{prefix_label}</span>
+                    <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Execution stopped</span>
                 </div>
                 """
 
         rows_html += f"""
         <tr>
             <td>
-                <div style="font-weight: 600; color: var(--text-primary);">{repo_display}</div>
+                <div style="font-weight: 600; color: var(--text-primary); display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap;">
+                    <span>{repo_display}</span>
+                    {repeated_badge}
+                </div>
                 <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--text-tertiary);">{repo_url}</div>
                 {repo_error_html}
             </td>
@@ -1447,30 +1566,48 @@ def progress_view(
     billing_status: Optional[Dict[str, Any]] = None,
 ) -> str:
     """Render the Live Progress view with Server-Sent Events (SSE) updates adhering to Archival Dossier tokens."""
-    job_id = sanitize_text(str(job.id))
-    repo_url = sanitize_text(job.repo_url)
-    job_status = str(getattr(job, "status", "pending")).lower()
-    raw_job_error = getattr(job, "error_message", None) or ""
-    safe_job_error = sanitize_text(str(raw_job_error))
+    job_id = sanitize_text(str(getattr(job, "id", None) if hasattr(job, "id") else (job.get("id", "") if isinstance(job, dict) else "")))
+    repo_url = sanitize_text(str(getattr(job, "repo_url", "") if hasattr(job, "repo_url") else (job.get("repo_url", "") if isinstance(job, dict) else "")))
+    job_status = str(getattr(job, "status", "pending") if hasattr(job, "status") else (job.get("status", "pending") if isinstance(job, dict) else "pending")).lower()
+    raw_job_error = getattr(job, "error_message", None) if hasattr(job, "error_message") else (job.get("error_message", None) if isinstance(job, dict) else None)
+    safe_job_error = sanitize_text(str(raw_job_error or ""))
     is_failed_initially = (job_status == "failed")
     failure_banner_display = "flex" if is_failed_initially else "none"
 
+    raw_repo_name = getattr(job, "repo_name", None) if hasattr(job, "repo_name") else (job.get("repo_name", None) if isinstance(job, dict) else None)
+    repo_name = sanitize_text(raw_repo_name or (repo_url.rstrip("/").split("/")[-1] if "/" in repo_url else (repo_url or f"Job #{job_id}")))
+
     job_created_ts = 0.0
-    if hasattr(job, "created_at") and job.created_at:
+    raw_created_at = getattr(job, "created_at", None) if hasattr(job, "created_at") else (job.get("created_at", None) if isinstance(job, dict) else None)
+    if raw_created_at is not None:
         try:
-            if hasattr(job.created_at, "timestamp") and callable(job.created_at.timestamp):
-                raw_ts = job.created_at.timestamp()
-                if isinstance(raw_ts, (int, float)):
-                    job_created_ts = float(raw_ts)
-            elif hasattr(job.created_at, "tzinfo") and job.created_at.tzinfo is None:
-                import datetime
-                raw_ts = job.created_at.replace(tzinfo=datetime.timezone.utc).timestamp()
-                if isinstance(raw_ts, (int, float)):
-                    job_created_ts = float(raw_ts)
+            ca = raw_created_at
+            if isinstance(ca, (int, float)):
+                val = float(ca)
+                job_created_ts = float(val / 1000.0) if val > 1e11 else val
+            elif isinstance(ca, datetime):
+                if ca.tzinfo is None:
+                    job_created_ts = float(ca.replace(tzinfo=timezone.utc).timestamp())
+                else:
+                    job_created_ts = float(ca.timestamp())
+            elif isinstance(ca, str):
+                from datetime import datetime as dt
+                clean_str = ca.strip()
+                if clean_str.endswith(" UTC"):
+                    clean_str = clean_str[:-4].strip() + "+00:00"
+                elif clean_str.endswith("Z"):
+                    clean_str = clean_str[:-1] + "+00:00"
+                parsed = dt.fromisoformat(clean_str)
+                if parsed.tzinfo is None:
+                    parsed = parsed.replace(tzinfo=timezone.utc)
+                job_created_ts = float(parsed.timestamp())
         except Exception:
             job_created_ts = 0.0
 
-    raw_exec_time = getattr(job, "execution_time_seconds", 0.0)
+    if not isinstance(job_created_ts, (int, float)):
+        job_created_ts = 0.0
+
+    raw_exec_time = getattr(job, "execution_time_seconds", 0.0) if hasattr(job, "execution_time_seconds") else (job.get("execution_time_seconds", 0.0) if isinstance(job, dict) else 0.0)
     try:
         execution_time_seconds = float(raw_exec_time) if raw_exec_time is not None and isinstance(raw_exec_time, (int, float, str)) else 0.0
     except (ValueError, TypeError):
@@ -1525,10 +1662,10 @@ def progress_view(
         (
             "stage_3",
             "03",
-            "AST & Syntax Parsing",
+            "Code Structure Parsing",
             '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>',
             "Parsing source code into concrete syntax trees to extract functions, classes, and statements.",
-            "Extracted concrete syntax trees (CST/AST) and parsed structural import/export declarations.",
+            "Broke the code down into its structural parts and parsed structural import/export declarations.",
         ),
         (
             "stage_4",
@@ -1552,7 +1689,7 @@ def progress_view(
             "Architecture Domain Mapping",
             '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>',
             "Grouping modules into architectural subsystems, core domains, and circular dependency clusters.",
-            "Segmented codebase into architectural tiers, cyclic clusters, and entry-point tiers.",
+            "Grouped the code into levels, including any circular dependencies, and entry-point tiers.",
         ),
         (
             "stage_7",
@@ -1622,7 +1759,7 @@ def progress_view(
     extra_scripts = f"""
     <script>
         const jobId = "{job_id}";
-        const jobStartTime = {job_created_ts * 1000 if job_created_ts > 0 else "Date.now()"};
+        const jobStartTime = {int(job_created_ts * 1000) if job_created_ts > 0 else "Date.now()"};
         const initialJobStatus = "{job_status}";
         const eventSource = new EventSource(`/api/analyses/${{jobId}}/events`);
         const statusHeader = document.getElementById("overall-status");
@@ -1631,7 +1768,10 @@ def progress_view(
         const pctLabel = document.getElementById("percentage-label");
         const progressBar = document.getElementById("progress-fill");
         const logBox = document.getElementById("sse-terminal-log");
+        const activityLogBox = document.getElementById("plain-activity-log");
         const timerElement = document.getElementById("elapsed-timer-text");
+
+        let currentEstRemaining = null;
 
         function formatDuration(totalSeconds) {{
             const mins = Math.floor(totalSeconds / 60);
@@ -1643,7 +1783,11 @@ def progress_view(
             if (!timerElement) return;
             const now = Date.now();
             const elapsedSecs = Math.max(0, Math.floor((now - jobStartTime) / 1000));
-            timerElement.textContent = `Running for ${{formatDuration(elapsedSecs)}}`;
+            if (currentEstRemaining !== null && currentEstRemaining > 0) {{
+                timerElement.textContent = `Running for ${{formatDuration(elapsedSecs)}} (~${{currentEstRemaining}}s remaining)`;
+            }} else {{
+                timerElement.textContent = `Running for ${{formatDuration(elapsedSecs)}}`;
+            }}
         }}
 
         let timerInterval = null;
@@ -1655,6 +1799,56 @@ def progress_view(
         let completedCount = 0;
         const completedStages = new Set();
         const checkmarkSvg = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+
+        function addActivityEntry(stageIndex, totalStages, stageName, message, isComplete=false) {{
+            if (!activityLogBox) return;
+            const existingId = `activity-stage-${{stageIndex}}`;
+            let item = document.getElementById(existingId);
+            if (!item) {{
+                item = document.createElement("div");
+                item.id = existingId;
+                item.style.padding = "0.75rem 1rem";
+                item.style.marginBottom = "0.5rem";
+                item.style.background = "var(--panel-raised)";
+                item.style.border = "1px solid var(--hairline)";
+                item.style.borderRadius = "4px";
+                item.style.display = "flex";
+                item.style.alignItems = "center";
+                item.style.justifyContent = "space-between";
+                item.style.gap = "0.75rem";
+                item.style.transition = "all 0.3s ease";
+                activityLogBox.appendChild(item);
+            }}
+            
+            const badgeClass = isComplete ? "badge-completed" : "badge-free";
+            const badgeBg = isComplete ? "var(--teal-soft)" : "var(--brass-soft)";
+            const badgeColor = isComplete ? "var(--teal)" : "var(--brass)";
+            const badgeBorder = isComplete ? "var(--teal-border)" : "var(--brass-border)";
+            const badgeText = isComplete ? "VERIFIED" : "IN PROGRESS";
+            const iconSvg = isComplete 
+                ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>'
+                : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--brass)" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>';
+
+            item.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 0.75rem; flex: 1;">
+                    <div style="flex-shrink: 0; width: 24px; height: 24px; border-radius: 50%; background: ${{badgeBg}}; border: 1px solid ${{badgeBorder}}; display: flex; align-items: center; justify-content: center;">
+                        ${{iconSvg}}
+                    </div>
+                    <div>
+                        <div style="font-size: 0.875rem; font-weight: 600; color: var(--text-primary);">
+                            Stage ${{stageIndex}} of ${{totalStages}} — ${{stageName}}
+                        </div>
+                        <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.15rem;">
+                            ${{message}}
+                        </div>
+                    </div>
+                </div>
+                <span class="badge ${{badgeClass}}" style="background: ${{badgeBg}}; color: ${{badgeColor}}; border-color: ${{badgeBorder}}; font-size: 0.65rem; padding: 0.2rem 0.5rem;">
+                    ${{badgeText}}
+                </span>
+            `;
+            activityLogBox.scrollTop = activityLogBox.scrollHeight;
+        }}
 
         function addLogEntry(text, type="info") {{
             if (!logBox) return;
@@ -1692,14 +1886,23 @@ def progress_view(
                 
                 if (data.type === "progress") {{
                     const stageKey = data.stage;
+                    const stageIndex = data.stage_index || 1;
+                    const stageTotal = data.stage_total || 11;
+                    const stageName = data.stage_name || stageKey;
                     const message = data.message || "Running...";
                     const pct = data.percentage || 0;
                     
+                    if (data.estimated_remaining_seconds !== undefined && data.estimated_remaining_seconds !== null && Number(data.estimated_remaining_seconds) > 0) {{
+                        currentEstRemaining = Math.round(Number(data.estimated_remaining_seconds));
+                    }}
+
                     if (progressBar) progressBar.style.width = pct + "%";
                     if (pctLabel) pctLabel.textContent = pct + "%";
-                    if (statusDesc) statusDesc.textContent = message;
+                    if (statusDesc) statusDesc.textContent = `Stage ${{stageIndex}} of ${{stageTotal}} — ${{stageName}}`;
 
+                    addActivityEntry(stageIndex, stageTotal, stageName, message, false);
                     addLogEntry(`[STAGE] ${{stageKey}}: ${{message}}`, "active");
+                    updateElapsedTimer();
 
                     const vessel = document.getElementById("icon-vessel-" + stageKey);
                     const body = document.getElementById("body-" + stageKey);
@@ -1721,11 +1924,16 @@ def progress_view(
                     }}
                 }} else if (data.type === "stage_complete") {{
                     const stageKey = data.stage;
+                    const stageIndex = data.stage_index || 1;
+                    const stageTotal = data.stage_total || 11;
+                    const stageName = data.stage_name || stageKey;
+
                     completedStages.add(stageKey);
                     completedCount = completedStages.size;
                     
                     if (stageCounter) stageCounter.textContent = completedCount;
 
+                    addActivityEntry(stageIndex, stageTotal, stageName, "Stage completed successfully.", true);
                     addLogEntry(`[VERIFIED] ${{stageKey}} resolved successfully`, "complete");
 
                     const vessel = document.getElementById("icon-vessel-" + stageKey);
@@ -1754,7 +1962,9 @@ def progress_view(
                         timerInterval = null;
                     }}
                     if (timerElement) {{
-                        const finalSecs = Math.max(0, Math.floor((Date.now() - jobStartTime) / 1000));
+                        const finalSecs = (data.execution_time_seconds !== undefined && data.execution_time_seconds !== null && Number(data.execution_time_seconds) > 0)
+                            ? Math.round(Number(data.execution_time_seconds))
+                            : Math.max(0, Math.floor((Date.now() - jobStartTime) / 1000));
                         timerElement.textContent = `Completed in ${{formatDuration(finalSecs)}}`;
                     }}
                     if (progressBar) progressBar.style.width = "100%";
@@ -1775,7 +1985,9 @@ def progress_view(
                         timerInterval = null;
                     }}
                     if (timerElement) {{
-                        const failSecs = Math.max(0, Math.floor((Date.now() - jobStartTime) / 1000));
+                        const failSecs = (data.execution_time_seconds !== undefined && data.execution_time_seconds !== null && Number(data.execution_time_seconds) > 0)
+                            ? Math.round(Number(data.execution_time_seconds))
+                            : Math.max(0, Math.floor((Date.now() - jobStartTime) / 1000));
                         timerElement.textContent = `Failed after ${{formatDuration(failSecs)}}`;
                     }}
                     if (statusHeader) statusHeader.innerHTML = '<span class="badge badge-failed">ANALYSIS JOB FAILED</span>';
@@ -1844,7 +2056,7 @@ def progress_view(
     <div class="stratum-card" style="margin-bottom: 2rem; position: relative; overflow: hidden;">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem; border-bottom: 1px solid var(--hairline-soft); padding-bottom: 0.75rem;">
             <div style="display: flex; align-items: center; gap: 0.5rem;">
-                <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--brass); font-weight: 600;">// CODE VALIDATION &amp; TIER SYNTHESIS</span>
+                <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--brass); font-weight: 600;">// Analysis in Progress</span>
                 <span style="color: var(--hairline);">/</span>
                 <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--text-tertiary);">REAL-TIME ANALYSIS PIPELINE</span>
             </div>
@@ -1862,11 +2074,11 @@ def progress_view(
 
         <div style="display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 1.25rem; margin-bottom: 1.5rem;">
             <div>
-                <h1 style="font-size: 2rem; font-weight: 500; letter-spacing: -0.02em; margin-bottom: 0.35rem;">
-                    Analysis Job Report: <span style="font-style: italic; color: var(--brass);">Job #{job_id}</span>
-                </h1>
+                <h1 style="font-size: 2rem; font-weight: 500; letter-spacing: -0.02em; margin-bottom: 0.35rem;">Architecture Report: <span style="font-style: italic; color: var(--brass);">{repo_name}</span></h1>
                 <div style="display: flex; align-items: center; gap: 0.75rem; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--text-tertiary); flex-wrap: wrap;">
                     <span>TARGET: <strong style="color: var(--text-secondary);">{repo_url}</strong></span>
+                    <span>&bull;</span>
+                    <span>Job #{job_id}</span>
                     <span>&bull;</span>
                     <span>ENGINE: <strong>11-Layer Reverse Intelligence</strong></span>
                 </div>
@@ -1891,7 +2103,7 @@ def progress_view(
             </div>
             <div style="display: flex; justify-content: space-between; font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--text-tertiary);">
                 <span>S00: AUTH GATE</span>
-                <span>S03: AST PARSE</span>
+                <span>S03: PARSE</span>
                 <span>S06: ARCH DOMAINS</span>
                 <span>S08: GRAPH/QUIZ</span>
                 <span>S10: TELEMETRY</span>
@@ -1899,7 +2111,7 @@ def progress_view(
         </div>
     </div>
 
-    <!-- Main Grid: Timeline Centerpiece with Collapsible Live Diagnostics Drawer -->
+    <!-- Main Grid: Timeline Centerpiece with Live Stage Activity & Collapsible Technical Log -->
     <div style="display: grid; grid-template-columns: 1fr; gap: 2rem; align-items: start;">
         
         <!-- 11-Layer Narrative Timeline Centerpiece -->
@@ -1920,41 +2132,50 @@ def progress_view(
             </div>
         </div>
 
-        <!-- Collapsible Diagnostics & Live Telemetry Drawer -->
+        <!-- Live Stage Activity & Collapsible Diagnostics Drawer -->
         <div class="stratum-card" style="padding: 1.25rem 1.5rem;">
-            <details id="sse-drawer" open style="cursor: pointer;">
-                <summary style="display: flex; justify-content: space-between; align-items: center; list-style: none; user-select: none;">
-                    <div style="display: flex; align-items: center; gap: 0.65rem;">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--brass)" stroke-width="2">
-                            <polyline points="4 17 10 11 4 5"></polyline>
-                            <line x1="12" y1="19" x2="20" y2="19"></line>
-                        </svg>
-                        <h3 style="font-size: 1.05rem; font-weight: 600; margin: 0; color: var(--text-primary);">Live Event Stream Log</h3>
-                    </div>
-                    <div style="display: flex; align-items: center; gap: 0.5rem;">
-                        <span class="chip-dot teal"></span>
-                        <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--teal); font-weight: 600;">STREAM ACTIVE</span>
-                    </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid var(--hairline-soft); padding-bottom: 0.75rem;">
+                <div style="display: flex; align-items: center; gap: 0.65rem;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--brass)" stroke-width="2">
+                        <polyline points="4 17 10 11 4 5"></polyline>
+                        <line x1="12" y1="19" x2="20" y2="19"></line>
+                    </svg>
+                    <h3 style="font-size: 1.05rem; font-weight: 600; margin: 0; color: var(--text-primary);">Live Event Stream Log</h3>
+                </div>
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <span class="chip-dot teal"></span>
+                    <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--teal); font-weight: 600;">STREAM ACTIVE</span>
+                </div>
+            </div>
+
+            <!-- Plain-language stage progress stream -->
+            <div id="plain-activity-log" style="max-height: 280px; overflow-y: auto; margin-bottom: 1rem;">
+                <!-- Real-time readable stage items rendered dynamically -->
+            </div>
+
+            <!-- Technical Raw Log (Default Collapsed) -->
+            <details id="technical-log-drawer" style="cursor: pointer; margin-top: 1rem; border-top: 1px solid var(--hairline-soft); padding-top: 0.75rem;">
+                <summary style="font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--text-tertiary); user-select: none; display: inline-flex; align-items: center; gap: 0.35rem; transition: color 120ms ease;">
+                    <span>&gt; Show technical log</span>
                 </summary>
-
-                <div style="margin-top: 1.25rem; cursor: default;">
-                    <div id="sse-terminal-log" style="background: var(--ink); border: 1px solid var(--hairline); border-radius: 4px; padding: 1rem; height: 180px; overflow-y: auto; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; line-height: 1.5; margin-bottom: 1rem;">
-                        <!-- Real-time events appended here -->
-                    </div>
-
-                    <div style="display: flex; justify-content: space-between; align-items: center; font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--text-tertiary); border-top: 1px solid var(--hairline-soft); padding-top: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
-                        <span>CHANNEL: <strong>/api/analyses/{job_id}/events</strong></span>
-                        <span>DOCKET: <strong>JOB-{job_id}</strong></span>
-                        <span>TENANT SECURITY: <strong style="color: var(--teal);">IDOR VERIFIED</strong></span>
+                <div style="margin-top: 0.75rem; cursor: default;">
+                    <div id="sse-terminal-log" style="background: var(--ink); border: 1px solid var(--hairline); border-radius: 4px; padding: 1rem; height: 160px; overflow-y: auto; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; line-height: 1.5; margin-bottom: 0.75rem;">
+                        <!-- Raw SSE telemetry entries appended here -->
                     </div>
                 </div>
             </details>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--text-tertiary); border-top: 1px solid var(--hairline-soft); padding-top: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
+                <span>CHANNEL: <strong>/api/analyses/{job_id}/events</strong></span>
+                <span>DOCKET: <strong>JOB-{job_id}</strong></span>
+                <span>TENANT SECURITY: <strong style="color: var(--teal);">IDOR VERIFIED</strong></span>
+            </div>
         </div>
 
     </div>
     """
     return page_shell(
-        f"Analysis Progress: Job #{job_id}",
+        f"Architecture Report: {repo_name} (In Progress)",
         content,
         current_user=current_user,
         active_route=f"/progress/{job_id}",
@@ -1992,7 +2213,7 @@ def _parse_report_markdown(raw_markdown: str) -> Dict[str, Any]:
     files_m = re.search(r"\*\*Total Analyzed Files\*\*:\s*`?(\d+)`?", raw_markdown)
     domains_m = re.search(r"\*\*Domain Categories\*\*:\s*`?(\d+)`?", raw_markdown)
     entry_m = re.search(r"\*\*Entry Point Files\*\*:\s*`?([^`\n]+)`?", raw_markdown)
-    cyclic_m = re.search(r"\*\*Cyclic Core Components\*\*:\s*`?(\d+)`?", raw_markdown)
+    cyclic_m = re.search(r"\*\*(?:Cyclic Core Components|Circular Dependency Components)\*\*:\s*`?(\d+)`?", raw_markdown)
     isolated_m = re.search(r"\*\*Isolated / Support Files\*\*:\s*`?(\d+)`?", raw_markdown)
 
     result["overview"] = {
@@ -2040,7 +2261,7 @@ def _parse_report_markdown(raw_markdown: str) -> Dict[str, Any]:
             confidence_badge = badge_m.group(1).strip() if badge_m else ""
             architectural_role = badge_m.group(2).strip() if badge_m else ""
 
-            is_cyclic = "*[CYCLIC CORE]*" in raw_m
+            is_cyclic = "*[CYCLIC CORE]*" in raw_m or "*[CIRCULAR DEPENDENCY]*" in raw_m
             is_isolated = "*[ISOLATED COMPONENT]*" in raw_m
 
             overview_m = re.search(r"\*\*Overview:\*\*\s*(.+?)(?=\n\n\*\*|\n\*\*|\Z)", raw_m, re.DOTALL)
@@ -2107,19 +2328,19 @@ def _render_confidence_badge_with_tooltip(
         level = "high"
         badge_cls = "badge-teal"
         level_title = "HIGH CONFIDENCE"
-        level_desc = "Reconstructed with high certainty using verified leaf-to-root AST import topology and verified Git commit chronology."
+        level_desc = "Reconstructed with high certainty using a clear, verified chain of imports and commit history."
     elif "MEDIUM" in upper_badge:
         level = "medium"
         badge_cls = "badge-amber"
         level_title = "MEDIUM CONFIDENCE"
-        level_desc = "Ordering derived using domain precedence heuristics (config &rarr; database &rarr; core &rarr; endpoints &rarr; tests) or LLM tie-breaking due to identical or absent commit timestamps."
+        level_desc = "Ordering derived using a standard ordering pattern (config, then database, then core logic, then endpoints, then tests) or LLM tie-breaking due to identical or absent commit timestamps."
     else:
         level = "low"
         badge_cls = "badge-brass"
         level_title = "LOW CONFIDENCE"
         level_desc = "Ordering is an educated structural estimate due to cyclic co-dependencies (circular imports), isolated standalone files, or reduced history confidence."
 
-    return f"""<div class="tooltip-container" style="display: inline-flex; align-items: center; position: relative;"><span class="badge {badge_cls}">{clean_badge}</span><button type="button" class="info-icon-btn" aria-label="Confidence scoring explanation" title="Confidence scoring explanation" onclick="event.stopPropagation();">ⓘ</button><div class="confidence-tooltip" role="tooltip"><div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.25rem; display: flex; align-items: center; justify-content: space-between;"><span>Sequence Confidence</span><span class="badge {badge_cls}" style="font-size: 0.58rem; padding: 0.1rem 0.35rem;">{level_title}</span></div><div style="color: var(--text-secondary); font-size: 0.72rem; margin-bottom: 0.35rem; line-height: 1.4;">{level_desc}</div><div style="border-top: 1px solid var(--hairline-soft); padding-top: 0.35rem; font-size: 0.6875rem; color: var(--text-tertiary); line-height: 1.4;"><div>&bull; <strong style="color: var(--teal);">High:</strong> Strict AST imports &amp; verified commit history</div><div>&bull; <strong style="color: var(--amber);">Medium:</strong> Domain heuristics &amp; LLM tie-breaking</div><div>&bull; <strong style="color: var(--crimson);">Low:</strong> Cyclic clusters, isolated files, squashed history</div></div></div></div>"""
+    return f"""<div class="tooltip-container" style="display: inline-flex; align-items: center; position: relative;"><span class="badge {badge_cls}">{clean_badge}</span><button type="button" class="info-icon-btn" aria-label="Confidence scoring explanation" title="Confidence scoring explanation" onclick="event.stopPropagation();">ⓘ</button><div class="confidence-tooltip" role="tooltip"><div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.25rem; display: flex; align-items: center; justify-content: space-between;"><span>Sequence Confidence</span><span class="badge {badge_cls}" style="font-size: 0.58rem; padding: 0.1rem 0.35rem;">{level_title}</span></div><div style="color: var(--text-secondary); font-size: 0.72rem; margin-bottom: 0.35rem; line-height: 1.4;">{level_desc}</div><div style="border-top: 1px solid var(--hairline-soft); padding-top: 0.35rem; font-size: 0.6875rem; color: var(--text-tertiary); line-height: 1.4;"><div>&bull; <strong style="color: var(--teal);">High:</strong> Verified imports and commit history</div><div>&bull; <strong style="color: var(--amber);">Medium:</strong> Estimated from common code patterns</div><div>&bull; <strong style="color: var(--crimson);">Low:</strong> Circular dependencies, standalone files, or unclear history</div></div></div></div>"""
 
 
 def _render_confidence_info_icon(level: str = "high") -> str:
@@ -2128,17 +2349,86 @@ def _render_confidence_info_icon(level: str = "high") -> str:
     if lvl == "high":
         badge_cls = "badge-teal"
         level_title = "HIGH CONFIDENCE"
-        level_desc = "Reconstructed with high certainty using verified leaf-to-root AST import topology and verified Git commit chronology."
+        level_desc = "Reconstructed with high certainty using a clear, verified chain of imports and commit history."
     elif lvl == "medium":
         badge_cls = "badge-amber"
         level_title = "MEDIUM CONFIDENCE"
-        level_desc = "Ordering derived using domain precedence heuristics (config &rarr; database &rarr; core &rarr; endpoints &rarr; tests) or LLM tie-breaking due to identical or absent commit timestamps."
+        level_desc = "Ordering derived using a standard ordering pattern (config, then database, then core logic, then endpoints, then tests) or LLM tie-breaking due to identical or absent commit timestamps."
     else:
         badge_cls = "badge-brass"
         level_title = "LOW CONFIDENCE"
         level_desc = "Ordering is an educated structural estimate due to cyclic co-dependencies (circular imports), isolated standalone files, or reduced history confidence."
 
-    return f"""<div class="tooltip-container" style="display: inline-flex; align-items: center; position: relative;"><button type="button" class="info-icon-btn" aria-label="Confidence scoring explanation" title="Confidence scoring explanation" onclick="event.stopPropagation();">ⓘ</button><div class="confidence-tooltip" role="tooltip"><div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.25rem; display: flex; align-items: center; justify-content: space-between;"><span>Sequence Confidence</span><span class="badge {badge_cls}" style="font-size: 0.58rem; padding: 0.1rem 0.35rem;">{level_title}</span></div><div style="color: var(--text-secondary); font-size: 0.72rem; margin-bottom: 0.35rem; line-height: 1.4;">{level_desc}</div><div style="border-top: 1px solid var(--hairline-soft); padding-top: 0.35rem; font-size: 0.6875rem; color: var(--text-tertiary); line-height: 1.4;"><div>&bull; <strong style="color: var(--teal);">High:</strong> Strict AST imports &amp; verified commit history</div><div>&bull; <strong style="color: var(--amber);">Medium:</strong> Domain heuristics &amp; LLM tie-breaking</div><div>&bull; <strong style="color: var(--crimson);">Low:</strong> Cyclic clusters, isolated files, squashed history</div></div></div></div>"""
+    return f"""<div class="tooltip-container" style="display: inline-flex; align-items: center; position: relative;"><button type="button" class="info-icon-btn" aria-label="Confidence scoring explanation" title="Confidence scoring explanation" onclick="event.stopPropagation();">ⓘ</button><div class="confidence-tooltip" role="tooltip"><div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.25rem; display: flex; align-items: center; justify-content: space-between;"><span>Sequence Confidence</span><span class="badge {badge_cls}" style="font-size: 0.58rem; padding: 0.1rem 0.35rem;">{level_title}</span></div><div style="color: var(--text-secondary); font-size: 0.72rem; margin-bottom: 0.35rem; line-height: 1.4;">{level_desc}</div><div style="border-top: 1px solid var(--hairline-soft); padding-top: 0.35rem; font-size: 0.6875rem; color: var(--text-tertiary); line-height: 1.4;"><div>&bull; <strong style="color: var(--teal);">High:</strong> Verified imports and commit history</div><div>&bull; <strong style="color: var(--amber);">Medium:</strong> Estimated from common code patterns</div><div>&bull; <strong style="color: var(--crimson);">Low:</strong> Circular dependencies, standalone files, or unclear history</div></div></div></div>"""
+
+
+def _truncate_path_middle(path: str, max_len: int = 28) -> str:
+    """
+    Truncates a file path from the middle with '...' so both the repo root prefix
+    and the filename tail remain visible and identifiable.
+    """
+    if not path or len(path) <= max_len:
+        return path
+    if max_len <= 3:
+        return path[:max_len]
+    available = max_len - 3
+    head_len = available // 2
+    tail_len = available - head_len
+    return f"{path[:head_len]}...{path[-tail_len:]}"
+
+
+def _render_grouped_fill_chips(
+    blanked_functions: List[Dict[str, Any]],
+    fallback_reason: Optional[str] = None,
+) -> str:
+    """Renders Fill the Blanks target function chips grouped by class/module with auto-collapsing for large lists."""
+    if not blanked_functions:
+        reason_text = html.escape(fallback_reason or "File contains no function bodies to blank.")
+        return f'<span style="font-size: 0.75rem; color: var(--text-tertiary); font-style: italic;">{reason_text}</span>'
+
+    total_count = len(blanked_functions)
+    should_collapse = total_count > 15
+
+    group_order: List[str] = []
+    groups: Dict[str, Dict[str, Any]] = {}
+
+    for bf in blanked_functions:
+        class_name = bf.get("class_name") or ""
+        group_key = class_name if class_name else "__toplevel__"
+        if group_key not in groups:
+            groups[group_key] = {
+                "class_name": class_name,
+                "is_class": bool(class_name),
+                "items": [],
+            }
+            group_order.append(group_key)
+        groups[group_key]["items"].append(bf)
+
+    html_parts = []
+    for key in group_order:
+        g = groups[key]
+        count = len(g["items"])
+        group_title = f"class {html.escape(g['class_name'])}" if g["is_class"] else "Top-level Functions"
+        count_label = f"{count} {'method' if count == 1 else 'methods'}" if g["is_class"] else f"{count} {'function' if count == 1 else 'functions'}"
+        icon = "🏛️" if g["is_class"] else "📁"
+
+        chips_html = "".join([
+            f'<span class="mono" title="{html.escape(bf.get("full_name", bf.get("name", "")))}()" style="display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.15rem 0.45rem; background: var(--panel-raised); border: 1px solid var(--hairline); border-radius: 3px; font-size: 0.72rem; color: var(--teal);">🧩 {html.escape(bf.get("name", ""))}</span> '
+            for bf in g["items"]
+        ])
+
+        open_attr = "" if should_collapse else " open"
+        html_parts.append(
+            f'<details{open_attr} class="fill-chip-group" style="margin-bottom: 0.4rem; background: var(--panel); border: 1px solid var(--hairline); border-radius: 4px; padding: 0.35rem 0.6rem;">'
+            f'<summary style="cursor: pointer; font-family: \'IBM Plex Mono\', monospace; font-size: 0.72rem; font-weight: 600; color: var(--text-secondary); user-select: none; display: flex; align-items: center; justify-content: space-between;">'
+            f'<span>{icon} {group_title} <span style="opacity: 0.7; font-weight: normal; font-size: 0.6875rem;">({count_label})</span></span>'
+            f'<span style="font-size: 0.65rem; color: var(--text-tertiary);">▾</span>'
+            f'</summary>'
+            f'<div style="display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.4rem; padding-top: 0.35rem; border-top: 1px solid var(--hairline-soft);">{chips_html}</div>'
+            f'</details>'
+        )
+
+    return "".join(html_parts)
 
 
 def _render_server_diff_html(
@@ -2168,8 +2458,10 @@ def _render_server_diff_html(
         tier_tag = '<span class="badge badge-teal" style="font-size: 0.65rem; letter-spacing: 0.04em;">TIER 1 // REAL REPO TEST SUITE</span>'
     elif grading_method == "expected_output":
         tier_tag = '<span class="badge badge-amber" style="font-size: 0.65rem; letter-spacing: 0.04em;">TIER 2 // EXPECTED OUTPUT</span>'
+    elif grading_method == "fill_the_blanks":
+        tier_tag = '<span class="badge badge-teal" style="font-size: 0.65rem; letter-spacing: 0.04em;">TIER 3 // FILL THE BLANKS (SCOPED EVALUATION)</span>'
     else:
-        tier_tag = '<span class="badge badge-brass" style="font-size: 0.65rem; letter-spacing: 0.04em;">TIER 3 // STATIC AST DIFF</span>'
+        tier_tag = '<span class="badge badge-brass" style="font-size: 0.65rem; letter-spacing: 0.04em;">TIER 3 // Structure Comparison</span>'
 
     if is_verified:
         banner = f"""
@@ -2191,6 +2483,51 @@ def _render_server_diff_html(
         """
 
     err_html = f"""<div style="color: var(--crimson); font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; margin-bottom: 0.5rem; background: rgba(244,63,94,0.08); padding: 0.5rem; border-radius: 3px;">{sanitize_text(err_msg)}</div>""" if err_msg else ""
+
+    # Check for Fill the Blanks grading results specially
+    blank_details = verification.get("blank_details", [])
+    if grading_method == "fill_the_blanks" or blank_details or "blanked_evaluated" in verification:
+        blanked_count = verification.get("blanked_evaluated", len(blank_details))
+        implemented_count = verification.get("implemented_count", sum(1 for b in blank_details if b.get("status") == "implemented"))
+        implemented_pills = ""
+        stub_pills = ""
+        for b in blank_details:
+            name = sanitize_text(b.get("name", "function"))
+            if b.get("status") == "implemented":
+                implemented_pills += f"""<span style="display: inline-flex; align-items: center; gap: 0.3rem; background: rgba(45, 212, 191, 0.12); border: 1px solid var(--teal-border); color: var(--teal); padding: 0.2rem 0.5rem; border-radius: 3px; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem;">✓ {name}() <span style="opacity: 0.75; font-size: 0.6875rem;">(implemented)</span></span> """
+            else:
+                reason = sanitize_text(b.get("reason", "unimplemented stub"))
+                stub_pills += f"""<span style="display: inline-flex; align-items: center; gap: 0.3rem; background: rgba(244, 63, 94, 0.12); border: 1px solid rgba(244, 63, 94, 0.35); color: var(--crimson); padding: 0.2rem 0.5rem; border-radius: 3px; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem;">✗ {name}() <span style="opacity: 0.75; font-size: 0.6875rem;">({reason})</span></span> """
+
+        is_all_done = (implemented_count == blanked_count and blanked_count > 0)
+        fill_summary = f"{implemented_count}/{blanked_count} functions completed" + (" ✓" if is_all_done else "")
+        fill_sections_html = f"""<div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.4rem;">Scoped blanks evaluated: <strong>{implemented_count} / {blanked_count}</strong> completed.</div>"""
+        if implemented_pills:
+            fill_sections_html += f"""
+            <details class="matched-symbols-collapse" style="background: var(--panel); border: 1px solid var(--teal-border); border-radius: 4px; padding: 0.45rem 0.75rem; margin-bottom: 0.4rem;">
+                <summary style="cursor: pointer; font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem; font-weight: 600; color: var(--teal); display: flex; align-items: center; justify-content: space-between; user-select: none;">
+                    <span>IMPLEMENTED BLANKS ({fill_summary}):</span>
+                    <span style="font-size: 0.6875rem; opacity: 0.85; font-weight: normal;">View list ▾</span>
+                </summary>
+                <div style="display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.5rem; padding-top: 0.4rem; border-top: 1px solid var(--hairline-soft);">
+                    {implemented_pills}
+                </div>
+            </details>
+            """
+        if stub_pills:
+            fill_sections_html += f"""
+            <div style="background: rgba(244, 63, 94, 0.06); border: 1px solid rgba(244, 63, 94, 0.25); border-radius: 4px; padding: 0.45rem 0.75rem; margin-bottom: 0.4rem;">
+                <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--crimson); font-weight: 600; margin-bottom: 0.35rem;">UNIMPLEMENTED / STUB BLANKS:</div>
+                <div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">{stub_pills}</div>
+            </div>
+            """
+        return f"""
+        {banner}
+        {err_html}
+        <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem;">
+            {fill_sections_html}
+        </div>
+        """
 
     present_pills = ""
     for s in present_syms:
@@ -2214,25 +2551,34 @@ def _render_server_diff_html(
         kind = sanitize_text(s.get("kind", "extra") if isinstance(s, dict) else "extra")
         extra_pills += f"""<span style="display: inline-flex; align-items: center; gap: 0.3rem; background: var(--panel-raised); border: 1px solid var(--hairline); color: var(--text-secondary); padding: 0.2rem 0.5rem; border-radius: 3px; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem;">+ {name} <span style="opacity: 0.75; font-size: 0.6875rem;">({kind})</span></span> """
 
+    total_expected = len(present_syms) + len(missing_syms)
+    is_all_matched = (len(missing_syms) == 0 and total_expected > 0)
+    matched_summary_str = f"{len(present_syms)}/{total_expected} symbols matched" + (" ✓" if is_all_matched else "") if total_expected > 0 else f"{len(present_syms)} matched"
+
     sections_html = ""
     if present_pills:
         sections_html += f"""
-        <div>
-            <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--teal); font-weight: 600; margin-bottom: 0.25rem;">PRESENT &amp; MATCHED SYMBOLS ({len(present_syms)}):</div>
-            <div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">{present_pills}</div>
-        </div>
+        <details class="matched-symbols-collapse" style="background: var(--panel); border: 1px solid var(--teal-border); border-radius: 4px; padding: 0.45rem 0.75rem; margin-bottom: 0.4rem;">
+            <summary style="cursor: pointer; font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem; font-weight: 600; color: var(--teal); display: flex; align-items: center; justify-content: space-between; user-select: none;">
+                <span>PRESENT &amp; MATCHED SYMBOLS ({matched_summary_str}):</span>
+                <span style="font-size: 0.6875rem; opacity: 0.85; font-weight: normal;">View list ▾</span>
+            </summary>
+            <div style="display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.5rem; padding-top: 0.4rem; border-top: 1px solid var(--hairline-soft);">
+                {present_pills}
+            </div>
+        </details>
         """
     if missing_pills:
         sections_html += f"""
-        <div>
-            <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--crimson); font-weight: 600; margin-bottom: 0.25rem;">MISSING EXPECTED SYMBOLS ({len(missing_syms)}):</div>
+        <div style="background: rgba(244, 63, 94, 0.06); border: 1px solid rgba(244, 63, 94, 0.25); border-radius: 4px; padding: 0.45rem 0.75rem; margin-bottom: 0.4rem;">
+            <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--crimson); font-weight: 600; margin-bottom: 0.35rem;">MISSING EXPECTED SYMBOLS ({len(missing_syms)}):</div>
             <div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">{missing_pills}</div>
         </div>
         """
     if extra_pills:
         sections_html += f"""
-        <div>
-            <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--text-tertiary); font-weight: 600; margin-bottom: 0.25rem;">EXTRA / AUXILIARY SYMBOLS ({len(extra_syms)}):</div>
+        <div style="background: var(--panel); border: 1px solid var(--hairline); border-radius: 4px; padding: 0.45rem 0.75rem; margin-bottom: 0.4rem;">
+            <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--text-tertiary); font-weight: 600; margin-bottom: 0.35rem;">EXTRA / AUXILIARY SYMBOLS ({len(extra_syms)}):</div>
             <div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">{extra_pills}</div>
         </div>
         """
@@ -2294,6 +2640,7 @@ def report_view(
     billing_status: Optional[Dict[str, Any]] = None,
     attempts_by_tier: Optional[Dict[int, Any]] = None,
     file_contents: Optional[Dict[str, str]] = None,
+    redacted_files: Optional[Set[str]] = None,
 ) -> str:
     """
     Render the Archival Dossier Report View.
@@ -2305,10 +2652,14 @@ def report_view(
     except (ValueError, TypeError, AttributeError):
         job_id = 0
     repo_url = sanitize_text(getattr(job, "repo_url", "") if hasattr(job, "repo_url") else (job.get("repo_url", "") if isinstance(job, dict) else ""))
-    repo_name = sanitize_text(job.repo_name or (job.repo_url.rstrip("/").split("/")[-1] if "/" in job.repo_url else job.repo_url))
-    created_at = sanitize_text(job.created_at.strftime("%Y-%m-%d %H:%M:%S UTC") if hasattr(job.created_at, "strftime") else str(job.created_at))
-    duration = f"{job.execution_time_seconds:.1f}s" if job.execution_time_seconds else "Completed"
-    run_id = sanitize_text(job.run_id or f"run_{job_id}")
+    raw_repo_name = getattr(job, "repo_name", None) if hasattr(job, "repo_name") else (job.get("repo_name") if isinstance(job, dict) else None)
+    repo_name = sanitize_text(raw_repo_name or (repo_url.rstrip("/").split("/")[-1] if "/" in repo_url else repo_url))
+    raw_created_at = getattr(job, "created_at", None) if hasattr(job, "created_at") else (job.get("created_at") if isinstance(job, dict) else None)
+    created_at = sanitize_text(raw_created_at.strftime("%Y-%m-%d %H:%M:%S UTC") if hasattr(raw_created_at, "strftime") else str(raw_created_at or ""))
+    exec_time = getattr(job, "execution_time_seconds", None) if hasattr(job, "execution_time_seconds") else (job.get("execution_time_seconds") if isinstance(job, dict) else None)
+    duration = f"{exec_time:.1f}s" if exec_time else "Completed"
+    raw_run_id = getattr(job, "run_id", None) if hasattr(job, "run_id") else (job.get("run_id") if isinstance(job, dict) else None)
+    run_id = sanitize_text(raw_run_id or f"run_{job_id}")
 
     parsed_md = _parse_report_markdown(raw_markdown)
     overview_data = parsed_md.get("overview", {})
@@ -2332,35 +2683,112 @@ def report_view(
     isolated_count = overview_data.get("isolated_files", 0)
     total_tiers = len(set(n.get("tier", 0) for n in nodes)) if nodes else (len(milestones_data) or 1)
 
-    entry_chips_html = ""
+    # Build node domain mapping from graph nodes
+    node_domain_map: Dict[str, str] = {}
+    for n in nodes:
+        nid = n.get("id") or n.get("path") or n.get("name")
+        if nid:
+            node_domain_map[str(nid)] = str(n.get("domain", n.get("type", ""))).lower()
+
+    app_entry_points: List[str] = []
+    test_entry_points: List[str] = []
     for ep in entry_points:
+        dom = node_domain_map.get(ep, "")
+        ep_lower = ep.lower()
+        if dom in ("tests", "benchmarks") or "/test" in ep_lower or "test_" in ep_lower or "_test." in ep_lower or "tests." in ep_lower or "bench" in ep_lower:
+            test_entry_points.append(ep)
+        else:
+            app_entry_points.append(ep)
+
+    app_chips_html = ""
+    for ep in app_entry_points:
         safe_ep = sanitize_text(ep)
-        entry_chips_html += f"""
-        <div class="entry-chip">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--brass);">
-                <polygon points="5 3 19 12 5 21 5 3"></polygon>
-            </svg>
-            <span class="mono" style="font-size: 0.75rem; color: var(--text-primary);">{safe_ep}</span>
+        app_chips_html += f"""
+        <div class="entry-chip" onclick="switchReportTab('graph'); setTimeout(function() {{ selectDagNode('{safe_ep}'); }}, 50);" role="button" tabindex="0" title="Inspect application entry point in dependency graph" style="cursor: pointer; display: flex; align-items: center; justify-content: space-between;">
+            <div style="display: flex; align-items: center; gap: 0.4rem; overflow: hidden;">
+                <span class="entry-chip-arrow">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--teal); pointer-events: none;">
+                        <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                    </svg>
+                </span>
+                <span class="mono" style="font-size: 0.75rem; color: var(--text-primary); text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">{safe_ep}</span>
+            </div>
+            <span class="badge badge-teal" style="font-size: 0.58rem; padding: 0.05rem 0.3rem; flex-shrink: 0;">MAIN/APP</span>
         </div>
         """
-    if not entry_chips_html:
-        entry_chips_html = '<span style="font-size: 0.8125rem; color: var(--text-tertiary);">No distinct external entry points detected</span>'
+    if not app_chips_html:
+        app_chips_html = '<span style="font-size: 0.75rem; color: var(--text-tertiary); font-style: italic;">No application entry points detected</span>'
+
+    test_chips_html = ""
+    for ep in test_entry_points:
+        safe_ep = sanitize_text(ep)
+        badge_lbl = "BENCHMARK" if "bench" in safe_ep.lower() else "TEST RUNNER"
+        test_chips_html += f"""
+        <div class="entry-chip" onclick="switchReportTab('graph'); setTimeout(function() {{ selectDagNode('{safe_ep}'); }}, 50);" role="button" tabindex="0" title="Inspect test/benchmark runner in dependency graph" style="cursor: pointer; display: flex; align-items: center; justify-content: space-between;">
+            <div style="display: flex; align-items: center; gap: 0.4rem; overflow: hidden;">
+                <span class="entry-chip-arrow">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--brass); pointer-events: none;">
+                        <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                    </svg>
+                </span>
+                <span class="mono" style="font-size: 0.75rem; color: var(--text-primary); text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">{safe_ep}</span>
+            </div>
+            <span class="badge badge-brass" style="font-size: 0.58rem; padding: 0.05rem 0.3rem; flex-shrink: 0;">{badge_lbl}</span>
+        </div>
+        """
+
+    if test_entry_points:
+        test_section_html = f"""
+        <div style="border-top: 1px solid var(--hairline-soft); padding-top: 0.65rem; margin-top: 0.65rem;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.35rem;">
+                <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; font-weight: 600; color: var(--brass); text-transform: uppercase; letter-spacing: 0.04em;">
+                    Test &amp; Benchmark Runners ({len(test_entry_points)})
+                </span>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 0.35rem;">
+                {test_chips_html}
+            </div>
+        </div>
+        """
+    else:
+        test_section_html = ""
+
+    entry_tray_body_html = f"""
+    <div style="margin-bottom: 0.5rem;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.35rem;">
+            <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; font-weight: 600; color: var(--teal); text-transform: uppercase; letter-spacing: 0.04em;">
+                Application Entry Targets ({len(app_entry_points)})
+            </span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 0.35rem;">
+            {app_chips_html}
+        </div>
+    </div>
+    {test_section_html}
+    """ if entry_points else '<span style="font-size: 0.8125rem; color: var(--text-tertiary);">No distinct external entry points detected</span>'
+
+    entry_kpi_sub = f"{len(app_entry_points)} App &bull; {len(test_entry_points)} Test/Tools" if entry_points else "0 App &bull; 0 Test/Tools"
 
     # Domain Distribution Bars
     domain_bars_html = ""
     for d in domain_dist:
+        raw_d_name = str(d.get("domain", "")).lower()
         d_name = sanitize_text(d["domain"]).upper()
         d_count = d["count"]
         d_pct = sanitize_text(d["percentage"])
         pct_val = float(d["percentage"].replace("%", "")) if "%" in d["percentage"] else 0
+        d_color = DOMAIN_HEX_COLORS.get(raw_d_name, "#9CA3AF")
         domain_bars_html += f"""
         <div style="margin-bottom: 0.85rem;">
             <div style="display: flex; justify-content: space-between; font-size: 0.75rem; font-family: 'IBM Plex Mono', monospace; margin-bottom: 0.25rem;">
-                <span style="color: var(--text-primary); font-weight: 600;">{d_name}</span>
+                <span style="color: var(--text-primary); font-weight: 600; display: flex; align-items: center; gap: 0.4rem;">
+                    <span style="display: inline-block; width: 7px; height: 7px; border-radius: 2px; background: {d_color}; flex-shrink: 0;"></span>
+                    {d_name}
+                </span>
                 <span style="color: var(--text-secondary);">{d_count} files ({d_pct})</span>
             </div>
             <div style="height: 6px; background: var(--panel-raised); border-radius: 3px; overflow: hidden; border: 1px solid var(--hairline-soft);">
-                <div style="width: {pct_val}%; height: 100%; background: var(--brass); border-radius: 3px;"></div>
+                <div style="width: {pct_val}%; height: 100%; background: {d_color}; border-radius: 3px;"></div>
             </div>
         </div>
         """
@@ -2429,14 +2857,14 @@ def report_view(
         overall_conf_label = "HIGH"
         overall_conf_val = "high"
         overall_conf_color = "var(--teal)"
-        conf_sub_text = "Verified AST Topology"
+        conf_sub_text = "Verified Structure"
 
     overview_section_html = f"""
     <div class="stratum-card" id="section-overview" style="margin-bottom: 2rem;">
         <div class="card-header">
             <div>
                 <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--brass); text-transform: uppercase; letter-spacing: 0.05em;">
-                    Section 01 // Architectural Synthesis Tier
+                    Section 01 // Codebase Overview
                 </div>
                 <h2 style="font-size: 1.45rem; font-weight: 500; margin-top: 0.15rem;">Codebase Architecture Overview</h2>
             </div>
@@ -2474,7 +2902,7 @@ def report_view(
             <div class="kpi-card">
                 <div class="kpi-label">ENTRY POINTS</div>
                 <div class="kpi-value" style="color: var(--amber);">{len(entry_points)}</div>
-                <div class="kpi-sub">Application Targets</div>
+                <div class="kpi-sub">{entry_kpi_sub}</div>
             </div>
             <div class="kpi-card">
                 <div class="kpi-label">GRAPH DEPENDENCIES</div>
@@ -2491,10 +2919,10 @@ def report_view(
         <!-- Invariant Pull-Quote Memo Callout -->
         <div class="dossier-pullquote" style="margin: 1.25rem 0; padding: 1.15rem 1.35rem; background: var(--panel); border: 1px solid var(--hairline); border-left: 3px solid var(--brass); border-radius: 4px;">
             <div style="font-family: 'Newsreader', Georgia, serif; font-style: italic; font-size: 1.05rem; color: var(--text-primary); line-height: 1.5; margin-bottom: 0.4rem;">
-                &ldquo;Topologically ordered leaf-to-root architectural synthesis computed from static CST/AST parsing and cross-module import analysis.&rdquo;
+                &ldquo;Files are ordered from foundational building blocks up to the code that depends on them, based on how the code actually imports and calls into itself.&rdquo;
             </div>
             <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--text-tertiary);">
-                Verified Architecture Summary &bull; ISOLATED FILES: {isolated_count} &bull; CYCLIC CLUSTERS: {cyclic_count}
+                Verified Architecture Summary &bull; STANDALONE FILES: {isolated_count} &bull; CIRCULAR DEPENDENCIES: {cyclic_count}
             </div>
         </div>
 
@@ -2508,9 +2936,7 @@ def report_view(
                     </span>
                     <span class="chip" style="font-size: 0.625rem;">ROOT TIERS</span>
                 </div>
-                <div style="display: flex; flex-direction: column; gap: 0.4rem;">
-                    {entry_chips_html}
-                </div>
+                {entry_tray_body_html}
             </div>
 
             <!-- Domain Distribution -->
@@ -2605,7 +3031,7 @@ def report_view(
 
                 node_label = sanitize_text(raw_label)
                 full_node_path = sanitize_text(raw_path)
-                node_path = sanitize_text(raw_path[-28:])
+                node_path = sanitize_text(_truncate_path_middle(raw_path, 28))
                 node_domain = sanitize_text(raw_domain[:7])
                 confidence = sanitize_text(str(node.get("confidence", "high"))).lower()
                 conf_color = "var(--teal)" if confidence == "high" else ("var(--amber)" if confidence == "medium" else "var(--brass)")
@@ -2688,23 +3114,11 @@ def report_view(
             """
 
         # Distinct Domain and Confidence Tag Extraction for Dynamic Legend
-        domain_color_defs = {
-            "core": ("#3B82F6", "core application code"),
-            "backend": ("#10B981", "backend & API services"),
-            "frontend": ("#8B5CF6", "UI & client components"),
-            "database": ("#F59E0B", "database & data models"),
-            "tests": ("#6B7280", "test files & suites"),
-            "config": ("#EC4899", "configuration & setup"),
-            "docs": ("#14B8A6", "documentation assets"),
-            "build": ("#F97316", "build & bundling scripts"),
-            "devops": ("#6366F1", "DevOps & CI/CD workflows"),
-            "examples": ("#84CC16", "examples & tutorials"),
-            "uncategorized": ("#9CA3AF", "general modules"),
-        }
+        domain_color_defs = DOMAIN_COLOR_DEFS
 
         confidence_legend_defs = {
-            "high": ("var(--teal)", "high confidence (strict AST / Git history)"),
-            "medium": ("var(--amber)", "medium confidence (domain heuristics)"),
+            "high": ("var(--teal)", "high confidence (clear structure or history)"),
+            "medium": ("var(--amber)", "medium confidence (estimated pattern)"),
             "low": ("var(--crimson)", "low confidence (cyclic / isolated)"),
         }
 
@@ -2770,7 +3184,7 @@ def report_view(
             </div>
 
             <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1rem; line-height: 1.5;">
-                Computed from static AST syntax tree parsing and cross-module import resolution. Nodes represent decomposed compilation modules grouped horizontally by milestone tier (leaf-to-root).
+                Built from analyzing the code's structure and how files import each other. Each box is a file, arranged left-to-right from foundational code to code that depends on it.
             </p>
 
             <!-- Graph Interactive Toolbar -->
@@ -2961,17 +3375,41 @@ def report_view(
                     h2_text = "Specific missing contracts and files available."
                     h2_style = "display: block;"
 
-            # Pre-render Reference Implementation if revealed
+            # Pre-render Reference Implementation if revealed (Part B & C)
             ref_code_rendered = ""
             ref_style = "display: none;"
             if impl_revealed:
-                try:
-                    ref_data = HintEngine.get_reference_implementation(graph_data or {}, m_tier)
-                    ref_code_rendered = html.escape(ref_data.get("reference_code", ""))
-                    ref_style = "display: block;"
-                except Exception:
-                    ref_code_rendered = "# Reference implementation available."
-                    ref_style = "display: block;"
+                from app.services.file_content_service import FileContentService, SOURCE_NOT_AVAILABLE_MESSAGE
+                ref_pieces = []
+                if m_files:
+                    for f_path in m_files:
+                        c = FileContentService.find_matching_file_content(file_contents or {}, f_path)
+                        if not c and graph_data and "nodes" in graph_data:
+                            for n in graph_data.get("nodes", []):
+                                n_path = n.get("path") or n.get("id") or ""
+                                if n_path == f_path or n_path.endswith(f_path) or f_path.endswith(n_path):
+                                    if n.get("source_code") or n.get("content"):
+                                        c = n.get("source_code") or n.get("content")
+                                        break
+                        if c:
+                            ref_pieces.append((f_path, c))
+
+                if ref_pieces:
+                    if len(ref_pieces) == 1:
+                        ref_code_rendered = html.escape(ref_pieces[0][1])
+                    else:
+                        ref_code_rendered = html.escape(
+                            "\n\n".join(
+                                f"# ====================================================================\n"
+                                f"# File: {p}\n"
+                                f"# ====================================================================\n"
+                                f"{c}"
+                                for p, c in ref_pieces
+                            )
+                        )
+                else:
+                    ref_code_rendered = html.escape(SOURCE_NOT_AVAILABLE_MESSAGE)
+                ref_style = "display: block;"
 
             # Hint button text & state
             if hint_level == 0:
@@ -2984,9 +3422,9 @@ def report_view(
                 hint_btn_text = "Hints Unlocked (2/2)"
                 hint_btn_disabled = "disabled"
 
-            hint_btn_display = "display: inline-flex;" if is_active_attempt else "display: none;"
+            hint_btn_display = "display: inline-flex;"
             reveal_btn_display = "display: inline-flex;" if is_active_attempt else "display: none;"
-            locked_notice_display = "display: none;" if is_active_attempt else "display: inline-flex;"
+            locked_notice_display = "display: none;"
             reveal_btn_text = "Reference Revealed" if impl_revealed else "Reveal Implementation"
 
             # Pre-rendered Diff output if attempt has previous submitted code
@@ -3069,21 +3507,18 @@ def report_view(
                 </div>
                 """
 
-            # Prepare read-only file contents for "Just Read It" mode
+            # Prepare read-only file contents for "Just Read It" mode (Part B & C)
             read_files_data = []
+            from app.services.file_content_service import FileContentService, SOURCE_NOT_AVAILABLE_MESSAGE
             if m_files:
                 for idx, f_path in enumerate(m_files):
                     f_content = ""
+                    has_real_source = False
                     if file_contents:
-                        if f_path in file_contents:
-                            f_content = file_contents[f_path]
-                        else:
-                            norm_f = f_path.replace("\\", "/").strip("/")
-                            for k, v in file_contents.items():
-                                norm_k = k.replace("\\", "/").strip("/")
-                                if norm_k == norm_f or norm_k.endswith("/" + norm_f) or norm_f.endswith("/" + norm_k):
-                                    f_content = v
-                                    break
+                        matched = FileContentService.find_matching_file_content(file_contents, f_path)
+                        if matched:
+                            f_content = matched
+                            has_real_source = True
 
                     if not f_content and graph_data and "nodes" in graph_data:
                         for n in graph_data.get("nodes", []):
@@ -3091,36 +3526,29 @@ def report_view(
                             if n_path == f_path or n_path.endswith(f_path) or f_path.endswith(n_path):
                                 if n.get("source_code"):
                                     f_content = n.get("source_code")
+                                    has_real_source = True
                                     break
                                 elif n.get("content"):
                                     f_content = n.get("content")
+                                    has_real_source = True
                                     break
 
                     if not f_content:
-                        try:
-                            ref_info = HintEngine.get_reference_implementation(graph_data or {}, m_tier)
-                            f_content = ref_info.get("reference_code", "")
-                        except Exception:
-                            f_content = ""
-
-                    if not f_content:
-                        f_content = f"# Milestone {m_tier} implementation: {f_path}\n# No source content available in repository snapshot."
+                        f_content = SOURCE_NOT_AVAILABLE_MESSAGE
+                        has_real_source = False
 
                     read_files_data.append({
                         "path": f_path,
                         "filename": f_path.replace("\\", "/").split("/")[-1],
                         "content": f_content,
+                        "has_real_source": has_real_source,
                     })
             else:
-                try:
-                    ref_info = HintEngine.get_reference_implementation(graph_data or {}, m_tier)
-                    default_code = ref_info.get("reference_code", "# Reference implementation")
-                except Exception:
-                    default_code = f"# Milestone {m_tier} reference implementation"
                 read_files_data.append({
                     "path": f"milestone_{m_tier}_implementation.py",
                     "filename": f"milestone_{m_tier}_implementation.py",
-                    "content": default_code,
+                    "content": SOURCE_NOT_AVAILABLE_MESSAGE,
+                    "has_real_source": False,
                 })
 
             read_file_tabs_html = ""
@@ -3146,6 +3574,19 @@ def report_view(
                     </button>
                     """
 
+                norm_path = r_file["path"].replace("\\", "/").strip("/")
+                is_redacted = bool(redacted_files and (r_file["path"] in redacted_files or norm_path in redacted_files))
+                redaction_notice_html = ""
+                if is_redacted:
+                    redaction_notice_html = """
+                    <div class="redaction-notice-bar" style="display: flex; align-items: center; gap: 0.35rem; padding: 0.35rem 0.85rem; background: rgba(245, 158, 11, 0.08); border: 1px solid var(--amber-border); border-bottom: none; font-family: 'IBM Plex Mono', monospace; font-size: 0.7rem; color: var(--amber);">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                        </svg>
+                        <span>Some values were hidden for security</span>
+                    </div>
+                    """
+
                 read_file_panes_html += f"""
                 <div id="read-file-pane-{m_tier}-{f_idx}" class="read-file-pane" style="display: {pane_display};">
                     <div style="display: flex; justify-content: space-between; align-items: center; background: #12141a; padding: 0.4rem 0.85rem; border: 1px solid var(--hairline); border-bottom: none; border-top-left-radius: 4px; border-top-right-radius: 4px; font-family: 'IBM Plex Mono', monospace; font-size: 0.7rem; color: var(--text-tertiary);">
@@ -3155,18 +3596,35 @@ def report_view(
                         </div>
                         <span class="tag" style="font-size: 0.625rem;">READ-ONLY SOURCE</span>
                     </div>
+                    {redaction_notice_html}
                     <pre class="read-code-pre" style="background: #181a20; padding: 1rem 1.15rem; border-bottom-left-radius: 4px; border-bottom-right-radius: 4px; border: 1px solid var(--hairline); overflow-x: auto; margin: 0; max-height: 480px; font-family: 'IBM Plex Mono', monospace; font-size: 0.8rem; line-height: 1.5; color: #f8f8f2;"><code id="read-code-content-{m_tier}-{f_idx}">{escaped_f_content}</code></pre>
                 </div>
                 """
 
-            # Prepare Scaffold Data for "Fill the Blanks" mode
+            # Prepare Scaffold Data for "Fill the Blanks" mode (Part B & C)
             fill_files_data = []
             has_any_scaffold = False
             for f_idx, r_file in enumerate(read_files_data):
+                if not r_file.get("has_real_source", True):
+                    fill_files_data.append({
+                        "path": r_file["path"],
+                        "filename": r_file["filename"],
+                        "scaffold_code": r_file["content"],
+                        "has_scaffold": False,
+                        "blanked_functions": [],
+                        "blanked_count": 0,
+                        "reason": "The original source for this file isn't available for this job — try re-running the analysis to view the real implementation.",
+                    })
+                    continue
+
+                norm_path = r_file["path"].replace("\\", "/").strip("/")
+                f_is_redacted = bool(redacted_files and (r_file["path"] in redacted_files or norm_path in redacted_files))
+
                 s_res = ScaffoldGenerator.generate_scaffold(
                     code=r_file["content"],
                     language="python",
                     file_path=r_file["path"],
+                    is_redacted=f_is_redacted,
                 )
                 if s_res.get("has_scaffold", False):
                     has_any_scaffold = True
@@ -3181,6 +3639,35 @@ def report_view(
                 })
 
             all_fill_files_map[m_tier] = fill_files_data
+
+            # Check if any reference source file is available for Guess It
+            has_any_real_source = any(r.get("has_real_source", False) for r in read_files_data)
+            guess_disabled_banner_html = ""
+            btn_run_disabled = ""
+            btn_submit_disabled = ""
+            if not has_any_real_source:
+                guess_disabled_banner_html = """
+                <div class="guess-disabled-banner" style="margin-bottom: 0.85rem; padding: 0.75rem 1rem; background: rgba(245, 158, 11, 0.08); border-left: 3px solid var(--amber); border-radius: 3px; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; line-height: 1.45; color: var(--amber);">
+                    <span>⚠️</span> <strong>Guess It Disabled:</strong> Reference source files are not available for this milestone. Try re-running the analysis to view and verify against the real implementation.
+                </div>
+                """
+                # Run Code remains enabled as an unmetered sandbox scratchpad, while Submit Verification requires reference source
+                btn_submit_disabled = 'disabled title="Reference source unavailable" style="cursor: not-allowed; opacity: 0.45;"'
+
+            # Starter signature from real file content (ScaffoldGenerator convention)
+            starter_code = ""
+            if fill_files_data and fill_files_data[0].get("has_real_source", True):
+                starter_code = fill_files_data[0].get("scaffold_code", "")
+            active_editor_code = submitted_code if submitted_code else starter_code
+            escaped_code = html.escape(active_editor_code)
+
+            # Starter code fallback notice
+            starter_notice_display = "display: flex;" if (fill_files_data and not fill_files_data[0].get("has_scaffold", False) and not submitted_code) else "display: none;"
+            starter_unavailable_notice_html = f"""
+            <div id="starter-unavailable-notice-{m_tier}" class="starter-unavailable-notice" style="{starter_notice_display}align-items: center; gap: 0.4rem; margin-bottom: 0.65rem; padding: 0.6rem 0.85rem; background: rgba(245, 158, 11, 0.08); border-left: 3px solid var(--amber); border-radius: 3px; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--text-secondary);">
+                <span>ℹ️</span> <strong>Starter code isn't available for this file.</strong>
+            </div>
+            """
 
             # Guess It Mode: Multi-file picker & Task Instructions
             first_target_file = sanitize_text(m_files[0]) if m_files else f"milestone_{m_tier}.py"
@@ -3211,6 +3698,27 @@ def report_view(
                     <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; font-weight: 600; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.04em;">Target File:</span>
                     <div id="guess-file-tabs-{m_tier}" style="display: flex; gap: 0.35rem; flex-wrap: wrap;">
                         {guess_file_tabs_html}
+                    </div>
+                </div>
+                """
+
+            # Example Input/Output: ONLY include if real example data exists
+            example_io_data = m.get("example_io") or m.get("test_cases") or m.get("examples")
+            example_io_html = ""
+            if example_io_data:
+                if isinstance(example_io_data, list):
+                    ex_rendered = "".join(f'<div style="font-family: \'IBM Plex Mono\', monospace; font-size: 0.75rem; background: var(--panel); padding: 0.4rem 0.6rem; border-radius: 3px; border: 1px solid var(--hairline-soft); margin-top: 0.25rem;">{sanitize_text(str(ex))}</div>' for ex in example_io_data)
+                elif isinstance(example_io_data, dict):
+                    ex_rendered = f'<pre style="font-family: \'IBM Plex Mono\', monospace; font-size: 0.75rem; background: var(--panel); padding: 0.4rem 0.6rem; border-radius: 3px; border: 1px solid var(--hairline-soft); margin-top: 0.25rem; overflow-x: auto;">{sanitize_text(json.dumps(example_io_data, indent=2))}</pre>'
+                else:
+                    ex_rendered = f'<div style="font-family: \'IBM Plex Mono\', monospace; font-size: 0.75rem; background: var(--panel); padding: 0.4rem 0.6rem; border-radius: 3px; border: 1px solid var(--hairline-soft); margin-top: 0.25rem;">{sanitize_text(str(example_io_data))}</div>'
+                example_io_html = f"""
+                <div class="brief-example-io-section" style="margin-bottom: 0.65rem;">
+                    <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; font-weight: 600; color: var(--text-tertiary); text-transform: uppercase; margin-bottom: 0.2rem;">
+                        Example Input / Output:
+                    </div>
+                    <div style="margin-top: 0.25rem;">
+                        {ex_rendered}
                     </div>
                 </div>
                 """
@@ -3252,13 +3760,7 @@ def report_view(
                 """
 
             initial_blanked = first_fill_file["blanked_functions"]
-            if initial_blanked:
-                fill_chips_html = "".join([
-                    f'<span class="mono" style="display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.15rem 0.45rem; background: var(--panel); border: 1px solid var(--hairline); border-radius: 3px; font-size: 0.72rem; color: var(--teal);">🧩 {html.escape(bf["full_name"] if bf.get("class_name") else bf["name"])}()</span> '
-                    for bf in initial_blanked
-                ])
-            else:
-                fill_chips_html = f'<span style="font-size: 0.75rem; color: var(--text-tertiary); font-style: italic;">{html.escape(first_fill_file.get("reason") or "File contains no function bodies to blank.")}</span>'
+            fill_chips_html = _render_grouped_fill_chips(initial_blanked, first_fill_file.get("reason"))
 
             # Mode Switcher button for Fill the Blanks
             if has_any_scaffold:
@@ -3351,6 +3853,7 @@ def report_view(
 
                         <!-- Mode 1 Workspace: Guess It (Interactive Code Box & Graded AST Engine) -->
                         <div id="workspace-guess-{m_tier}" class="milestone-mode-workspace guess-mode">
+                            {guess_disabled_banner_html}
                             <!-- Task Instructions Banner -->
                             <div class="guess-instruction-banner" style="margin-bottom: 0.85rem; padding: 0.75rem 1rem; background: var(--panel-raised); border-left: 3px solid var(--brass); border-radius: 3px; font-family: 'IBM Plex Sans', sans-serif; font-size: 0.825rem; line-height: 1.5; color: var(--text-secondary);">
                                 <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.2rem; display: flex; align-items: center; gap: 0.35rem;">
@@ -3363,6 +3866,37 @@ def report_view(
 
                             {guess_file_picker_container_html}
 
+                            <!-- Structured Brief Card -->
+                            <div class="milestone-brief-card" style="margin-bottom: 0.85rem; padding: 0.85rem 1rem; background: var(--panel-raised); border: 1px solid var(--hairline); border-radius: 4px;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.65rem; border-bottom: 1px solid var(--hairline-soft); padding-bottom: 0.45rem;">
+                                    <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; font-weight: 600; color: var(--brass); text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; gap: 0.4rem;">
+                                        <span>📋</span> Milestone {m_tier} Structured Brief
+                                    </div>
+                                    <span class="tag" style="font-size: 0.65rem;">Sourced from Codebase</span>
+                                </div>
+
+                                <!-- 1. Objective -->
+                                <div class="brief-objective-section" style="margin-bottom: 0.65rem;">
+                                    <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; font-weight: 600; color: var(--text-tertiary); text-transform: uppercase; margin-bottom: 0.2rem;">
+                                        Objective:
+                                    </div>
+                                    {f'<div style="font-size: 0.825rem; color: var(--text-secondary); line-height: 1.5;">{m_summary}</div>' if m_summary else '<div style="font-size: 0.75rem; color: var(--text-tertiary); font-style: italic;">No objective text available for this milestone.</div>'}
+                                </div>
+
+                                <!-- 2. Constraints / Expected Functions & Signatures -->
+                                <div class="brief-constraints-section" style="margin-bottom: 0.65rem;">
+                                    <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; font-weight: 600; color: var(--text-tertiary); text-transform: uppercase; margin-bottom: 0.35rem;">
+                                        Constraints / Expected Functions &amp; Signatures:
+                                    </div>
+                                    <div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">
+                                        {expected_pills_html}
+                                    </div>
+                                </div>
+
+                                <!-- 3. Example Input / Output (ONLY if real example data exists) -->
+                                {example_io_html}
+                            </div>
+
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.65rem; flex-wrap: gap: 0.5rem;">
                                 <div style="display: flex; align-items: center; gap: 0.5rem;">
                                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--brass);">
@@ -3374,19 +3908,11 @@ def report_view(
                                     </span>
                                 </div>
                                 <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                    <span class="tag" style="font-size: 0.6875rem;">AST &amp; RUNTIME VERIFIED</span>
+                                    <span class="tag" style="font-size: 0.6875rem;">Structure &amp; Execution Verified</span>
                                 </div>
                             </div>
 
-                            <!-- Expected Invariant Target Pills -->
-                            <div style="margin-bottom: 0.75rem; background: var(--panel-raised); border: 1px solid var(--hairline-soft); border-radius: 4px; padding: 0.6rem 0.85rem;">
-                                <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--text-tertiary); margin-bottom: 0.35rem; font-weight: 600; text-transform: uppercase;">
-                                    Expected Functions &amp; Signatures:
-                                </div>
-                                <div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">
-                                    {expected_pills_html}
-                                </div>
-                            </div>
+                            {starter_unavailable_notice_html}
 
                             <!-- CodeMirror Embedded Surface -->
                             <div class="editor-surface-container" style="border: 1px solid var(--hairline); border-radius: 4px; overflow: hidden; background: #282a36;">
@@ -3397,7 +3923,7 @@ def report_view(
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
                                 <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
                                     <!-- Run Action Button (Unmetered, no grading, real stdout/stderr/exit code) -->
-                                    <button type="button" id="btn-run-{m_tier}" onclick="runMilestoneCode('{job_id}', {m_tier})" class="btn btn-sm btn-secondary" style="font-family: 'IBM Plex Mono', monospace; letter-spacing: 0.02em; border-color: var(--brass-border); color: var(--brass);">
+                                    <button type="button" id="btn-run-{m_tier}" onclick="runMilestoneCode('{job_id}', {m_tier})" {btn_run_disabled} class="btn btn-sm btn-secondary" style="font-family: 'IBM Plex Mono', monospace; letter-spacing: 0.02em; border-color: var(--brass-border); color: var(--brass);">
                                         <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none">
                                             <polygon points="5 3 19 12 5 21 5 3"></polygon>
                                         </svg>
@@ -3408,7 +3934,7 @@ def report_view(
                                     </span>
 
                                     <!-- Submit Action Button (Structural Check + Runtime Execution + Graded Attempt State) -->
-                                    <button type="button" id="btn-submit-{m_tier}" onclick="submitMilestoneCode('{job_id}', {m_tier})" class="btn btn-sm btn-primary" style="font-family: 'IBM Plex Mono', monospace; letter-spacing: 0.02em;">
+                                    <button type="button" id="btn-submit-{m_tier}" onclick="submitMilestoneCode('{job_id}', {m_tier})" {btn_submit_disabled} class="btn btn-sm btn-primary" style="font-family: 'IBM Plex Mono', monospace; letter-spacing: 0.02em;">
                                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                             <polyline points="20 6 9 17 4 12"></polyline>
                                         </svg>
@@ -3434,7 +3960,7 @@ def report_view(
                                     </span>
                                 </div>
                                 <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--text-tertiary);">
-                                    Run: Sandbox execution &bull; Submit: Graded AST diff
+                                    Run: Sandbox execution &bull; Submit: Compared against expected structure
                                 </div>
                             </div>
 
@@ -3512,7 +4038,7 @@ def report_view(
                             <div id="hint-2-panel-{m_tier}" class="hint-panel" style="{h2_style} margin-top: 0.85rem; padding: 0.85rem 1rem; background: var(--panel-raised); border-left: 3px solid var(--amber); border-radius: 2px;">
                                 <div style="display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.35rem;">
                                     <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.7rem; font-weight: 700; color: var(--amber); text-transform: uppercase; letter-spacing: 0.05em;">
-                                        Hint 2 // Target Files &amp; Required AST Contracts (Zero Literal Code)
+                                        Hint 2 // Target Files &amp; Required Functions &amp; Classes (Zero Literal Code)
                                     </span>
                                 </div>
                                 <div id="hint-2-text-{m_tier}" style="font-size: 0.8125rem; color: var(--text-primary); line-height: 1.55;">
@@ -3528,7 +4054,7 @@ def report_view(
                                             Reference Structural Architecture
                                         </span>
                                     </div>
-                                    <span class="tag" style="font-size: 0.65rem;">STATIC AST SKELETON</span>
+                                    <span class="tag" style="font-size: 0.65rem;">Code Structure Outline</span>
                                 </div>
                                 <pre style="background: #181a20; padding: 0.75rem 1rem; border-radius: 4px; overflow-x: auto; border: 1px solid var(--hairline); margin: 0;"><code id="reference-code-{m_tier}" class="mono" style="font-size: 0.78rem; color: var(--text-primary);">{ref_code_rendered}</code></pre>
                             </div>
@@ -3568,7 +4094,7 @@ def report_view(
                                 <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--text-tertiary); margin-bottom: 0.35rem; font-weight: 600; text-transform: uppercase;">
                                     Functions To Implement:
                                 </div>
-                                <div id="fill-blanked-chips-{m_tier}" style="display: flex; flex-wrap: wrap; gap: 0.35rem;">
+                                <div id="fill-blanked-chips-{m_tier}" style="display: flex; flex-direction: column; gap: 0.35rem;">
                                     {fill_chips_html}
                                 </div>
                             </div>
@@ -3707,7 +4233,11 @@ def report_view(
         quiz_items_rendered = ""
         for i, q in enumerate(questions, 1):
             q_text = sanitize_text(q.get("question", ""))
-            q_tier = sanitize_text(str(q.get("tier", "—")))
+            tier_raw = q.get("tier")
+            if tier_raw is None or str(tier_raw).strip() in ("", "—", "None", "-"):
+                q_tier = "0"
+            else:
+                q_tier = sanitize_text(str(tier_raw))
             q_exp = sanitize_text(q.get("explanation", ""))
             options = q.get("options", [])
             try:
@@ -3910,8 +4440,63 @@ def report_view(
                 .replace(/'/g, '&#039;');
         }}
 
+        function renderGroupedFillChips(blankedFunctions, reason) {{
+            if (!blankedFunctions || blankedFunctions.length === 0) {{
+                return '<span style="font-size: 0.75rem; color: var(--text-tertiary); font-style: italic;">' + escapeHtml(reason || 'File contains no function bodies to blank.') + '</span>';
+            }}
+
+            const totalCount = blankedFunctions.length;
+            const shouldCollapse = totalCount > 15;
+
+            const groupOrder = [];
+            const groups = {{}};
+
+            blankedFunctions.forEach(function(bf) {{
+                const className = bf.class_name || '';
+                const groupKey = className ? className : '__toplevel__';
+                if (!groups[groupKey]) {{
+                    groups[groupKey] = {{
+                        className: className,
+                        isClass: Boolean(className),
+                        items: []
+                    }};
+                    groupOrder.push(groupKey);
+                }}
+                groups[groupKey].items.push(bf);
+            }});
+
+            let html = '';
+            groupOrder.forEach(function(key) {{
+                const g = groups[key];
+                const count = g.items.length;
+                const groupTitle = g.isClass ? ('class ' + escapeHtml(g.className)) : 'Top-level Functions';
+                const groupCountLabel = g.isClass ? (count + (count === 1 ? ' method' : ' methods')) : (count + (count === 1 ? ' function' : ' functions'));
+                const icon = g.isClass ? '🏛️' : '📁';
+
+                let chipsHtml = '';
+                g.items.forEach(function(bf) {{
+                    const fnName = escapeHtml(bf.name || bf.full_name || '');
+                    const fullFnName = escapeHtml((bf.full_name || bf.name || '') + '()');
+                    chipsHtml += '<span class="mono" title="' + fullFnName + '" style="display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.15rem 0.45rem; background: var(--panel-raised); border: 1px solid var(--hairline); border-radius: 3px; font-size: 0.72rem; color: var(--teal);">🧩 ' + fnName + '()</span> ';
+                }});
+
+                const openAttr = shouldCollapse ? '' : ' open';
+                html += '<details' + openAttr + ' class="fill-chip-group" style="margin-bottom: 0.4rem; background: var(--panel); border: 1px solid var(--hairline); border-radius: 4px; padding: 0.35rem 0.6rem;">' +
+                    '<summary style="cursor: pointer; font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.72rem; font-weight: 600; color: var(--text-secondary); user-select: none; display: flex; align-items: center; justify-content: space-between;">' +
+                        '<span>' + icon + ' ' + groupTitle + ' <span style="opacity: 0.7; font-weight: normal; font-size: 0.6875rem;">(' + groupCountLabel + ')</span></span>' +
+                        '<span style="font-size: 0.65rem; color: var(--text-tertiary);">▾</span>' +
+                    '</summary>' +
+                    '<div style="display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.4rem; padding-top: 0.35rem; border-top: 1px solid var(--hairline-soft);">' +
+                        chipsHtml +
+                    '</div>' +
+                '</details>';
+            }});
+
+            return html;
+        }}
+
         function renderDiffHtmlInJs(result, isVerified, errorMsg, gradingMethod) {{
-            let tierTag = '<span class="badge badge-brass" style="font-size: 0.65rem; letter-spacing: 0.04em;">TIER 3 // STATIC AST DIFF</span>';
+            let tierTag = '<span class="badge badge-brass" style="font-size: 0.65rem; letter-spacing: 0.04em;">TIER 3 // Structure Comparison</span>';
             if (gradingMethod === 'real_tests') {{
                 tierTag = '<span class="badge badge-teal" style="font-size: 0.65rem; letter-spacing: 0.04em;">TIER 1 // REAL REPO TEST SUITE</span>';
             }} else if (gradingMethod === 'expected_output') {{
@@ -3956,10 +4541,18 @@ def report_view(
 
                 let fillSectionsHtml = '<div style="font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.4rem;">Scoped blanks evaluated: <strong>' + implementedCount + ' / ' + blankedCount + '</strong> completed.</div>';
                 if (implementedPills) {{
-                    fillSectionsHtml += '<div><div style="font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.6875rem; color: var(--teal); font-weight: 600; margin-bottom: 0.25rem;">IMPLEMENTED BLANKS:</div><div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">' + implementedPills + '</div></div>';
+                    const isAllDone = (implementedCount === blankedCount && blankedCount > 0);
+                    const fillSummary = implementedCount + '/' + blankedCount + ' functions completed' + (isAllDone ? ' ✓' : '');
+                    fillSectionsHtml += '<details class="matched-symbols-collapse" style="background: var(--panel); border: 1px solid var(--teal-border); border-radius: 4px; padding: 0.45rem 0.75rem; margin-bottom: 0.4rem;">' +
+                        '<summary style="cursor: pointer; font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.72rem; font-weight: 600; color: var(--teal); display: flex; align-items: center; justify-content: space-between; user-select: none;">' +
+                            '<span>IMPLEMENTED BLANKS (' + fillSummary + '):</span>' +
+                            '<span style="font-size: 0.6875rem; opacity: 0.85; font-weight: normal;">View list ▾</span>' +
+                        '</summary>' +
+                        '<div style="display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.5rem; padding-top: 0.4rem; border-top: 1px solid var(--hairline-soft);">' + implementedPills + '</div>' +
+                    '</details>';
                 }}
                 if (stubPills) {{
-                    fillSectionsHtml += '<div><div style="font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.6875rem; color: var(--crimson); font-weight: 600; margin-bottom: 0.25rem;">UNIMPLEMENTED / STUB BLANKS:</div><div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">' + stubPills + '</div></div>';
+                    fillSectionsHtml += '<div style="background: rgba(244, 63, 94, 0.06); border: 1px solid rgba(244, 63, 94, 0.25); border-radius: 4px; padding: 0.45rem 0.75rem; margin-bottom: 0.4rem;"><div style="font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.6875rem; color: var(--crimson); font-weight: 600; margin-bottom: 0.35rem;">UNIMPLEMENTED / STUB BLANKS:</div><div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">' + stubPills + '</div></div>';
                 }}
 
                 return banner + errHtml + '<div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem;">' + fillSectionsHtml + '</div>';
@@ -3995,15 +4588,25 @@ def report_view(
                 extraPills += '<span style="display: inline-flex; align-items: center; gap: 0.3rem; background: var(--panel-raised); border: 1px solid var(--hairline); color: var(--text-secondary); padding: 0.2rem 0.5rem; border-radius: 3px; font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.75rem;">+ ' + name + ' <span style="opacity: 0.75; font-size: 0.6875rem;">(' + kind + ')</span></span> ';
             }});
 
+            const totalExpected = present.length + missing.length;
+            const isAllMatched = (missing.length === 0 && totalExpected > 0);
+            const matchSummary = totalExpected > 0 ? (present.length + '/' + totalExpected + ' symbols matched' + (isAllMatched ? ' ✓' : '')) : (present.length + ' matched');
+
             let sectionsHtml = '';
             if (presentPills) {{
-                sectionsHtml += '<div><div style="font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.6875rem; color: var(--teal); font-weight: 600; margin-bottom: 0.25rem;">PRESENT &amp; MATCHED SYMBOLS (' + present.length + '):</div><div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">' + presentPills + '</div></div>';
+                sectionsHtml += '<details class="matched-symbols-collapse" style="background: var(--panel); border: 1px solid var(--teal-border); border-radius: 4px; padding: 0.45rem 0.75rem; margin-bottom: 0.4rem;">' +
+                    '<summary style="cursor: pointer; font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.72rem; font-weight: 600; color: var(--teal); display: flex; align-items: center; justify-content: space-between; user-select: none;">' +
+                        '<span>PRESENT &amp; MATCHED SYMBOLS (' + matchSummary + '):</span>' +
+                        '<span style="font-size: 0.6875rem; opacity: 0.85; font-weight: normal;">View list ▾</span>' +
+                    '</summary>' +
+                    '<div style="display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.5rem; padding-top: 0.4rem; border-top: 1px solid var(--hairline-soft);">' + presentPills + '</div>' +
+                '</details>';
             }}
             if (missingPills) {{
-                sectionsHtml += '<div><div style="font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.6875rem; color: var(--crimson); font-weight: 600; margin-bottom: 0.25rem;">MISSING EXPECTED SYMBOLS (' + missing.length + '):</div><div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">' + missingPills + '</div></div>';
+                sectionsHtml += '<div style="background: rgba(244, 63, 94, 0.06); border: 1px solid rgba(244, 63, 94, 0.25); border-radius: 4px; padding: 0.45rem 0.75rem; margin-bottom: 0.4rem;"><div style="font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.6875rem; color: var(--crimson); font-weight: 600; margin-bottom: 0.35rem;">MISSING EXPECTED SYMBOLS (' + missing.length + '):</div><div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">' + missingPills + '</div></div>';
             }}
             if (extraPills) {{
-                sectionsHtml += '<div><div style="font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.6875rem; color: var(--text-tertiary); font-weight: 600; margin-bottom: 0.25rem;">EXTRA / AUXILIARY SYMBOLS (' + extra.length + '):</div><div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">' + extraPills + '</div></div>';
+                sectionsHtml += '<div style="background: var(--panel); border: 1px solid var(--hairline); border-radius: 4px; padding: 0.45rem 0.75rem; margin-bottom: 0.4rem;"><div style="font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.6875rem; color: var(--text-tertiary); font-weight: 600; margin-bottom: 0.35rem;">EXTRA / AUXILIARY SYMBOLS (' + extra.length + '):</div><div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">' + extraPills + '</div></div>';
             }}
 
             return banner + errHtml + '<div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem;">' + sectionsHtml + '</div>';
@@ -4673,14 +5276,33 @@ def report_view(
                 targetNameEl.textContent = filePath;
             }}
 
-            // Restore draft for the newly selected file
-            const newDraft = (window.guessFileDrafts[tier][fileIdx] !== undefined) ? window.guessFileDrafts[tier][fileIdx] : '';
+            // Restore draft for the newly selected file (defaulting to starter signature scaffold if no draft yet)
+            let newDraft = window.guessFileDrafts[tier][fileIdx];
+            if (newDraft === undefined) {{
+                const fileData = (window.fillFilesData && window.fillFilesData[tier] && window.fillFilesData[tier][fileIdx]) ? window.fillFilesData[tier][fileIdx] : null;
+                if (fileData && fileData.scaffold_code && fileData.has_real_source !== false) {{
+                    newDraft = fileData.scaffold_code;
+                }} else {{
+                    newDraft = '';
+                }}
+            }}
             if (window.cmEditors && window.cmEditors[tier]) {{
                 window.cmEditors[tier].setValue(newDraft);
                 setTimeout(() => {{ window.cmEditors[tier].refresh(); }}, 20);
             }}
             const ta = document.getElementById('code-editor-' + tier);
             if (ta) ta.value = newDraft;
+
+            // Update starter code unavailable notice visibility
+            const starterNoticeEl = document.getElementById('starter-unavailable-notice-' + tier);
+            if (starterNoticeEl) {{
+                const fileData = (window.fillFilesData && window.fillFilesData[tier] && window.fillFilesData[tier][fileIdx]) ? window.fillFilesData[tier][fileIdx] : null;
+                if (fileData && fileData.has_scaffold === false && (!newDraft || !newDraft.trim())) {{
+                    starterNoticeEl.style.display = 'flex';
+                }} else {{
+                    starterNoticeEl.style.display = 'none';
+                }}
+            }}
 
             window.activeGuessFileIdx[tier] = fileIdx;
         }}
@@ -4728,16 +5350,7 @@ def report_view(
             // Update blanked chips
             const chipsEl = document.getElementById('fill-blanked-chips-' + tier);
             if (chipsEl && fileData) {{
-                if (fileData.blanked_functions && fileData.blanked_functions.length > 0) {{
-                    let chipsHtml = '';
-                    fileData.blanked_functions.forEach(bf => {{
-                        const fnName = escapeHtml(bf.full_name || bf.name);
-                        chipsHtml += '<span class="mono" style="display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.15rem 0.45rem; background: var(--panel); border: 1px solid var(--hairline); border-radius: 3px; font-size: 0.72rem; color: var(--teal);">🧩 ' + fnName + '()</span> ';
-                    }});
-                    chipsEl.innerHTML = chipsHtml;
-                }} else {{
-                    chipsEl.innerHTML = '<span style="font-size: 0.75rem; color: var(--text-tertiary); font-style: italic;">' + escapeHtml(fileData.reason || 'File contains no function bodies to blank.') + '</span>';
-                }}
+                chipsEl.innerHTML = renderGroupedFillChips(fileData.blanked_functions, fileData.reason);
             }}
 
             // Restore draft or initial scaffold code
@@ -5234,18 +5847,35 @@ def report_view(
             color: var(--text-secondary);
         }
         .entry-chip {
-            display: flex;
+            display: inline-flex;
             align-items: center;
-            gap: 0.45rem;
-            padding: 0.35rem 0.65rem;
+            gap: 0.5rem;
+            padding: 0.45rem 0.8rem;
+            min-height: 38px;
             background: var(--panel-raised);
             border: 1px solid var(--hairline-soft);
-            border-radius: 3px;
+            border-radius: 4px;
             transition: all 120ms ease;
+            user-select: none;
+            touch-action: manipulation;
         }
         .entry-chip:hover {
             border-color: var(--brass);
             background: var(--panel-overlay);
+        }
+        .entry-chip .entry-chip-arrow {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 28px;
+            min-height: 28px;
+            padding: 6px;
+            margin: -6px 0 -6px -4px;
+            border-radius: 3px;
+            transition: background 120ms ease;
+        }
+        .entry-chip:hover .entry-chip-arrow {
+            background: rgba(212, 163, 89, 0.15);
         }
         .dag-node-box {
             transition: stroke 150ms ease, fill 150ms ease, filter 150ms ease;
@@ -5344,7 +5974,7 @@ def report_view(
                     &larr; BACK TO DASHBOARD LEDGER
                 </a>
                 <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
-                    <h1 style="font-size: 2.15rem; font-weight: 500; letter-spacing: -0.02em;">Repository Architecture Report: <span style="font-style: italic; color: var(--brass);">{repo_name}</span></h1>
+                    <h1 style="font-size: 2.15rem; font-weight: 500; letter-spacing: -0.02em;">Architecture Report: <span style="font-style: italic; color: var(--brass);">{repo_name}</span></h1>
                 </div>
                 <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.2rem;">
                     Codebase Intelligence Report &bull; Structural Syntax Tree &amp; Dependency Reconstruction
@@ -5412,7 +6042,7 @@ def report_view(
     </div>
     """
     return page_shell(
-        "Repository Architecture Report",
+        f"Architecture Report: {repo_name}",
         content,
         current_user=current_user,
         active_route="/report",
@@ -5504,7 +6134,7 @@ def settings_view(
             <div style="background: var(--panel-raised); border: 1px solid var(--hairline); border-radius: 4px; padding: 1.25rem;">
                 <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.35rem;">Enterprise Code Validation Suite</div>
                 <p style="color: var(--text-secondary); font-size: 0.85rem; line-height: 1.45; margin-bottom: 1rem;">
-                    Your account has unmetered access to the 11-Layer Reverse Intelligence engine, priority AST parsing, and interactive dependency graphs.
+                    Your account has unlimited access to repository analysis, priority processing, and interactive dependency graphs.
                 </p>
                 <a href="/api/billing/portal" class="btn btn-secondary" style="width: 100%; justify-content: center; padding: 0.75rem;">
                     Manage Subscription &amp; Invoices &rarr;
@@ -5651,11 +6281,11 @@ def settings_view(
                             <span id="theme-check-dark" style="color: var(--brass); font-weight: bold; font-size: 0.875rem;">✓</span>
                         </div>
                         <div style="height: 24px; background: #0c0e11; border-radius: 2px; border: 1px solid #282a2d; margin-bottom: 0.5rem; display: flex; align-items: center; padding: 0 0.5rem; gap: 0.35rem;">
-                            <div style="width: 8px; height: 8px; border-radius: 50%; background: #d4a359;"></div>
+                            <div style="width: 8px; height: 8px; border-radius: 50%; background: #6ee7b7;"></div>
                             <div style="width: 24px; height: 4px; border-radius: 2px; background: #333538;"></div>
                         </div>
                         <div style="font-size: 0.75rem; color: var(--text-tertiary); line-height: 1.35;">
-                            Pitch-dark substrate with high-density brass highlights.
+                            Pitch-dark substrate with high-density sage & mint highlights.
                         </div>
                     </button>
 
@@ -5666,7 +6296,7 @@ def settings_view(
                             <span id="theme-check-light" style="color: var(--brass); font-weight: bold; font-size: 0.875rem; display: none;">✓</span>
                         </div>
                         <div style="height: 24px; background: #fbfbfd; border-radius: 2px; border: 1px solid #d3c4b3; margin-bottom: 0.5rem; display: flex; align-items: center; padding: 0 0.5rem; gap: 0.35rem;">
-                            <div style="width: 8px; height: 8px; border-radius: 50%; background: #614000;"></div>
+                            <div style="width: 8px; height: 8px; border-radius: 50%; background: #1b6d4b;"></div>
                             <div style="width: 24px; height: 4px; border-radius: 2px; background: #9c8f7f;"></div>
                         </div>
                         <div style="font-size: 0.75rem; color: var(--text-tertiary); line-height: 1.35;">

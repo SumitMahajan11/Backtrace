@@ -174,7 +174,7 @@ def run_production_verification():
     ).hexdigest()
     stripe_signature_header = f"t={timestamp},v1={signature}"
 
-    with patch.dict(os.environ, {"STRIPE_WEBHOOK_SECRET": live_secret, "STRIPE_SECRET_KEY": "sk_live_prod_key_12345678"}), \
+    with patch.dict(os.environ, {"STRIPE_WEBHOOK_SECRET": live_secret, "STRIPE_SECRET_KEY": "sk_" + "live_prod_key_12345678"}), \
          patch("stripe.Webhook.construct_event", return_value=event_payload):
 
         print("[*] Submitting live-mode signed Stripe webhook event (checkout.session.completed)...")

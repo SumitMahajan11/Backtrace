@@ -183,10 +183,24 @@ class TestProgressiveHintAPI:
         )
         test_db_session.add(job_a)
         test_db_session.commit()
+
+        from app.services.file_content_service import FileContentService
+        FileContentService.persist_file_contents(
+            session=test_db_session,
+            github_url="https://github.com/org/alice-repo",
+            file_contents={
+                "app/core/config.py": "class Settings:\n    \"\"\"Reference settings class.\"\"\"\n    pass\n\ndef get_settings():\n    return Settings()\n",
+                "app/services/auth_service.py": "class AuthService:\n    def verify_token(self, token):\n        pass\n",
+                "app/api/endpoints.py": "def login_handler(req):\n    pass\n",
+            },
+            commit_hash="commit_alice_123",
+        )
+        test_db_session.commit()
+
         return user_a, user_b, job_a
 
     def test_hint_gate_try_first_policy(self, setup_user_and_job, test_db_session):
-        """Verifies hints are locked (HTTP 400) if milestone has not been attempted yet."""
+        """Verifies Hint 1 is available immediately with 0 attempts, and Hint 2 is locked until first code submission."""
         user_a, _, job_a = setup_user_and_job
 
         def override_get_current_user():
@@ -200,9 +214,33 @@ class TestProgressiveHintAPI:
 
         try:
             client = TestClient(app)
-            resp = client.post(f"/api/attempts/{job_a.id}/0/hint")
-            assert resp.status_code == status.HTTP_400_BAD_REQUEST
-            assert "Hints are locked until you make your first implementation attempt" in resp.json()["detail"]
+
+            # 1. Hint 1 request succeeds immediately with zero prior attempts
+            resp1 = client.post(f"/api/attempts/{job_a.id}/0/hint")
+            assert resp1.status_code == status.HTTP_200_OK
+            data1 = resp1.json()
+            assert data1["hint_level_revealed"] == 1
+            assert data1["hint_1"] is not None
+            assert "Milestone 0 forms the foundation layer" in data1["hint_1"]
+
+            # 2. Hint 2 request before submitting code fails with HTTP 400
+            resp2 = client.post(f"/api/attempts/{job_a.id}/0/hint")
+            assert resp2.status_code == status.HTTP_400_BAD_REQUEST
+            assert "locked until you make your first implementation attempt" in resp2.json()["detail"]
+
+            # 3. After submitting code attempt, Hint 2 request succeeds
+            sub_resp = client.post(
+                f"/api/attempts/{job_a.id}/0",
+                json={"submitted_code": "class IncompleteSettings:\n    pass\n"},
+            )
+            assert sub_resp.status_code == 200
+
+            resp3 = client.post(f"/api/attempts/{job_a.id}/0/hint")
+            assert resp3.status_code == status.HTTP_200_OK
+            data3 = resp3.json()
+            assert data3["hint_level_revealed"] == 2
+            assert data3["hint_2"] is not None
+            assert "Missing AST contracts to declare" in data3["hint_2"]
         finally:
             app.dependency_overrides.clear()
 

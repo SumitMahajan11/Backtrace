@@ -10,6 +10,8 @@ def pytest_configure(config):
     """Discover reachable Piston URL once for test session and isolate Sentry monitoring."""
     os.environ["SENTRY_DSN"] = ""
     os.environ["ENVIRONMENT"] = "testing"
+    os.environ["DATABASE_URL"] = "sqlite:///:memory:"
+    os.environ["REDIS_URL"] = "redis://127.0.0.1:6379/0"
     global _discovered_piston_health
     piston_found = False
     try:
@@ -42,15 +44,18 @@ def pytest_configure(config):
 @pytest.fixture(autouse=True)
 def reset_piston_health_state():
     """Ensure singleton piston health state and rate limiters are clean before each test."""
+    from app.db.session import Base, engine
+    import app.models.db  # noqa: F401
+    Base.metadata.create_all(bind=engine)
     piston_health_monitor._is_healthy = True
     if os.environ.get("PISTON_URL"):
         piston_health_monitor.piston_url = os.environ["PISTON_URL"]
 
-    # Provide an in-memory fakeredis client to rate limiter if real redis is unavailable
-    from app.security.rate_limiter import execution_rate_limiter
+    # Provide an in-memory fakeredis client to rate limiters
     import fakeredis
-    if not execution_rate_limiter.is_redis_healthy():
-        execution_rate_limiter._redis = fakeredis.FakeRedis(decode_responses=True)
+    fake_r = fakeredis.FakeRedis(decode_responses=True)
+    from app.security.rate_limiter import execution_rate_limiter
+    execution_rate_limiter._redis = fake_r
     execution_rate_limiter.reset_all()
 
     yield

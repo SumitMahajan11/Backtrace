@@ -15,6 +15,31 @@ def sanitize_text(raw_text: Optional[str]) -> str:
     return html.escape(str(raw_text), quote=True)
 
 
+def truncate_text_clean(text: Optional[str], max_chars: int = 85, ellipsis: str = "…") -> str:
+    """
+    Cleanly truncates text at the nearest preceding word boundary without dangling punctuation,
+    stray underscores, or broken mid-word tokens.
+    """
+    if not text:
+        return ""
+    clean = str(text).strip()
+    if len(clean) <= max_chars:
+        return clean
+
+    truncated = clean[:max_chars]
+    # Check if there is a word boundary (space) in the slice
+    last_space = truncated.rfind(" ")
+    if last_space > 0:
+        truncated = truncated[:last_space]
+
+    # Strip any trailing punctuation, spaces, or stray symbols (e.g. _, -, :, ;, ,, .)
+    truncated = truncated.rstrip(" _-,:;.!?/\t\n\r")
+    if not truncated:
+        truncated = clean[:max_chars].rstrip(" _-,:;.!?/\t\n\r")
+
+    return truncated + ellipsis
+
+
 def render_safe_markdown(markdown_text: Optional[str]) -> str:
     """
     Safely converts Markdown text into structured HTML while strictly neutralizing XSS injections.

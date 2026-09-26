@@ -116,10 +116,12 @@ class PipelineOrchestrator:
                 except Exception:
                     pass
 
+        current_stage = PipelineStage.INGESTION
         try:
             # -------------------------------------------------------------
             # Stage 1: Ingestion & Workspace Validation (Layers 1, 10)
             # -------------------------------------------------------------
+            current_stage = PipelineStage.INGESTION
             s1_start = time.time()
             emit(PipelineStage.INGESTION, 10.0, f"Validating {len(file_paths)} repository files")
 
@@ -135,6 +137,7 @@ class PipelineOrchestrator:
                     success=False,
                     repo_name=repo_name,
                     events=events,
+                    failed_stage=PipelineStage.INGESTION.value,
                     error=limit_msg,
                     run_id=active_run_id,
                     execution_time_seconds=round(time.time() - start_time, 3),
@@ -146,6 +149,7 @@ class PipelineOrchestrator:
             # -------------------------------------------------------------
             # Stage 2: Static AST Parsing & Git History (Layers 2, 3)
             # -------------------------------------------------------------
+            current_stage = PipelineStage.PARSING
             s2_start = time.time()
             emit(PipelineStage.PARSING, 25.0, "Parsing structural AST import graphs and symbol exports")
             parsed_nodes = []
@@ -180,6 +184,7 @@ class PipelineOrchestrator:
             # -------------------------------------------------------------
             # Stage 3: Segmentation & Hybrid RAG (Layers 4, 5)
             # -------------------------------------------------------------
+            current_stage = PipelineStage.UNDERSTANDING
             s3_start = time.time()
             emit(PipelineStage.UNDERSTANDING, 45.0, "Segmenting architecture domains and indexing RAG vectors")
             seg_result = self.seg_engine.segment_repository(parsed_nodes, file_paths)
@@ -196,6 +201,7 @@ class PipelineOrchestrator:
             # -------------------------------------------------------------
             # Stage 4: Sequence Reasoning (Layer 6 Stages A, B, C, D)
             # -------------------------------------------------------------
+            current_stage = PipelineStage.SEQUENCE_REASONING
             s4_start = time.time()
             emit(PipelineStage.SEQUENCE_REASONING, 70.0, "Computing calibrated topological sequence reasoning")
             a_res = self.stage_a.compute_baseline_order(
@@ -216,6 +222,7 @@ class PipelineOrchestrator:
             # -------------------------------------------------------------
             # Stage 5: Synthesis & Formatting (Layers 7, 8)
             # -------------------------------------------------------------
+            current_stage = PipelineStage.SYNTHESIS
             s5_start = time.time()
             emit(PipelineStage.SYNTHESIS, 90.0, "Synthesizing unified repository architecture and formatting outputs")
             synth_report = self.synthesis_engine.synthesize(
@@ -265,14 +272,28 @@ class PipelineOrchestrator:
             )
 
         except Exception as e:
-            emit(PipelineStage.FAILED, 100.0, f"Pipeline failed: {str(e)}")
+            logger.error(
+                f"Pipeline execution failed during stage '{current_stage.value}': {e}",
+                exc_info=True,
+                extra={"layer": current_stage.value, "run_id": active_run_id},
+            )
+            stage_user_messages = {
+                PipelineStage.INGESTION: "Failed while reading and validating repository files.",
+                PipelineStage.PARSING: "Failed while parsing code syntax trees and extracting declarations.",
+                PipelineStage.UNDERSTANDING: "Failed while analyzing component relationships and architectural domains.",
+                PipelineStage.SEQUENCE_REASONING: "Failed while synthesizing the chronological learning sequence.",
+                PipelineStage.SYNTHESIS: "Failed while generating architecture diagrams, quizzes, and report.",
+            }
+            clean_error = stage_user_messages.get(current_stage, f"Pipeline encountered an unexpected error during {current_stage.value}.")
+            emit(PipelineStage.FAILED, 100.0, clean_error)
             elapsed = time.time() - start_time
             metrics_collector.record_pipeline_run(active_run_id, False, elapsed)
             return PipelineResult(
                 success=False,
                 repo_name=repo_name,
                 events=events,
-                error=str(e),
+                failed_stage=current_stage.value,
+                error=clean_error,
                 run_id=active_run_id,
                 execution_time_seconds=elapsed,
             )

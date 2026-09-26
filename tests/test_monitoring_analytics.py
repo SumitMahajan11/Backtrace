@@ -343,15 +343,49 @@ def test_analysis_submission_analytics_trigger(client, create_user):
     token = create_access_token(user_id=user.id, github_id=user.github_id, github_username=user.github_username)
     client.cookies.set("access_token", token)
 
-    resp = client.post(
-        "/analyses/submit",
-        data={"repo_url": "https://github.com/facebook/react"},
-        follow_redirects=False,
-    )
-    assert resp.status_code == 302
+    with patch("app.services.ingestion.check_repo_size_preflight", return_value=50):
+        resp = client.post(
+            "/analyses/submit",
+            data={"repo_url": "https://github.com/facebook/react"},
+            follow_redirects=False,
+        )
+        assert resp.status_code == 302
 
     captured = analytics.get_captured_events()
     submitted_events = [e for e in captured if e["event"] == "analysis_submitted"]
     assert len(submitted_events) == 1
     assert submitted_events[0]["distinct_id"] == f"usr_{user.id}"
     assert submitted_events[0]["properties"]["tier"] == "free"
+
+
+def test_metrics_collector_estimate_remaining_duration_median_and_threshold():
+    """Verify that ETA requires at least 3 historical samples and calculates median duration."""
+    from app.services.metrics import PipelineMetricsCollector
+
+    collector = PipelineMetricsCollector()
+
+    # 1. No data -> returns None
+    assert collector.estimate_remaining_duration_seconds("layer_1_ingestion") is None
+
+    # 2. Only 1 or 2 samples for layer_2_parsing -> still returns None (< 3 threshold)
+    collector.record_layer_metric("layer_2_parsing", 2000.0)
+    assert collector.estimate_remaining_duration_seconds("layer_1_ingestion") is None
+    collector.record_layer_metric("layer_2_parsing", 3000.0)
+    assert collector.estimate_remaining_duration_seconds("layer_1_ingestion") is None
+
+    # 3. 3 samples for layer_2_parsing -> median of [2000, 3000, 10000] is 3000ms = 3.0s
+    collector.record_layer_metric("layer_2_parsing", 10000.0)
+    est = collector.estimate_remaining_duration_seconds("layer_1_ingestion")
+    assert est == 3.0
+
+    # 4. Add 3 samples for layer_4_segmentation: [4000, 5000, 6000] -> median 5000ms = 5.0s
+    collector.record_layer_metric("layer_4_segmentation", 4000.0)
+    collector.record_layer_metric("layer_4_segmentation", 5000.0)
+    collector.record_layer_metric("layer_4_segmentation", 6000.0)
+
+    # From layer_1_ingestion: includes layer_2 (3.0s) + layer_4 (5.0s) = 8.0s
+    assert collector.estimate_remaining_duration_seconds("layer_1_ingestion") == 8.0
+
+    # From layer_4_segmentation: includes only layer_4 (5.0s)
+    assert collector.estimate_remaining_duration_seconds("layer_4_segmentation") == 5.0
+

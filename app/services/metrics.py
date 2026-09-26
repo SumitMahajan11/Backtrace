@@ -6,6 +6,7 @@ and maintains running aggregate statistics for monitoring scrapers or APMs.
 
 import json
 import logging
+import statistics
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -96,6 +97,48 @@ class PipelineMetricsCollector:
             "failure_rate_pct": round(failure_rate * 100, 2),
             "average_layer_latencies_ms": avg_layer_latencies,
         }
+
+    def estimate_remaining_duration_seconds(
+        self, current_layer: str, min_sample_threshold: int = 3
+    ) -> Optional[float]:
+        """
+        Calculates estimated remaining seconds for subsequent layers based on historical median durations.
+        Requires at least min_sample_threshold (default 3) samples to compute an estimate.
+        Returns None if no layer meets the minimum sample threshold (displays elapsed time only).
+        """
+        layer_order = [
+            "layer_1_ingestion",
+            "layer_2_parsing",
+            "layer_4_segmentation",
+            "layer_6_sequence_reasoning",
+            "layer_7_synthesis",
+        ]
+        if current_layer not in layer_order:
+            if not self._layer_durations_ms:
+                return None
+            idx = 0
+        else:
+            idx = layer_order.index(current_layer)
+
+        remaining_layers = layer_order[idx:]
+        if not remaining_layers:
+            return 0.0
+
+        # Check if we have at least min_sample_threshold samples for any remaining layer
+        has_sufficient_data = any(
+            len(self._layer_durations_ms.get(l, [])) >= min_sample_threshold
+            for l in remaining_layers
+        )
+        if not has_sufficient_data:
+            return None
+
+        total_est_ms = 0.0
+        for l in remaining_layers:
+            l_durations = self._layer_durations_ms.get(l, [])
+            if len(l_durations) >= min_sample_threshold:
+                total_est_ms += statistics.median(l_durations)
+
+        return round(max(1.0, total_est_ms / 1000.0), 1)
 
 
 # Global singleton instance for easy import across orchestrators

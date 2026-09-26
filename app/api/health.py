@@ -17,11 +17,14 @@ from app.models.db import RepoModel
 from app.orchestration.pipeline import PipelineOrchestrator
 
 
-def inspect_health(target_engine=engine) -> Tuple[Dict[str, Any], int]:
+def inspect_health(target_engine=None) -> Tuple[Dict[str, Any], int]:
     """
     Executes dynamic health check across database, storage, and orchestrator components.
     Returns (health_payload, http_status_code).
     """
+    if target_engine is None:
+        from app.db.session import engine as current_engine
+        target_engine = current_engine
     checks: Dict[str, Any] = {}
     overall_healthy = True
 

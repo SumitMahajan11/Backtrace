@@ -272,3 +272,78 @@ def test_retry_endpoint_idor_protection(client, create_user, test_db):
     resp = client.post(f"/analyses/{job_id}/retry")
     assert resp.status_code == 403
     assert "Access forbidden" in resp.text
+
+
+def test_dashboard_distinct_timestamps_in_same_minute(client, create_user, test_db):
+    """Confirm two jobs submitted in the same minute show distinct HH:MM:SS timestamps."""
+    from datetime import datetime, timezone
+    user = create_user(github_id=888005, username="ts_user")
+    SessionLocal, _ = test_db
+    token = create_access_token(user_id=user.id, github_id=user.github_id, github_username=user.github_username)
+    client.cookies.set("access_token", token)
+
+    t1 = datetime(2026, 9, 25, 12, 30, 10, tzinfo=timezone.utc)
+    t2 = datetime(2026, 9, 25, 12, 30, 45, tzinfo=timezone.utc)
+
+    with SessionLocal() as session:
+        job1 = AnalysisJobRepository.create_job(
+            session=session,
+            user_id=user.id,
+            repo_url="https://github.com/fastapi/fastapi",
+            status="completed",
+        )
+        job1.created_at = t1.replace(tzinfo=None)
+
+        job2 = AnalysisJobRepository.create_job(
+            session=session,
+            user_id=user.id,
+            repo_url="https://github.com/pallets/flask",
+            status="failed",
+            failed_stage="stage_3",
+            error_message="Failed while parsing code syntax trees.",
+        )
+        job2.created_at = t2.replace(tzinfo=None)
+        session.commit()
+
+    resp = client.get("/dashboard")
+    assert resp.status_code == 200
+    html = resp.text
+
+    # Both distinct seconds must be rendered
+    assert "12:30:10 UTC" in html
+    assert "12:30:45 UTC" in html
+
+    # Failed stage line must be displayed
+    assert "Failed at Code Structure Parsing:" in html
+    assert "Failed while parsing code syntax trees." in html
+
+
+def test_progress_view_activity_log_and_collapsed_technical_log(client, create_user, test_db):
+    """Confirm progress view renders plain stage activity stream and collapsed technical log."""
+    user = create_user(github_id=888006, username="prog_user")
+    SessionLocal, _ = test_db
+    token = create_access_token(user_id=user.id, github_id=user.github_id, github_username=user.github_username)
+    client.cookies.set("access_token", token)
+
+    with SessionLocal() as session:
+        job = AnalysisJobRepository.create_job(
+            session=session,
+            user_id=user.id,
+            repo_url="https://github.com/psf/requests",
+            status="running",
+        )
+        job_id = job.id
+
+    resp = client.get(f"/progress/{job_id}")
+    assert resp.status_code == 200
+    html = resp.text
+
+    # Plain activity log stream
+    assert 'id="plain-activity-log"' in html
+    assert "Live Stage Activity" in html
+
+    # Technical log is collapsed by default
+    assert 'id="technical-log-drawer"' in html
+    assert "Show technical log" in html
+    assert 'id="sse-terminal-log"' in html
+

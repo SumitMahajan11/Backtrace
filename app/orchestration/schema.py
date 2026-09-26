@@ -39,6 +39,7 @@ class PipelineResult(BaseModel):
     parse_errors: List[Dict[str, Any]] = Field(default_factory=list)
     uncategorized_files: List[str] = Field(default_factory=list)
     run_id: str = ""
+    failed_stage: Optional[str] = None
     error: Optional[str] = None
     execution_time_seconds: float = 0.0
 

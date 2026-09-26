@@ -126,6 +126,7 @@ class GradingEngine:
         graph_data: Optional[Dict[str, Any]] = None,
         mode: str = "guess",
         target_file: Optional[str] = None,
+        session: Optional[Any] = None,
     ) -> Dict[str, Any]:
         """
         Executes grading against user-submitted code following the 3-tier hierarchy or scoped fill-the-blanks mode.
@@ -138,21 +139,73 @@ class GradingEngine:
         # =================================================================
         if mode == "fill":
             from app.services.scaffold_generator import ScaffoldGenerator
-            from app.services.hint_engine import HintEngine
+            from app.services.file_content_service import FileContentService
 
-            ref_info = HintEngine.get_reference_implementation(g_data, milestone_tier)
-            ref_code = ref_info.get("reference_code", "")
+            ref_code = ""
 
-            # If target_file provided, try finding source code for that node
-            if target_file and "nodes" in g_data:
-                for n in g_data.get("nodes", []):
-                    n_path = n.get("path") or n.get("id") or ""
-                    if n_path == target_file or n_path.endswith(target_file) or target_file.endswith(n_path):
-                        if n.get("source_code") or n.get("content"):
-                            ref_code = n.get("source_code") or n.get("content")
-                            break
+            # 1. Look up real file contents from DB / session if available
+            if session is not None or hasattr(job, "github_url") or hasattr(job, "repo_url"):
+                try:
+                    if session is not None:
+                        file_contents = FileContentService.get_file_contents_for_job(session=session, job=job)
+                    else:
+                        from app.db.session import SessionLocal
+                        with SessionLocal() as db_sess:
+                            file_contents = FileContentService.get_file_contents_for_job(session=db_sess, job=job)
 
-            scaffold_info = ScaffoldGenerator.generate_scaffold(ref_code, language=language)
+                    if target_file and file_contents:
+                        ref_code = FileContentService.find_matching_file_content(file_contents, target_file) or ""
+                    elif file_contents:
+                        tier_nodes = [n for n in g_data.get("nodes", []) if n.get("tier") == milestone_tier]
+                        for tn in tier_nodes:
+                            p = tn.get("path") or tn.get("id")
+                            if p:
+                                c = FileContentService.find_matching_file_content(file_contents, p)
+                                if c:
+                                    ref_code = c
+                                    break
+                except Exception:
+                    ref_code = ""
+
+            # 2. Check nodes in g_data
+            if not ref_code and "nodes" in g_data:
+                if target_file:
+                    for n in g_data.get("nodes", []):
+                        n_path = n.get("path") or n.get("id") or ""
+                        if n_path == target_file or n_path.endswith(target_file) or target_file.endswith(n_path):
+                            if n.get("source_code") or n.get("content"):
+                                ref_code = n.get("source_code") or n.get("content")
+                                break
+                if not ref_code:
+                    for n in g_data.get("nodes", []):
+                        if n.get("tier") == milestone_tier:
+                            if n.get("source_code") or n.get("content"):
+                                ref_code = n.get("source_code") or n.get("content")
+                                break
+
+            # 3. If real source is genuinely unavailable, do NOT fall back to fake stubs (Part C)
+            if not ref_code:
+                return {
+                    "grading_method": "fill_the_blanks",
+                    "status": "attempting",
+                    "verification": {
+                        "is_verified": False,
+                        "structurally_verified": False,
+                        "error_message": "The original source for this file isn't available for this job — try re-running the analysis to view the real implementation.",
+                    },
+                    "execution": {
+                        "stdout": "",
+                        "stderr": "The original source for this file isn't available for this job — try re-running the analysis to view the real implementation.",
+                        "exit_code": 1,
+                        "status": "error",
+                    },
+                    "details": {
+                        "passed": False,
+                        "reason": "The original source for this file isn't available for this job — try re-running the analysis to view the real implementation.",
+                    },
+                }
+
+            scaffold_info = ScaffoldGenerator.generate_scaffold(ref_code, language=language, file_path=target_file)
             fill_result = ScaffoldGenerator.grade_fill_blanks(
                 submitted_code=submitted_code,
                 scaffold_info=scaffold_info,

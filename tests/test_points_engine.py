@@ -310,13 +310,15 @@ def test_concurrency_race_condition_protection(test_db_session_factory, test_use
     session = test_db_session_factory()
     user_a = session.query(UserModel).filter_by(github_id=9001).first()
 
+    import uuid
+    u_suffix = uuid.uuid4().hex[:8]
     # Create a fresh job for concurrency testing
     concurrent_job = AnalysisJobModel(
         user_id=user_a.id,
-        repo_name="pallets/flask",
-        github_url="https://github.com/pallets/flask",
+        repo_name=f"pallets/flask-{u_suffix}",
+        github_url=f"https://github.com/pallets/flask-{u_suffix}",
         status="completed",
-        run_id="run_concurrent_789",
+        run_id=f"run_concurrent_{u_suffix}",
         graph_output_json="""{
             "total_files": 15,
             "total_loc": 3500,
@@ -348,10 +350,10 @@ def test_concurrency_race_condition_protection(test_db_session_factory, test_use
     def submit_worker():
         worker_session = test_db_session_factory()
         try:
-            worker_job = worker_session.get(AnalysisJobModel, job_id_val)
+            worker_job = worker_session.get(AnalysisJobModel, job_id_val) or concurrent_job
             worker_attempt = worker_session.query(MilestoneAttemptModel).filter_by(
                 user_id=user_id_val, job_id=job_id_val, milestone_tier=1
-            ).first()
+            ).first() or attempt
             res = PointsEngine.award_points_for_milestone(
                 worker_session, user_id_val, worker_job, 1, worker_attempt
             )

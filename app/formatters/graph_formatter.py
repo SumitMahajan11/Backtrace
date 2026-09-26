@@ -7,19 +7,21 @@ from typing import Dict, List, Any
 from app.synthesis.schema import SynthesizedRepositoryReport
 
 
-DOMAIN_HEX_COLORS = {
-    "core": "#3B82F6",       # Blue
-    "backend": "#10B981",    # Emerald
-    "frontend": "#8B5CF6",   # Purple
-    "database": "#F59E0B",   # Amber
-    "tests": "#6B7280",      # Gray
-    "config": "#EC4899",     # Pink
-    "docs": "#14B8A6",       # Teal
-    "build": "#F97316",      # Orange
-    "devops": "#6366F1",     # Indigo
-    "examples": "#84CC16",   # Lime
-    "uncategorized": "#9CA3AF",
+DOMAIN_COLOR_DEFS: Dict[str, tuple[str, str]] = {
+    "core": ("#3B82F6", "core application code"),
+    "backend": ("#10B981", "backend & API services"),
+    "frontend": ("#8B5CF6", "UI & client components"),
+    "database": ("#F59E0B", "database & data models"),
+    "tests": ("#6B7280", "test files & suites"),
+    "config": ("#EC4899", "configuration & setup"),
+    "docs": ("#14B8A6", "documentation assets"),
+    "build": ("#F97316", "build & bundling scripts"),
+    "devops": ("#6366F1", "DevOps & CI/CD workflows"),
+    "examples": ("#84CC16", "examples & tutorials"),
+    "uncategorized": ("#9CA3AF", "general modules"),
 }
+
+DOMAIN_HEX_COLORS: Dict[str, str] = {k: v[0] for k, v in DOMAIN_COLOR_DEFS.items()}
 
 
 class GraphExportFormatter:
@@ -34,13 +36,31 @@ class GraphExportFormatter:
             tier_groups[m.tier] = m.files
             for f in m.files:
                 file_exports = report.file_symbols.get(f, m.file_symbols.get(f, []))
+                f_domain = m.dominant_domain
+                if f_domain == "mixed" or not f_domain:
+                    p_lower = f.lower()
+                    if "test" in p_lower:
+                        f_domain = "tests"
+                    elif "config" in p_lower or p_lower.endswith((".toml", ".yaml", ".json", ".ini", ".env")):
+                        f_domain = "config"
+                    elif "doc" in p_lower or p_lower.endswith(".md"):
+                        f_domain = "docs"
+                    elif "front" in p_lower or "ui" in p_lower or "web" in p_lower or "component" in p_lower:
+                        f_domain = "frontend"
+                    elif "db" in p_lower or "model" in p_lower or "schema" in p_lower or "sql" in p_lower:
+                        f_domain = "database"
+                    elif "api" in p_lower or "route" in p_lower or "server" in p_lower or "service" in p_lower:
+                        f_domain = "backend"
+                    else:
+                        f_domain = "core"
+
                 nodes.append({
                     "id": f,
                     "label": f.split("/")[-1],
                     "path": f,
                     "tier": m.tier,
-                    "domain": m.dominant_domain,
-                    "color": DOMAIN_HEX_COLORS.get(m.dominant_domain.lower(), "#9CA3AF"),
+                    "domain": f_domain,
+                    "color": DOMAIN_HEX_COLORS.get(f_domain.lower(), "#9CA3AF"),
                     "confidence": m.confidence,
                     "confidence_breakdown": m.confidence_breakdown,
                     "is_cyclic": m.is_cyclic,

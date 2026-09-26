@@ -176,7 +176,12 @@ def get_milestone_attempt(
             missing = ver_res.get("missing_symbols", ver_res.get("missing", []))
             hint_2_text = HintEngine.get_hint_2(job.graph_data, milestone_tier, missing_symbols=missing)
         if attempt.implementation_revealed:
-            reference_data = HintEngine.get_reference_implementation(job.graph_data, milestone_tier)
+            from app.services.file_content_service import FileContentService
+            reference_data = FileContentService.get_milestone_reference_code(
+                session=session,
+                job=job,
+                milestone_tier=milestone_tier,
+            )
 
     attempt_data = _serialize_attempt(attempt, current_user.id, job_id, milestone_tier)
 
@@ -262,6 +267,7 @@ def submit_milestone_attempt(
             graph_data=job.graph_data,
             mode=payload.mode or "guess",
             target_file=payload.target_file,
+            session=session,
         )
     except StructuralVerificationError as e:
         raise HTTPException(
@@ -439,27 +445,28 @@ def request_milestone_hint(
         milestone_tier=milestone_tier,
     )
 
-    # Gated rule: Must have attempted the milestone first (unless fill-the-blanks mode where hints are immediately accessible)
-    if not attempt or attempt.status == "not_started":
-        if mode == "fill":
-            attempt = MilestoneAttemptRepository.save_or_update_attempt(
-                session=session,
-                user_id=current_user.id,
-                job_id=job_id,
-                milestone_tier=milestone_tier,
-                submitted_code="",
-                status="attempting",
-                hint_level_revealed=0,
-            )
-        else:
+    current_level = (attempt.hint_level_revealed if attempt else 0) or 0
+    next_level = min(2, current_level + 1) if current_level < 2 else 2
+
+    # Gated rule: Hint 2 and beyond require having made a first implementation attempt (submitting code), unless fill mode
+    if next_level >= 2 and mode != "fill":
+        if not attempt or not attempt.submitted_code or attempt.status == "not_started":
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Hints are locked until you make your first implementation attempt. Try writing and submitting code first!",
+                detail="Hint 2 is locked until you make your first implementation attempt. Try writing and submitting code first!",
             )
 
-    # Determine next level
-    current_level = attempt.hint_level_revealed or 0
-    next_level = min(2, current_level + 1) if current_level < 2 else 2
+    # Initialize attempt if not present (e.g. user requesting Hint 1 on a fresh milestone)
+    if not attempt:
+        attempt = MilestoneAttemptRepository.save_or_update_attempt(
+            session=session,
+            user_id=current_user.id,
+            job_id=job_id,
+            milestone_tier=milestone_tier,
+            submitted_code="",
+            status="attempting" if mode == "fill" else "not_started",
+            hint_level_revealed=0,
+        )
 
     hint_1 = HintEngine.get_hint_1(job.graph_data, milestone_tier)
     hint_2 = None
@@ -551,7 +558,12 @@ def reveal_milestone_implementation(
         implementation_revealed=True,
     )
 
-    ref_data = HintEngine.get_reference_implementation(job.graph_data, milestone_tier)
+    from app.services.file_content_service import FileContentService
+    ref_data = FileContentService.get_milestone_reference_code(
+        session=session,
+        job=job,
+        milestone_tier=milestone_tier,
+    )
 
     return {
         "milestone_tier": milestone_tier,

@@ -771,9 +771,9 @@ def test_confidence_score_badge_tooltips_and_explanations(client, create_user, t
 
     # Tooltip explanation text based on real backend calculation logic
     assert "Sequence Confidence" in html
-    assert "Strict AST imports" in html
-    assert "Domain heuristics" in html
-    assert "Cyclic clusters" in html
+    assert "Verified imports and commit history" in html
+    assert "Estimated from common code patterns" in html
+    assert "Circular dependencies, standalone files, or unclear history" in html
 
 
 def test_dependency_graph_legend_rendering(client, create_user, test_db):
@@ -888,9 +888,12 @@ def test_dependency_graph_full_path_node_tooltips(client, create_user, test_db):
     assert f'title="{long_path}"' in html
     assert f'<title>{long_path}</title>' in html
 
-    # The visual truncated path should be the trailing 28 chars
-    truncated_suffix = long_path[-28:]
-    assert truncated_suffix in html
+    # The visual truncated path should be truncated from the middle with '...'
+    from app.ui.components import _truncate_path_middle
+    expected_truncated = _truncate_path_middle(long_path, 28)
+    assert expected_truncated in html
+    assert long_path[:12] in html
+    assert long_path[-13:] in html
 
     # Verify click and hover interaction bindings are preserved
     assert f'data-node-id="{long_path}"' in html
@@ -1082,6 +1085,93 @@ def test_progress_view_live_elapsed_timer(client, create_user, test_db):
 
     assert 'id="elapsed-timer-badge"' in comp_html
     assert "Completed in 1:22" in comp_html
+
+
+def test_progress_view_elapsed_timer_accurate_known_timestamp(client, create_user, test_db):
+    """
+    Verify that a running job with a known created_at timestamp (e.g. 15s ago)
+    accurately computes server-rendered elapsed time (e.g. 'Running for 0:15', within 0:14-0:20),
+    and specifically avoids timezone shifts (e.g. 330:00+ / 5.5 hours).
+    """
+    from datetime import datetime, timezone, timedelta
+    from app.ui.components import progress_view
+
+    SessionLocal, _ = test_db
+    user = create_user(github_id=9910, username="timer_known_tester")
+    token = create_access_token(user_id=user.id, github_id=user.github_id, github_username=user.github_username)
+    client.cookies.set("access_token", token)
+
+    # 1. Test running job created 15 seconds ago (naive UTC from DB)
+    created_15s_ago = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(seconds=15)
+    with SessionLocal() as session:
+        job_15s = AnalysisJobRepository.create_job(
+            session=session,
+            user_id=user.id,
+            repo_url="https://github.com/test/fifteen-second-repo",
+            status="running",
+        )
+        job_15s.created_at = created_15s_ago
+        session.commit()
+        job_15s_id = job_15s.id
+
+    resp_15s = client.get(f"/progress/{job_15s_id}")
+    assert resp_15s.status_code == 200
+    html_15s = resp_15s.text
+
+    # Extract initial timer text from server render
+    import re
+    timer_match = re.search(r'<span id="elapsed-timer-text">(.*?)</span>', html_15s)
+    assert timer_match is not None, "elapsed-timer-text element not found in HTML"
+    rendered_timer = timer_match.group(1)
+    
+    # Must be "Running for 0:1x" (around 15s), strictly NOT 330:xx
+    assert "330:" not in rendered_timer
+    assert "329:" not in rendered_timer
+    assert rendered_timer.startswith("Running for 0:")
+    secs_val = int(rendered_timer.split("0:")[-1])
+    assert 14 <= secs_val <= 20, f"Expected elapsed time in 14-20s range, got: {rendered_timer}"
+
+    # 2. Test direct progress_view with timezone-aware datetime
+    aware_15s_ago = datetime.now(timezone.utc) - timedelta(seconds=15)
+    mock_job_aware = {
+        "id": 999,
+        "repo_url": "https://github.com/test/aware-repo",
+        "status": "running",
+        "created_at": aware_15s_ago,
+        "execution_time_seconds": 0.0,
+    }
+    html_aware = progress_view(job=mock_job_aware, current_user=user)
+    timer_match_aware = re.search(r'<span id="elapsed-timer-text">(.*?)</span>', html_aware)
+    assert timer_match_aware is not None
+    assert "330:" not in timer_match_aware.group(1)
+    assert timer_match_aware.group(1).startswith("Running for 0:")
+
+    # 3. Test direct progress_view with formatted ISO string ("... UTC")
+    iso_utc_str = (datetime.now(timezone.utc) - timedelta(seconds=15)).strftime("%Y-%m-%d %H:%M:%S UTC")
+    mock_job_str = {
+        "id": 1000,
+        "repo_url": "https://github.com/test/str-repo",
+        "status": "running",
+        "created_at": iso_utc_str,
+        "execution_time_seconds": 0.0,
+    }
+    html_str = progress_view(job=mock_job_str, current_user=user)
+    timer_match_str = re.search(r'<span id="elapsed-timer-text">(.*?)</span>', html_str)
+    assert timer_match_str is not None
+    assert "330:" not in timer_match_str.group(1)
+    assert timer_match_str.group(1).startswith("Running for 0:")
+
+    # 4. Test completed job freezes timer matching job duration
+    mock_completed_job = {
+        "id": 1001,
+        "repo_url": "https://github.com/test/completed-repo",
+        "status": "completed",
+        "created_at": created_15s_ago,
+        "execution_time_seconds": 14.6,
+    }
+    html_completed = progress_view(job=mock_completed_job, current_user=user)
+    assert "Completed in 0:14" in html_completed or "Completed in 0:15" in html_completed
+
 
 
 def test_dashboard_and_report_timestamps_include_seconds_for_same_minute_jobs(client, create_user, test_db):
@@ -1783,14 +1873,650 @@ func Helper() {
     assert "Syntax error" not in html_text
 
 
+def test_truncate_text_clean_helper():
+    """Verify word-boundary aware truncation helper."""
+    from app.ui.sanitizer import truncate_text_clean
+
+    # 1. Short text returns untouched
+    assert truncate_text_clean("Short error message", 50) == "Short error message"
+
+    # 2. Text with underscore/word at cutoff is cleanly trimmed to previous word boundary
+    long_msg = "Repository file count exceeds maximum allowed capacity_limit_exceeded for v1 sandbox."
+    res = truncate_text_clean(long_msg, 55)
+    assert res.endswith("…")
+    assert not res.endswith(" _…")
+    assert not res.endswith("_…")
+    assert "capacity" not in res  # cut before the partial word
+    assert res == "Repository file count exceeds maximum allowed…"
+
+    # 3. Empty or None input
+    assert truncate_text_clean(None) == ""
+    assert truncate_text_clean("") == ""
+
+    # 4. Trailing punctuation stripped before ellipsis
+    punct_msg = "Error encountered while parsing AST: " + "a" * 80
+    res2 = truncate_text_clean(punct_msg, 40)
+    assert not res2.endswith(":…")
+    assert not res2.endswith(" …")
 
 
+def test_failed_job_error_message_word_boundary_truncation_on_dashboard(client, create_user, test_db):
+    """
+    Verify that long error messages on the dashboard history table are truncated
+    at clean word boundaries with a proper ellipsis rather than cutting mid-word
+    or ending with a stray underscore.
+    """
+    SessionLocal, _ = test_db
+    user = create_user(github_id=9908, username="error_trunc_tester")
+    token = create_access_token(user_id=user.id, github_id=user.github_id, github_username=user.github_username)
+    client.cookies.set("access_token", token)
+
+    raw_long_error = (
+        "Repository file count exceeds maximum allowed capacity_limit_threshold "
+        "of 150 supported files during deep architectural syntax inspection."
+    )
+    with SessionLocal() as session:
+        job = AnalysisJobRepository.create_job(
+            session=session,
+            user_id=user.id,
+            repo_url="https://github.com/org/truncated-error-repo",
+            status="failed",
+        )
+        AnalysisJobRepository.update_job_status(
+            session=session,
+            job_id=job.id,
+            status="failed",
+            error_message=raw_long_error,
+        )
+
+    resp = client.get("/dashboard")
+    assert resp.status_code == 200
+    dash_html = resp.text
+
+    from app.ui.sanitizer import truncate_text_clean
+    expected_summary = truncate_text_clean(raw_long_error, 85)
+
+    # Full error is preserved in tooltip title
+    assert f'title="{raw_long_error}"' in dash_html
+    # Displayed summary in table ends in clean ellipsis and cleanly truncated at word boundary
+    assert f'<span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{expected_summary}</span>' in dash_html
+    assert "cap _" not in expected_summary
+    assert not expected_summary.endswith("_…")
+    assert expected_summary.endswith("…")
 
 
+def test_repeated_repo_submissions_visual_indicator(client, create_user, test_db):
+    """
+    Verify that when the same repository URL is submitted multiple times,
+    a distinct visual indicator badge (Re-analyzed Nx) is rendered on each row.
+    Unique repositories do not have this badge.
+    """
+    SessionLocal, _ = test_db
+    user = create_user(github_id=9909, username="repeat_repo_tester")
+    token = create_access_token(user_id=user.id, github_id=user.github_id, github_username=user.github_username)
+    client.cookies.set("access_token", token)
+
+    with SessionLocal() as session:
+        # Job 1: repeated repo
+        j1 = AnalysisJobRepository.create_job(
+            session=session,
+            user_id=user.id,
+            repo_url="https://github.com/Daily-Dive/daily-dive",
+            status="completed",
+        )
+        # Job 2: same repeated repo
+        j2 = AnalysisJobRepository.create_job(
+            session=session,
+            user_id=user.id,
+            repo_url="https://github.com/Daily-Dive/daily-dive",
+            status="completed",
+        )
+        # Job 3: unique standalone repo
+        j3 = AnalysisJobRepository.create_job(
+            session=session,
+            user_id=user.id,
+            repo_url="https://github.com/unique-org/unique-project",
+            status="completed",
+        )
+
+    resp = client.get("/dashboard")
+    assert resp.status_code == 200
+    html_text = resp.text
+
+    # Visual signal for repeated repository is present
+    assert "repo-repeat-indicator" in html_text
+    assert "Re-analyzed (2x)" in html_text
+    assert "Repository analyzed 2 times in history" in html_text
 
 
+# =========================================================================
+# 35. UI Density & Readability Enhancements Tests
+# =========================================================================
+
+def test_fill_the_blanks_chips_grouped_by_class_and_collapsible():
+    """PART A: Tests that Fill the Blanks chips are grouped by class/module and auto-collapse for large sets."""
+    from app.ui.components import _render_grouped_fill_chips
+
+    # Small list: <= 15 items -> open by default
+    small_funcs = [
+        {"name": "get_key", "full_name": "ApiKey.get_key", "class_name": "ApiKey", "kind": "method"},
+        {"name": "revoke", "full_name": "ApiKey.revoke", "class_name": "ApiKey", "kind": "method"},
+        {"name": "helper_util", "full_name": "helper_util", "class_name": None, "kind": "function"},
+    ]
+    html_small = _render_grouped_fill_chips(small_funcs)
+    assert "<details open" in html_small
+    assert "class ApiKey" in html_small
+    assert "(2 methods)" in html_small
+    assert "Top-level Functions" in html_small
+    assert "(1 function)" in html_small
+    assert "🧩 get_key" in html_small
+    assert "🧩 revoke" in html_small
+    assert "🧩 helper_util" in html_small
+
+    # Large list: > 15 items -> collapsed by default (no 'open' attribute on details)
+    large_funcs = []
+    for i in range(20):
+        large_funcs.append({
+            "name": f"method_{i}",
+            "full_name": f"HugeClass.method_{i}",
+            "class_name": "HugeClass",
+            "kind": "method",
+        })
+    html_large = _render_grouped_fill_chips(large_funcs)
+    assert "<details" in html_large
+    assert "<details open" not in html_large
+    assert "class HugeClass" in html_large
+    assert "(20 methods)" in html_large
+    assert "🧩 method_0" in html_large
+    assert "🧩 method_19" in html_large
 
 
+def test_present_matched_symbols_collapsible_summary():
+    """PART B: Tests that Present & Matched symbols render as a collapsed summary by default with working expandable details."""
+    from app.ui.components import _render_server_diff_html
 
+    # Case 1: All symbols matched
+    verification_all_pass = {
+        "structurally_verified": True,
+        "present_symbols": [
+            {"matched": {"name": f"func_{i}", "kind": "function", "args": []}}
+            for i in range(47)
+        ],
+        "missing_symbols": [],
+        "extra_symbols": [],
+    }
+    rendered_all_pass = _render_server_diff_html(verification_all_pass)
+    assert '<details class="matched-symbols-collapse"' in rendered_all_pass
+    assert "PRESENT &amp; MATCHED SYMBOLS (47/47 symbols matched ✓)" in rendered_all_pass
+    assert "View list ▾" in rendered_all_pass
+    assert "✓ func_0" in rendered_all_pass
+    assert "✓ func_46" in rendered_all_pass
+
+    # Case 2: Partial matches with missing symbols
+    verification_partial = {
+        "structurally_verified": False,
+        "present_symbols": [
+            {"matched": {"name": "func_a", "kind": "function", "args": []}},
+            {"matched": {"name": "func_b", "kind": "function", "args": []}},
+        ],
+        "missing_symbols": [
+            {"name": "func_c", "kind": "function"},
+        ],
+        "extra_symbols": [],
+    }
+    rendered_partial = _render_server_diff_html(verification_partial)
+    assert '<details class="matched-symbols-collapse"' in rendered_partial
+    assert "PRESENT &amp; MATCHED SYMBOLS (2/3 symbols matched):" in rendered_partial
+    assert "MISSING EXPECTED SYMBOLS (1):" in rendered_partial
+
+
+def test_middle_truncation_preserves_repo_root_and_filename():
+    """PART C: Tests middle truncation logic for graph node paths."""
+    from app.ui.components import _truncate_path_middle
+
+    # Short path: no truncation
+    short_path = "reelclaim-backend/app/db.py"
+    assert _truncate_path_middle(short_path, 28) == "reelclaim-backend/app/db.py"
+
+    # Long path: truncated in the middle with '...'
+    long_path = "services/backend/deeply/nested/components/authentication/oauth_handler.py"
+    truncated = _truncate_path_middle(long_path, 28)
+    assert len(truncated) == 28
+    assert truncated.startswith("services/bac")
+    assert truncated.endswith("th_handler.py")
+    assert "..." in truncated
+    # Front is NOT blindly cut off
+    assert not truncated.startswith("claim-backend")
+
+
+def test_consistent_report_naming_across_lifecycle():
+    """PART A: Tests consistent 'Architecture Report' naming across progress and completed views."""
+    from app.ui.components import progress_view, report_view
+
+    user = UserModel(id="u1", github_id=123, github_username="tester", email="tester@example.com")
+    billing = {"tier": "paid", "monthly_usage": 1, "monthly_quota": 100}
+
+    # 1. In-progress view
+    job_in_progress = AnalysisJobModel(
+        id=101,
+        user_id="u1",
+        repo_url="https://github.com/org/repo-alpha",
+        repo_name="repo-alpha",
+        status="running",
+    )
+    prog_html = progress_view(job_in_progress, current_user=user, billing_status=billing)
+    assert "<title>Architecture Report: repo-alpha (In Progress) // Backtrace Repository Archaeology</title>" in prog_html
+    assert "Architecture Report: <span style=\"font-style: italic; color: var(--brass);\">repo-alpha</span>" in prog_html
+    assert "Analysis Job Report" not in prog_html
+
+    # 2. Completed report view
+    completed_job = AnalysisJobModel(
+        id=102,
+        user_id="u1",
+        repo_url="https://github.com/org/repo-alpha",
+        repo_name="repo-alpha",
+        status="completed",
+        execution_time_seconds=42.0,
+    )
+    raw_md = """# Architectural Reverse-Engineering Report: `repo-alpha`
+*Synthesized at: 2026-09-24 10:00:00 UTC*
+
+## 1. Executive Architecture Overview
+- **Primary Language**: `Python`
+- **Total Analyzed Files**: `10`
+- **Domain Categories**: `1`
+- **Entry Point Files**: `app/main.py`
+- **Cyclic Core Components**: `0` files
+- **Isolated / Support Files**: `0` files
+
+### Domain Distribution
+| Domain Category | File Count | Percentage |
+| :--- | :--- | :--- |
+| `Core` | 10 | 100.0% |
+
+## 2. Build Order & Confidence Scoring
+Calibration text.
+
+## 3. Step-by-Step Architectural Milestones
+"""
+    graph_data = {"nodes": [], "edges": []}
+    quiz_data = {"questions": []}
+
+    report_html = report_view(
+        job=completed_job,
+        raw_markdown=raw_md,
+        graph_data=graph_data,
+        quiz_data=quiz_data,
+        current_user=user,
+        billing_status=billing,
+    )
+    assert "<title>Architecture Report: repo-alpha // Backtrace Repository Archaeology</title>" in report_html
+    assert "Architecture Report: <span style=\"font-style: italic; color: var(--brass);\">repo-alpha</span>" in report_html
+    assert "Repository Architecture Report" not in report_html
+    assert "Print Architecture Report" in report_html
+
+
+def test_entry_chips_enlarged_clickable_hit_area():
+    """PART B1: Tests that Execution Entry Target chips have an enlarged clickable hit area wrapper."""
+    from app.ui.components import report_view
+
+    user = UserModel(id="u1", github_id=123, github_username="tester", email="tester@example.com")
+    billing = {"tier": "paid"}
+    completed_job = AnalysisJobModel(
+        id=103,
+        user_id="u1",
+        repo_url="https://github.com/demo/repo",
+        repo_name="demo-repo",
+        status="completed",
+    )
+    raw_md = """# Architectural Reverse-Engineering Report: `demo-repo`
+*Synthesized at: 2026-09-24 10:00:00 UTC*
+
+## 1. Executive Architecture Overview
+- **Primary Language**: `Python`
+- **Total Analyzed Files**: `5`
+- **Domain Categories**: `1`
+- **Entry Point Files**: `cli/entrypoint.py, server/main.py`
+- **Cyclic Core Components**: `0` files
+- **Isolated / Support Files**: `0` files
+"""
+    graph_data = {"nodes": [], "edges": []}
+    quiz_data = {"questions": []}
+
+    html = report_view(
+        job=completed_job,
+        raw_markdown=raw_md,
+        graph_data=graph_data,
+        quiz_data=quiz_data,
+        current_user=user,
+        billing_status=billing,
+    )
+
+    # Check for entry-chip and enlarged entry-chip-arrow wrapper
+    assert 'class="entry-chip"' in html
+    assert 'class="entry-chip-arrow"' in html
+    assert ".entry-chip .entry-chip-arrow" in html
+    assert "min-width: 28px;" in html
+    assert "min-height: 28px;" in html
+    assert "selectDagNode(&#39;cli/entrypoint.py&#39;)" in html or "selectDagNode('cli/entrypoint.py')" in html
+    assert "selectDagNode(&#39;server/main.py&#39;)" in html or "selectDagNode('server/main.py')" in html
+
+
+def test_code_viewer_high_contrast_scrollbars():
+    """PART B2: Tests that high-contrast scrollbars are configured for code viewers and editors."""
+    from app.ui.components import page_shell
+
+    shell_html = page_shell("Test Title", "<pre>code</pre>")
+    assert ".read-code-pre" in shell_html
+    assert ".CodeMirror-scroll" in shell_html
+    assert "scrollbar-color: #525e75 #13171f;" in shell_html
+    assert "background: #525e75;" in shell_html
+    assert "border: 1px solid #2d3748;" in shell_html
+
+
+def test_entry_targets_categorization_split_and_kpi_counts():
+    """
+    PART B: Validates that entry targets are visually separated into Application Entry Targets
+    and Test & Benchmark Runners with accurate badges and counts on the KPI card.
+    """
+    from app.ui.components import report_view
+    from app.models.db import UserModel, AnalysisJobModel
+
+    user = UserModel(id="u2", github_id=456, github_username="entry_tester", email="entry@example.com")
+    billing = {"tier": "paid"}
+    job = AnalysisJobModel(
+        id=205,
+        user_id="u2",
+        repo_url="https://github.com/org/repo-with-mixed-entries",
+        repo_name="mixed-repo",
+        status="completed",
+    )
+    raw_md = """# Architectural Reverse-Engineering Report: `mixed-repo`
+*Synthesized at: 2026-09-24 12:00:00 UTC*
+
+## 1. Executive Architecture Overview
+- **Primary Language**: `Python`
+- **Total Analyzed Files**: `8`
+- **Domain Categories**: `3`
+- **Entry Point Files**: `app/main.py, cli/entry.py, tests/test_runner.py, benchmarks/bench_perf.py`
+- **Circular Dependency Components**: `2` files
+- **Isolated / Support Files**: `1` files
+
+### Domain Distribution
+| Domain Category | File Count | Percentage |
+| :--- | :--- | :--- |
+| `core` | 4 | 50.0% |
+| `tests` | 2 | 25.0% |
+| `benchmarks` | 2 | 25.0% |
+
+## 2. Build Order & Confidence Scoring
+Build order disclosure text.
+
+## 3. Step-by-Step Architectural Milestones
+### Milestone 0: Core Foundation (Tier 0)
+**[HIGH CONFIDENCE]** -- *Foundations*
+**Overview:** Core primitives.
+**Included Files (2):**
+- `app/core.py`
+- `app/utils.py`
+"""
+    graph_nodes = [
+        {"id": "app/main.py", "domain": "core", "tier": 2, "confidence": "high"},
+        {"id": "cli/entry.py", "domain": "core", "tier": 2, "confidence": "high"},
+        {"id": "tests/test_runner.py", "domain": "tests", "tier": 3, "confidence": "medium"},
+        {"id": "benchmarks/bench_perf.py", "domain": "benchmarks", "tier": 3, "confidence": "medium"},
+        {"id": "app/core.py", "domain": "core", "tier": 0, "confidence": "high"},
+        {"id": "app/utils.py", "domain": "core", "tier": 0, "confidence": "high"},
+    ]
+
+    html = report_view(
+        job=job,
+        raw_markdown=raw_md,
+        graph_data={"nodes": graph_nodes, "edges": []},
+        quiz_data={"questions": []},
+        current_user=user,
+        billing_status=billing,
+    )
+
+    # 1. Check KPI Card Subtitle
+    assert "2 App &bull; 2 Test/Tools" in html or "2 App • 2 Test/Tools" in html
+    assert "ENTRY POINTS" in html
+
+    # 2. Check Section 01 Header & Pullquote
+    assert "Section 01 // Codebase Overview" in html
+    assert "STANDALONE FILES: 1 &bull; CIRCULAR DEPENDENCIES: 2" in html
+
+    # 3. Check Application Entry Targets group
+    assert "Application Entry Targets (2)" in html
+    assert "MAIN/APP" in html
+    assert "app/main.py" in html
+    assert "cli/entry.py" in html
+
+    # 4. Check Test & Benchmark Runners group
+    assert "Test &amp; Benchmark Runners (2)" in html
+    assert "TEST RUNNER" in html
+    assert "BENCHMARK" in html
+    assert "tests/test_runner.py" in html
+    assert "benchmarks/bench_perf.py" in html
+
+    # 5. Check Dependency Graph plain language descriptions
+    assert "Built from analyzing the code&#39;s structure and how files import each other." in html or "Built from analyzing the code's structure and how files import each other." in html
+    assert "high confidence (clear structure or history)" in html
+    assert "medium confidence (estimated pattern)" in html
+
+
+def test_run_code_does_not_increment_attempt_or_alter_hint_gate(client, create_user, test_db):
+    """
+    Verifies that Run Code is an unmetered sandbox scratchpad:
+    - Executes code and returns stdout/stderr/exit code.
+    - Does NOT record an attempt submission or alter hint-gate progression.
+    - Hint 1 remains available (0 attempts), and Hint 2 remains locked (requires submission).
+    """
+    SessionLocal, _ = test_db
+    user = create_user(github_id=9879, username="run_code_sandbox_tester")
+    token = create_access_token(user_id=user.id, github_id=user.github_id, github_username=user.github_username)
+    client.cookies.set("access_token", token)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    with SessionLocal() as session:
+        job = AnalysisJobRepository.create_job(
+            session=session,
+            user_id=user.id,
+            repo_url="https://github.com/test/run-code-repo",
+            status="completed",
+        )
+        AnalysisJobRepository.update_job_status(
+            session=session,
+            job_id=job.id,
+            status="completed",
+            graph_data={
+                "nodes": [
+                    {"id": "calc.py", "path": "calc.py", "tier": 0, "symbols": [{"name": "add", "kind": "function"}]}
+                ]
+            },
+        )
+        job_id = job.id
+
+    # 1. Execute Run Code
+    run_resp = client.post(
+        f"/api/attempts/{job_id}/0/run",
+        headers=headers,
+        json={"submitted_code": "print('Sandbox Test: 123')", "language": "python"},
+    )
+    assert run_resp.status_code == 200
+    run_data = run_resp.json()
+    assert run_data["execution"]["exit_code"] == 0
+    assert "Sandbox Test: 123" in run_data["execution"]["stdout"]
+
+    # 2. Check that attempt status has NOT transitioned to 'attempting' or 'structurally_verified'
+    get_resp = client.get(f"/api/attempts/{job_id}/0", headers=headers)
+    assert get_resp.status_code == 200
+    att_data = get_resp.json()
+    assert att_data["attempt"]["status"] == "not_started"
+    assert "Sandbox Test: 123" in (att_data["attempt"]["last_run_stdout"] or "")
+    assert att_data["attempt"]["hint_level_revealed"] == 0
+
+    # 3. Hint 1 is available with zero attempts
+    h1_resp = client.post(f"/api/attempts/{job_id}/0/hint", headers=headers)
+    assert h1_resp.status_code == 200
+    assert h1_resp.json()["hint_level_revealed"] == 1
+
+    # 4. Hint 2 remains strictly gated (400 Bad Request) because Run Code did not submit code
+    h2_resp = client.post(f"/api/attempts/{job_id}/0/hint", headers=headers)
+    assert h2_resp.status_code == 400
+    assert "locked until you make your first implementation attempt" in h2_resp.json()["detail"]
+
+
+def test_milestone_brief_rendering_with_data_and_omission_paths(client, create_user, test_db):
+    """
+    Verifies that the Structured Brief Card:
+    - Renders real Objective and Constraints when present in graph/markdown.
+    - Omission path: completely omits Example I/O when no example data exists (no fabricated data).
+    - Renders Example I/O only when real example data is provided.
+    - Handles missing objective and symbols gracefully with transparent notices.
+    """
+    SessionLocal, _ = test_db
+    user = create_user(github_id=9880, username="brief_tester")
+    token = create_access_token(user_id=user.id, github_id=user.github_id, github_username=user.github_username)
+    client.cookies.set("access_token", token)
+
+    report_md = """# Architectural Report
+## 3. Step-by-Step Architectural Milestones
+
+### Milestone 0: Core Foundation
+**[HIGH CONFIDENCE]** -- *Foundational Kernel*
+**Overview:** Real overview of Milestone 0 core foundation layer.
+**Included Files:**
+- `core/kernel.py`
+
+### Milestone 1: Auxiliary Tools
+**[LOW CONFIDENCE]** -- *Tools*
+**Included Files:**
+- `tools/helper.txt`
+"""
+
+    with SessionLocal() as session:
+        job = AnalysisJobRepository.create_job(
+            session=session,
+            user_id=user.id,
+            repo_url="https://github.com/test/brief-repo",
+            status="completed",
+        )
+        AnalysisJobRepository.update_job_status(
+            session=session,
+            job_id=job.id,
+            status="completed",
+            report_markdown=report_md,
+            graph_data={
+                "nodes": [
+                    {
+                        "id": "core/kernel.py",
+                        "path": "core/kernel.py",
+                        "tier": 0,
+                        "symbols": [{"name": "KernelInit", "kind": "function", "args": ["config"]}],
+                    },
+                    {
+                        "id": "tools/helper.txt",
+                        "path": "tools/helper.txt",
+                        "tier": 1,
+                        "symbols": [],
+                    },
+                ],
+                "milestones": [
+                    {
+                        "tier": 0,
+                        "title": "Core Foundation",
+                        "overview": "Real overview of Milestone 0 core foundation layer.",
+                        "exported_symbols": ["KernelInit(config)"],
+                    },
+                    {
+                        "tier": 1,
+                        "title": "Auxiliary Tools",
+                        "overview": "",
+                        "exported_symbols": [],
+                    },
+                ],
+            },
+        )
+        job_id = job.id
+
+    resp = client.get(f"/report/{job_id}")
+    assert resp.status_code == 200
+    html = resp.text
+
+    # Milestone 0 checks (Populated Data Path)
+    assert "Milestone 0 Structured Brief" in html
+    assert "Real overview of Milestone 0 core foundation layer." in html
+    assert "KernelInit" in html
+    # Example I/O is NOT in graph_data -> Must NOT be in Milestone 0 brief
+    assert 'class="brief-example-io-section"' not in html
+
+    # Milestone 1 checks (Omission / Missing Data Path)
+    assert "Milestone 1 Structured Brief" in html
+    assert "No objective text available for this milestone." in html
+    assert "Any milestone module functions/classes" in html
+
+
+def test_starter_code_unavailable_fallback_notice(client, create_user, test_db):
+    """
+    Verifies that when ScaffoldGenerator cannot produce a starter signature
+    (e.g., empty or non-code files), the Structured Brief remains visible
+    and a visible 'Starter code isn't available for this file' notice is rendered.
+    """
+    SessionLocal, _ = test_db
+    user = create_user(github_id=9881, username="starter_fallback_tester")
+    token = create_access_token(user_id=user.id, github_id=user.github_id, github_username=user.github_username)
+    client.cookies.set("access_token", token)
+
+    report_md = """# Architectural Report
+## 3. Step-by-Step Architectural Milestones
+
+### Milestone 0: Pure Data Config
+**[HIGH CONFIDENCE]** -- *Configuration constants*
+**Overview:** Defines environment configuration constants.
+**Included Files:**
+- `config.json`
+"""
+    with SessionLocal() as session:
+        job = AnalysisJobRepository.create_job(
+            session=session,
+            user_id=user.id,
+            repo_url="https://github.com/test/fallback-repo",
+            status="completed",
+        )
+        AnalysisJobRepository.update_job_status(
+            session=session,
+            job_id=job.id,
+            status="completed",
+            report_markdown=report_md,
+            graph_data={
+                "nodes": [
+                    {"id": "config.json", "path": "config.json", "tier": 0, "symbols": []}
+                ],
+            },
+        )
+        job_id = job.id
+
+        from app.services.file_content_service import FileContentService
+        FileContentService.persist_file_contents(
+            session=session,
+            github_url="https://github.com/test/fallback-repo",
+            file_contents={
+                "config.json": '{"host": "localhost", "port": 8080}',
+            },
+            commit_hash="commit_fallback_123",
+        )
+        session.commit()
+
+    resp = client.get(f"/report/{job_id}")
+    assert resp.status_code == 200
+    html = resp.text
+
+    # Brief is still shown
+    assert "Milestone 0 Structured Brief" in html
+    assert "Defines environment configuration constants." in html
+    # Visible starter code notice is rendered
+    assert 'id="starter-unavailable-notice-0"' in html
+    assert "Starter code isn&#39;t available for this file." in html or "Starter code isn't available for this file." in html
 
 

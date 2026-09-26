@@ -26,7 +26,7 @@ class MarkdownReportFormatter:
         lines.append(f"- **Total Analyzed Files**: `{ov.total_files}`")
         lines.append(f"- **Domain Categories**: `{ov.total_domains}`")
         lines.append(f"- **Entry Point Files**: `{', '.join(ov.entry_point_files) if ov.entry_point_files else 'None'}`")
-        lines.append(f"- **Cyclic Core Components**: `{ov.cyclic_cluster_file_count}` files")
+        lines.append(f"- **Circular Dependency Components**: `{ov.cyclic_cluster_file_count}` files")
         lines.append(f"- **Isolated / Support Files**: `{ov.isolated_file_count}` files\n")
 
         lines.append("### Domain Distribution")
@@ -54,7 +54,7 @@ class MarkdownReportFormatter:
                     breakdown_str = f" ({', '.join(parts)})"
             badge = f"**[{m.confidence.upper()} CONFIDENCE{breakdown_str}]**"
             if m.is_cyclic:
-                badge += " *[CYCLIC CORE]*"
+                badge += " *[CIRCULAR DEPENDENCY]*"
             elif m.is_isolated:
                 badge += " *[ISOLATED COMPONENT]*"
 

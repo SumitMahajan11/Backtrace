@@ -138,7 +138,7 @@ def test_cached_ingestion_service_hit_and_concurrency(db_session, monkeypatch):
     clone_counter = 0
 
     class DummyIngestionService:
-        def ingest_repository(self, target_url):
+        def ingest_repository(self, target_url, commit_ref=None, subpath=None, **kwargs):
             nonlocal clone_counter
             clone_counter += 1
             return IngestionResult(

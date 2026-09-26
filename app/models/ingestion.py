@@ -10,6 +10,7 @@ class FileNode(BaseModel):
     size_bytes: int
     extension: str
     file_type: str = "file"
+    redaction_count: int = 0
 
 
 class SkippedItem(BaseModel):

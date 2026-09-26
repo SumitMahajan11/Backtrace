@@ -351,27 +351,39 @@ def test_fill_the_blanks_submission_and_immediate_hints(client, create_user, tes
             job_id=job.id,
             status="completed",
             graph_data={
-                "nodes": [{"id": "calc.py", "path": "calc.py", "tier": 0, "source_code": sample_source}],
-                "milestones": [{"tier": 0, "included_files": ["calc.py"]}],
+                "nodes": [
+                    {"id": "calc.py", "path": "calc.py", "tier": 0, "source_code": sample_source},
+                    {"id": "util.py", "path": "util.py", "tier": 1, "source_code": sample_source},
+                ],
+                "milestones": [
+                    {"tier": 0, "included_files": ["calc.py"]},
+                    {"tier": 1, "included_files": ["util.py"]},
+                ],
             },
         )
         job_id = job.id
 
     client.cookies.set("access_token", token)
 
-    # 1. Untouched milestone hint in Guess mode is locked (400 Bad Request)
-    resp_guess_hint = client.post(f"/api/attempts/{job_id}/0/hint")
-    assert resp_guess_hint.status_code == 400
-    assert "locked until you make your first implementation attempt" in resp_guess_hint.json()["detail"]
+    # 1. Untouched milestone Hint 1 in Guess mode is immediately accessible without prior attempt
+    resp_guess_hint1 = client.post(f"/api/attempts/{job_id}/0/hint")
+    assert resp_guess_hint1.status_code == 200
+    assert resp_guess_hint1.json()["hint_level_revealed"] == 1
+    assert resp_guess_hint1.json()["hint_1"] is not None
 
-    # 2. Untouched milestone hint in Fill mode is immediately accessible
-    resp_fill_hint = client.post(f"/api/attempts/{job_id}/0/hint?mode=fill")
+    # 2. Hint 2 before submitting an attempt is locked (400 Bad Request)
+    resp_guess_hint2 = client.post(f"/api/attempts/{job_id}/0/hint")
+    assert resp_guess_hint2.status_code == 400
+    assert "locked until you make your first implementation attempt" in resp_guess_hint2.json()["detail"]
+
+    # 3. Untouched milestone hint in Fill mode on tier 1 is also immediately accessible at level 1
+    resp_fill_hint = client.post(f"/api/attempts/{job_id}/1/hint?mode=fill")
     assert resp_fill_hint.status_code == 200
     data_hint = resp_fill_hint.json()
     assert data_hint["hint_level_revealed"] == 1
     assert data_hint["hint_1"] is not None
 
-    # 3. Submit Fill the Blanks submission
+    # 4. Submit Fill the Blanks submission on tier 0
     resp_submit = client.post(
         f"/api/attempts/{job_id}/0",
         json={

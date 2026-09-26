@@ -398,7 +398,7 @@ class IngestionService:
                     continue
 
                 # Scan and redact any sensitive secrets in place
-                redacted_text, _ = self.secret_scanner.scan_and_redact(text)
+                redacted_text, file_redactions = self.secret_scanner.scan_and_redact(text)
 
                 ext = abs_path.suffix.lower()
                 file_tree.append(
@@ -407,6 +407,7 @@ class IngestionService:
                         size_bytes=file_size,
                         extension=ext,
                         file_type="file",
+                        redaction_count=file_redactions,
                     )
                 )
                 file_contents[rel_path] = redacted_text

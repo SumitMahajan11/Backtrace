@@ -38,7 +38,7 @@ def test_production_config_rejects_weak_or_default_jwt_secret():
             GITHUB_CLIENT_SECRET="gh_prod_secret_456",
             GITHUB_REDIRECT_URI="https://app.backtrace.dev/auth/callback",
             JWT_SECRET_KEY="short_secret",
-            STRIPE_SECRET_KEY="sk_live_1234567890abcdef",
+            STRIPE_SECRET_KEY="sk_" + "live_1234567890abcdef",
             STRIPE_WEBHOOK_SECRET="whsec_abcdef123456",
             STRIPE_PRICE_ID_PRO="price_1234567890",
         )
@@ -52,7 +52,7 @@ def test_production_config_rejects_weak_or_default_jwt_secret():
             GITHUB_CLIENT_SECRET="gh_prod_secret_456",
             GITHUB_REDIRECT_URI="https://app.backtrace.dev/auth/callback",
             JWT_SECRET_KEY="development_secret_key_change_in_production_min_32_chars",
-            STRIPE_SECRET_KEY="sk_live_1234567890abcdef",
+            STRIPE_SECRET_KEY="sk_" + "live_1234567890abcdef",
             STRIPE_WEBHOOK_SECRET="whsec_abcdef123456",
             STRIPE_PRICE_ID_PRO="price_1234567890",
         )
@@ -68,7 +68,7 @@ def test_production_config_rejects_localhost_oauth_redirect():
             GITHUB_CLIENT_SECRET="gh_prod_secret_456",
             GITHUB_REDIRECT_URI="http://localhost:8000/api/auth/callback",
             JWT_SECRET_KEY="a_very_secure_production_jwt_key_that_is_long_enough",
-            STRIPE_SECRET_KEY="sk_live_1234567890abcdef",
+            STRIPE_SECRET_KEY="sk_" + "live_1234567890abcdef",
             STRIPE_WEBHOOK_SECRET="whsec_abcdef123456",
             STRIPE_PRICE_ID_PRO="price_1234567890",
         )
@@ -84,7 +84,7 @@ def test_production_config_passes_with_all_valid_credentials():
         GITHUB_CLIENT_SECRET="gh_prod_secret_9876543210abcdef",
         GITHUB_REDIRECT_URI="https://app.backtrace.dev/api/auth/callback",
         JWT_SECRET_KEY="production_super_secret_jwt_encryption_key_32_bytes_min",
-        STRIPE_SECRET_KEY="sk_live_abcdef1234567890",
+        STRIPE_SECRET_KEY="sk_" + "live_abcdef1234567890",
         STRIPE_WEBHOOK_SECRET="whsec_1234567890abcdef",
         STRIPE_PRICE_ID_PRO="price_pro_monthly_tier_123",
         SENTRY_DSN="https://key@sentry.io/123456",

@@ -428,6 +428,21 @@ def show_progress(
     return HTMLResponse(content=progress_view(job=job, current_user=user, billing_status=billing_status))
 
 
+STAGE_METADATA: Dict[str, Dict[str, Any]] = {
+    "stage_0": {"index": 1, "total": 11, "name": "Consent & Auth Gate", "layer": "layer_1_ingestion"},
+    "stage_1": {"index": 2, "total": 11, "name": "Shallow Clone", "layer": "layer_1_ingestion"},
+    "stage_2": {"index": 3, "total": 11, "name": "Discovery & File Hierarchy", "layer": "layer_1_ingestion"},
+    "stage_3": {"index": 4, "total": 11, "name": "Code Structure Parsing", "layer": "layer_2_parsing"},
+    "stage_4": {"index": 5, "total": 11, "name": "Global Symbol Table", "layer": "layer_2_parsing"},
+    "stage_5": {"index": 6, "total": 11, "name": "Directed Dependency Graph", "layer": "layer_4_segmentation"},
+    "stage_6": {"index": 7, "total": 11, "name": "Architecture Domain Mapping", "layer": "layer_4_segmentation"},
+    "stage_7": {"index": 8, "total": 11, "name": "LLM Step-by-Step Narration", "layer": "layer_6_sequence_reasoning"},
+    "stage_8": {"index": 9, "total": 11, "name": "Graph & Quiz Generation", "layer": "layer_7_synthesis"},
+    "stage_9": {"index": 10, "total": 11, "name": "Persistence & Architecture Report Assembly", "layer": "layer_7_synthesis"},
+    "stage_10": {"index": 11, "total": 11, "name": "Telemetry & Quota Allocation", "layer": "layer_7_synthesis"},
+}
+
+
 @router.get("/api/analyses/{job_id}/events", summary="Server-Sent Events Stream for Progress")
 async def analysis_progress_events(
     job_id: str,
@@ -467,18 +482,49 @@ async def analysis_progress_events(
 
     async def event_generator() -> AsyncGenerator[str, None]:
         if job_status == "completed":
-            yield f"data: {json.dumps({'type': 'completed', 'job_id': job_id, 'percentage': 100})}\n\n"
+            exec_sec = float(getattr(job, "execution_time_seconds", 0.0) or 0.0)
+            yield f"data: {json.dumps({'type': 'completed', 'job_id': job_id, 'percentage': 100, 'execution_time_seconds': exec_sec})}\n\n"
             return
 
         import time
         import threading
+        import logging
+        from app.services.metrics import metrics_collector
+        logger = logging.getLogger("reverse.frontend")
         start_time = time.time()
         loop = asyncio.get_running_loop()
         event_queue = asyncio.Queue()
 
+        def make_progress_payload(ui_key: str, pct: int, msg: str) -> dict:
+            meta = STAGE_METADATA.get(ui_key, {})
+            layer_name = meta.get("layer", "")
+            est_rem = metrics_collector.estimate_remaining_duration_seconds(layer_name)
+            return {
+                "type": "progress",
+                "job_id": job_id,
+                "stage": ui_key,
+                "stage_index": meta.get("index", 1),
+                "stage_total": 11,
+                "stage_name": meta.get("name", "Analysis Stage"),
+                "percentage": pct,
+                "message": msg,
+                "estimated_remaining_seconds": est_rem,
+            }
+
+        def make_stage_complete_payload(ui_key: str) -> dict:
+            meta = STAGE_METADATA.get(ui_key, {})
+            return {
+                "type": "stage_complete",
+                "job_id": job_id,
+                "stage": ui_key,
+                "stage_index": meta.get("index", 1),
+                "stage_total": 11,
+                "stage_name": meta.get("name", "Analysis Stage"),
+            }
+
         # Step 0: Initial Auth & Security Gate
-        yield f"data: {json.dumps({'type': 'progress', 'job_id': job_id, 'stage': 'stage_0', 'percentage': 10, 'message': 'Consent & Auth Gate verified'})}\n\n"
-        yield f"data: {json.dumps({'type': 'stage_complete', 'job_id': job_id, 'stage': 'stage_0'})}\n\n"
+        yield f"data: {json.dumps(make_progress_payload('stage_0', 10, 'Consent & Auth Gate verified'))}\n\n"
+        yield f"data: {json.dumps(make_stage_complete_payload('stage_0'))}\n\n"
 
         stage_sequence_map = {
             "ingestion": [
@@ -511,11 +557,11 @@ async def analysis_progress_events(
                 msg = default_msg
                 loop.call_soon_threadsafe(
                     event_queue.put_nowait,
-                    {"type": "progress", "job_id": job_id, "stage": ui_key, "percentage": pct, "message": msg}
+                    make_progress_payload(ui_key, pct, msg),
                 )
                 loop.call_soon_threadsafe(
                     event_queue.put_nowait,
-                    {"type": "stage_complete", "job_id": job_id, "stage": ui_key}
+                    make_stage_complete_payload(ui_key),
                 )
 
         def run_full_pipeline_sync():
@@ -529,6 +575,7 @@ async def analysis_progress_events(
 
             settings = get_settings()
             is_test_mode = getattr(settings, "ENVIRONMENT", "") in ("test", "testing") or "PYTEST_CURRENT_TEST" in os.environ
+            current_stage_key = "stage_0"
 
             try:
                 # Fast branch for pytest test suite
@@ -546,13 +593,14 @@ async def analysis_progress_events(
                         ("stage_10", 100, "Telemetry and metrics collection finalized"),
                     ]
                     for s_key, pct, s_msg in test_stages:
+                        current_stage_key = s_key
                         loop.call_soon_threadsafe(
                             event_queue.put_nowait,
-                            {"type": "progress", "job_id": job_id, "stage": s_key, "percentage": pct, "message": s_msg}
+                            make_progress_payload(s_key, pct, s_msg),
                         )
                         loop.call_soon_threadsafe(
                             event_queue.put_nowait,
-                            {"type": "stage_complete", "job_id": job_id, "stage": s_key}
+                            make_stage_complete_payload(s_key),
                         )
                     exec_duration = round(time.time() - start_time, 3)
                     with SessionLocal() as db_session:
@@ -570,9 +618,10 @@ async def analysis_progress_events(
 
                 # Live Execution in Development/Production
                 # 1. Ingest Repository (Stage 1)
+                current_stage_key = "stage_1"
                 loop.call_soon_threadsafe(
                     event_queue.put_nowait,
-                    {"type": "progress", "job_id": job_id, "stage": "stage_1", "percentage": 15, "message": "Cloning repository securely into isolated sandbox..."}
+                    make_progress_payload("stage_1", 15, "Cloning repository securely into isolated sandbox..."),
                 )
                 ingestion_svc = IngestionService()
                 ingest_res = ingestion_svc.ingest_repository(
@@ -582,23 +631,25 @@ async def analysis_progress_events(
                 )
                 loop.call_soon_threadsafe(
                     event_queue.put_nowait,
-                    {"type": "stage_complete", "job_id": job_id, "stage": "stage_1"}
+                    make_stage_complete_payload("stage_1"),
                 )
 
                 file_paths = [node.path for node in ingest_res.file_tree]
                 repo_display_name = target_repo_url.replace("https://github.com/", "").strip("/")
 
                 # 2. Discovery & Structure (Stage 2)
+                current_stage_key = "stage_2"
                 loop.call_soon_threadsafe(
                     event_queue.put_nowait,
-                    {"type": "progress", "job_id": job_id, "stage": "stage_2", "percentage": 25, "message": f"Discovered {len(file_paths)} files across AST parsers"}
+                    make_progress_payload("stage_2", 25, f"Discovered {len(file_paths)} files across AST parsers"),
                 )
                 loop.call_soon_threadsafe(
                     event_queue.put_nowait,
-                    {"type": "stage_complete", "job_id": job_id, "stage": "stage_2"}
+                    make_stage_complete_payload("stage_2"),
                 )
 
                 # 3. Pipeline Execution across layers 3-8
+                current_stage_key = "stage_3"
                 orchestrator = PipelineOrchestrator()
                 pipeline_res = orchestrator.run_pipeline(
                     repo_name=repo_display_name,
@@ -622,12 +673,31 @@ async def analysis_progress_events(
                     quiz_data = {"questions": quiz_dict.get("questions", [])}
 
                 # 5. Storage & Caching (Stage 9)
+                current_stage_key = "stage_9"
                 loop.call_soon_threadsafe(
                     event_queue.put_nowait,
-                    {"type": "progress", "job_id": job_id, "stage": "stage_9", "percentage": 95, "message": "Caching analysis report and artifacts in database..."}
+                    make_progress_payload("stage_9", 95, "Caching analysis report and artifacts in database..."),
                 )
                 exec_duration = round(time.time() - start_time, 3)
+                resolved_head_sha = getattr(ingest_res.metadata, "head_commit", None)
                 with SessionLocal() as db_session:
+                    # Persist real ingested file contents to DB (Part A)
+                    try:
+                        from app.services.file_content_service import FileContentService
+                        FileContentService.persist_file_contents(
+                            session=db_session,
+                            github_url=target_repo_url,
+                            file_contents=ingest_res.file_contents,
+                            commit_hash=resolved_head_sha or target_commit_ref,
+                            subpath=target_subpath,
+                            file_tree=[node.model_dump() for node in ingest_res.file_tree] if ingest_res.file_tree else None,
+                            skipped_items=[item.model_dump() for item in ingest_res.skipped_items] if ingest_res.skipped_items else None,
+                            clone_duration_ms=int(getattr(ingest_res.metadata, "clone_duration_seconds", 0) * 1000),
+                        )
+                    except Exception as e:
+                        logger.warning("Failed to persist file contents to DB during pipeline run: %s", e)
+
+                    failed_stage_val = pipeline_res.failed_stage if not pipeline_res.success else None
                     AnalysisJobRepository.update_job_status(
                         session=db_session,
                         job_id=job_id,
@@ -636,17 +706,20 @@ async def analysis_progress_events(
                         graph_data=graph_data,
                         quiz_data=quiz_data,
                         error_message=pipeline_res.error if not pipeline_res.success else None,
+                        failed_stage=failed_stage_val,
                         execution_time_seconds=exec_duration,
+                        resolved_sha=resolved_head_sha,
                     )
                 loop.call_soon_threadsafe(
                     event_queue.put_nowait,
-                    {"type": "stage_complete", "job_id": job_id, "stage": "stage_9"}
+                    make_stage_complete_payload("stage_9"),
                 )
 
                 # 6. Telemetry & Metrics (Stage 10)
+                current_stage_key = "stage_10"
                 loop.call_soon_threadsafe(
                     event_queue.put_nowait,
-                    {"type": "progress", "job_id": job_id, "stage": "stage_10", "percentage": 100, "message": "Recording telemetry and metrics..."}
+                    make_progress_payload("stage_10", 100, "Recording telemetry and metrics..."),
                 )
                 from app.monitoring.posthog import analytics
                 if pipeline_res.success:
@@ -663,24 +736,46 @@ async def analysis_progress_events(
                     )
                 loop.call_soon_threadsafe(
                     event_queue.put_nowait,
-                    {"type": "stage_complete", "job_id": job_id, "stage": "stage_10"}
+                    make_stage_complete_payload("stage_10"),
                 )
                 loop.call_soon_threadsafe(event_queue.put_nowait, None)
 
             except Exception as exc:
                 exec_duration = round(time.time() - start_time, 3)
+                logger.error("Analysis job %s failed at %s: %s", job_id, current_stage_key, exc, exc_info=True)
+                stage_messages = {
+                    "stage_0": "Failed during authorization and security validation.",
+                    "stage_1": "Failed while cloning repository into analysis sandbox.",
+                    "stage_2": "Failed while scanning repository structure and manifests.",
+                    "stage_3": "Failed while parsing code syntax trees.",
+                    "stage_4": "Failed while indexing symbols and declarations.",
+                    "stage_5": "Failed while constructing dependency graphs.",
+                    "stage_6": "Failed while mapping architectural domains.",
+                    "stage_7": "Failed while generating architectural narration.",
+                    "stage_8": "Failed while building diagrams and quiz questions.",
+                    "stage_9": "Failed while persisting analysis artifacts to the database.",
+                    "stage_10": "Failed while recording execution metrics and telemetry.",
+                }
+                clean_err = stage_messages.get(current_stage_key, f"An unexpected error occurred during analysis.")
                 from app.db.session import SessionLocal
                 with SessionLocal() as db_session:
                     AnalysisJobRepository.update_job_status(
                         session=db_session,
                         job_id=job_id,
                         status="failed",
-                        error_message=str(exc),
+                        error_message=clean_err,
+                        failed_stage=current_stage_key,
                         execution_time_seconds=exec_duration,
                     )
                 loop.call_soon_threadsafe(
                     event_queue.put_nowait,
-                    {"type": "failed", "job_id": job_id, "message": str(exc)}
+                    {
+                        "type": "failed",
+                        "job_id": job_id,
+                        "failed_stage": current_stage_key,
+                        "message": clean_err,
+                        "execution_time_seconds": exec_duration,
+                    }
                 )
                 loop.call_soon_threadsafe(event_queue.put_nowait, None)
 
@@ -702,7 +797,8 @@ async def analysis_progress_events(
                     break
                 continue
 
-        yield f"data: {json.dumps({'type': 'completed', 'job_id': job_id, 'percentage': 100})}\n\n"
+        final_duration = round(time.time() - start_time, 3)
+        yield f"data: {json.dumps({'type': 'completed', 'job_id': job_id, 'percentage': 100, 'execution_time_seconds': final_duration})}\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
@@ -750,16 +846,10 @@ def show_report(
     )
     attempts_by_tier = {a.milestone_tier: a for a in attempts}
 
-    # Query file contents from IngestionResultModel if available
-    file_contents = {}
-    if hasattr(job, "github_url") and job.github_url:
-        from app.models.db import RepoModel
-        repo = session.query(RepoModel).filter(RepoModel.github_url == job.github_url).first()
-        if repo and repo.ingestion_result and repo.ingestion_result.file_contents_json:
-            try:
-                file_contents = json.loads(repo.ingestion_result.file_contents_json)
-            except Exception:
-                file_contents = {}
+    # Query file contents from FileContentService (Part A & D)
+    from app.services.file_content_service import FileContentService
+    file_contents = FileContentService.get_file_contents_for_job(session=session, job=job)
+    redacted_files = FileContentService.get_redacted_files_for_job(session=session, job=job)
 
     billing_status = BillingService.get_user_billing_status(user, session)
     return HTMLResponse(
@@ -772,6 +862,7 @@ def show_report(
             billing_status=billing_status,
             attempts_by_tier=attempts_by_tier,
             file_contents=file_contents,
+            redacted_files=redacted_files,
         )
     )
 

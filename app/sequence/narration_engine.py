@@ -100,36 +100,44 @@ class NarrationEngine:
 
         if not summary.history_available:
             low_parts = []
-            if cyclic_count > 0:
-                low_parts.append(f"{cyclic_count} cyclic files")
             if isolated_count > 0:
-                low_parts.append(f"{isolated_count} isolated files")
+                low_parts.append(f"{isolated_count} standalone files")
+            if cyclic_count > 0:
+                low_parts.append(f"{cyclic_count} in circular dependency loops")
             if unresolved_tie_count > 0:
-                low_parts.append(f"{unresolved_tie_count} unresolved-tie sibling files")
-            low_desc = ", ".join(low_parts) if low_parts else "unresolved structural estimates"
+                low_parts.append(f"{unresolved_tie_count} with unclear ordering")
+            if len(low_parts) == 1:
+                low_desc = low_parts[0]
+            elif len(low_parts) == 2:
+                low_desc = f"{low_parts[0]} plus {low_parts[1]}"
+            elif len(low_parts) > 2:
+                low_desc = ", ".join(low_parts[:-1]) + f", plus {low_parts[-1]}"
+            else:
+                low_desc = "standalone or loosely connected files"
+
             header = (
                 f"**Confidence Calibration Note (No Git History / Zip Upload):**\n"
-                f"This repository was analyzed without Git commit history. Sequence ordering is derived "
-                f"purely from static AST imports and domain-level heuristics ({summary.medium_pct}% medium confidence). "
-                f"{summary.low_pct}% of files ({low_desc}) reside in cyclic clusters, isolated sets, or unresolved sibling ties where ordering is an educated structural estimate."
+                f"This repository doesn't have commit history available, so the build order was estimated "
+                f"from how files import each other rather than when they were actually written ({summary.medium_pct}% medium confidence). "
+                f"About {summary.low_pct}% of files ({low_desc}) don't have a clear position in the sequence, so their placement is an estimate."
             )
         else:
             disclosure_lines = [
                 f"**Confidence & Verification Calibration ({total_files} Scored Files):**",
-                f"- **Verified History & Hard Topology ({summary.high_pct}% High Confidence):** "
+                f"- **Verified History & Clear Structure ({summary.high_pct}% High Confidence):** "
                 f"These files have clean acyclic dependencies and were ordered using verified Git commit timestamps (`--follow`).",
             ]
 
             if summary.medium_pct > 0.0:
                 disclosure_lines.append(
-                    f"- **Domain Heuristics ({summary.medium_pct}% Medium Confidence):** "
+                    f"- **Estimated Ordering ({summary.medium_pct}% Medium Confidence):** "
                     f"These files were ordered by domain precedence rules (config $\\rightarrow$ database $\\rightarrow$ core $\\rightarrow$ backend $\\rightarrow$ frontend $\\rightarrow$ examples $\\rightarrow$ tests) "
                     f"to resolve ties where timestamps were identical."
                 )
             else:
                 disclosure_lines.append(
-                    f"- **Domain Heuristics (0.0% Medium Confidence):** "
-                    f"Domain heuristics were not needed to break ties between different domains, as commit history resolved cross-domain dependencies."
+                    f"- **Estimated Ordering (0.0% Medium Confidence):** "
+                    f"No estimation was needed to order these files between different domains, as commit history resolved cross-domain dependencies."
                 )
 
             if cyclic_count > 0:
@@ -483,7 +491,7 @@ class NarrationEngine:
         if confs.get("high", 0) > 0:
             prov_parts.append(f"{confs['high']}/{file_count} files verified via Git history (`--follow`)")
         if confs.get("medium", 0) > 0:
-            prov_parts.append(f"{confs['medium']}/{file_count} ordered via domain precedence heuristics")
+            prov_parts.append(f"{confs['medium']}/{file_count} ordered using estimated patterns")
         if confs.get("low", 0) > 0:
             if is_cyclic:
                 prov_parts.append(f"{confs['low']}/{file_count} co-dependent files in a circular cluster")

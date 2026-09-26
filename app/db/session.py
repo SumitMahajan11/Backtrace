@@ -8,6 +8,10 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 def _get_initial_database_url() -> str:
+    env_name = os.getenv("ENVIRONMENT", "")
+    if env_name in ("test", "testing") or "PYTEST_CURRENT_TEST" in os.environ:
+        return os.getenv("DATABASE_URL", "sqlite:///:memory:")
+
     env_url = os.getenv("DATABASE_URL")
     url = env_url
     if not url:
@@ -40,11 +44,20 @@ if DATABASE_URL.startswith("postgresql"):
     )
 else:
     connect_args = {"check_same_thread": False, "timeout": 30.0} if DATABASE_URL.startswith("sqlite") else {}
-    engine = create_engine(
-        DATABASE_URL,
-        connect_args=connect_args,
-        echo=False,
-    )
+    if DATABASE_URL == "sqlite:///:memory:":
+        from sqlalchemy.pool import StaticPool
+        engine = create_engine(
+            DATABASE_URL,
+            connect_args=connect_args,
+            poolclass=StaticPool,
+            echo=False,
+        )
+    else:
+        engine = create_engine(
+            DATABASE_URL,
+            connect_args=connect_args,
+            echo=False,
+        )
 
 if DATABASE_URL.startswith("sqlite"):
     @event.listens_for(engine, "connect")

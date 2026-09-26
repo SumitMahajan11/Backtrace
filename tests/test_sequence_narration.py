@@ -143,7 +143,7 @@ def test_calibrated_confidence_disclosure_no_history():
     disclosure = engine._build_confidence_disclosure(scored_result)
 
     assert "No Git History / Zip Upload" in disclosure
-    assert "purely from static AST imports and domain-level heuristics" in disclosure
+    assert "build order was estimated from how files import each other rather than when they were actually written" in disclosure
 
 
 def test_deterministic_narration_fallback(sample_scored_result):

@@ -100,10 +100,10 @@ def test_real_flask_synthesis_and_narration():
     # Check that Markdown milestone header includes breakdown dictionary, not just bare badge
     # e.g., "**[LOW CONFIDENCE (Low: 19)]** *[CYCLIC CORE]*"
     assert "**[LOW CONFIDENCE (Low:" in md_output, "Markdown output failed to render confidence breakdown dict"
-    assert "*[CYCLIC CORE]*" in md_output
+    assert "*[CIRCULAR DEPENDENCY]*" in md_output
 
     # Check that reconciliation table is rendered in Section 2
-    assert "## 2. Sequence Reasoning & Confidence Calibration" in md_output
+    assert "## 2. Build Order & Confidence Scoring" in md_output
     assert "| Milestone / Scope | High | Medium | Low | Total Files | Dominant Domain |" in md_output
 
     # Graph DAG Formatter must also preserve confidence_breakdown

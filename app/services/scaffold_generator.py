@@ -21,11 +21,12 @@ class PythonScaffoldVisitor(ast.NodeTransformer):
     preserving docstrings, signatures, decorators, type hints, and top-level constants.
     """
 
-    def __init__(self):
+    def __init__(self, is_redacted: bool = False):
         super().__init__()
         self.blanked_functions: List[Dict[str, Any]] = []
         self.total_functions: int = 0
         self.enclosing_class: Optional[str] = None
+        self.is_redacted: bool = is_redacted
 
     def _is_empty_or_trivial_stub(self, body: List[ast.stmt]) -> bool:
         """Determines if a function body already has no real executable logic."""
@@ -50,6 +51,16 @@ class PythonScaffoldVisitor(ast.NodeTransformer):
                     return True
         return False
 
+    def _contains_redaction_marker(self, node: ast.AST) -> bool:
+        """Checks whether the AST node or any subnode contains a redaction marker."""
+        for child in ast.walk(node):
+            if isinstance(child, ast.Constant) and isinstance(child.value, str):
+                if "[REDACTED]" in child.value:
+                    return True
+            elif isinstance(child, ast.Name) and "REDACTED" in child.id:
+                return True
+        return False
+
     def visit_ClassDef(self, node: ast.ClassDef) -> ast.AST:
         prev_class = self.enclosing_class
         self.enclosing_class = node.name
@@ -69,6 +80,11 @@ class PythonScaffoldVisitor(ast.NodeTransformer):
         is_async: bool = False,
     ) -> ast.AST:
         self.total_functions += 1
+
+        # Skip blanking only if this file was flagged as redacted AND function contains redaction marker
+        if self.is_redacted and self._contains_redaction_marker(node):
+            return node
+
         docstring = ast.get_docstring(node)
         args_list = [a.arg for a in node.args.args]
         is_trivial = self._is_empty_or_trivial_stub(node.body)
@@ -135,6 +151,7 @@ class ScaffoldGenerator:
         code: str,
         language: str = "python",
         file_path: Optional[str] = None,
+        is_redacted: bool = False,
     ) -> Dict[str, Any]:
         """
         Generates scaffolded code from source code.
@@ -162,10 +179,15 @@ class ScaffoldGenerator:
                 "reason": cls.NON_PYTHON_REASON,
             }
 
-        return cls._generate_python_scaffold(code, file_path)
+        return cls._generate_python_scaffold(code, file_path, is_redacted=is_redacted)
 
     @classmethod
-    def _generate_python_scaffold(cls, code: str, file_path: Optional[str] = None) -> Dict[str, Any]:
+    def _generate_python_scaffold(
+        cls,
+        code: str,
+        file_path: Optional[str] = None,
+        is_redacted: bool = False,
+    ) -> Dict[str, Any]:
         try:
             tree = ast.parse(code)
         except SyntaxError as e:
@@ -179,7 +201,7 @@ class ScaffoldGenerator:
                 "reason": f"Syntax error in source file: {e}",
             }
 
-        visitor = PythonScaffoldVisitor()
+        visitor = PythonScaffoldVisitor(is_redacted=is_redacted)
         modified_tree = visitor.visit(tree)
         ast.fix_missing_locations(modified_tree)
 

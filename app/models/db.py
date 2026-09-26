@@ -41,6 +41,7 @@ class RepoModel(Base):
     keep_longer: bool = Column(Boolean, nullable=False, default=False)
     consent_prompt_improvement: bool = Column(Boolean, nullable=False, default=False)
     consent_future_training: bool = Column(Boolean, nullable=False, default=False)
+    subpath: Optional[str] = Column(String(500), nullable=True, default=None)
 
     # Relationships
     ingestion_result = relationship(
@@ -58,6 +59,7 @@ class RepoModel(Base):
 
     __table_args__ = (
         Index("idx_repo_url_commit", "github_url", "commit_hash"),
+        Index("idx_repo_url_commit_subpath", "github_url", "commit_hash", "subpath"),
     )
 
 
@@ -197,9 +199,11 @@ class AnalysisJobModel(Base):
     repo_name: str = Column(String(255), nullable=False, index=True)
     github_url: str = Column(String(255), nullable=False)
     commit_ref: Optional[str] = Column(String(255), nullable=True, default=None)
+    resolved_sha: Optional[str] = Column(String(64), nullable=True, default=None, index=True)
     subpath: Optional[str] = Column(String(500), nullable=True, default=None)
     status: str = Column(String(32), nullable=False, default="pending")  # pending, processing, complete, failed
     run_id: str = Column(String(64), nullable=False, index=True)
+    failed_stage: Optional[str] = Column(String(64), nullable=True, default=None)
     error_message: Optional[str] = Column(Text, nullable=True)
     execution_time_seconds: float = Column(Float, nullable=False, default=0.0)
     markdown_output: str = Column(Text, nullable=False, default="")
