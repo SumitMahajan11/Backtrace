@@ -9,6 +9,7 @@ _discovered_piston_health = False
 def pytest_configure(config):
     """Discover reachable Piston URL once for test session and isolate Sentry monitoring."""
     os.environ["SENTRY_DSN"] = ""
+    os.environ["DEBUG"] = "false"
     os.environ["ENVIRONMENT"] = "testing"
     os.environ["DATABASE_URL"] = "sqlite:///:memory:"
     os.environ["REDIS_URL"] = "redis://127.0.0.1:6379/0"

@@ -59,7 +59,7 @@ app = FastAPI(
     title=settings.APP_NAME,
     description="Identity, Session Management, Stripe Billing, and 11-Layer Reverse Engineering Pipeline API",
     version="1.0.0",
-    debug=settings.DEBUG,
+    debug=False,  # Enforce False to guarantee zero internal stack trace leakage across all environments
     lifespan=lifespan,
 )
 
