@@ -12,17 +12,9 @@ from app.security.auth import refresh_rate_limiter
 from app.services.auth_service import AuthService, AuthServiceError
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
+from app.core.config import get_settings
 
-# DEBUG: Print at module load time
-import os as _os
-print(f"[AUTH_MODULE_LOAD] GITHUB_REDIRECT_URI env={_os.environ.get('GITHUB_REDIRECT_URI', 'NOT SET')}", flush=True)
-try:
-    from app.core.config import get_settings as _gs
-    _settings = _gs()
-    print(f"[AUTH_MODULE_LOAD] settings.GITHUB_REDIRECT_URI={_settings.GITHUB_REDIRECT_URI!r}", flush=True)
-except Exception as _e:
-    print(f"[AUTH_MODULE_LOAD] ERROR loading settings: {_e}", flush=True)
-
+_settings = get_settings()
 
 
 class RefreshTokenRequest(BaseModel):
@@ -54,16 +46,7 @@ def github_login(
     random, single-use state token for CSRF protection.
     """
     try:
-        import os
-        from app.core.config import get_settings
-        _s = get_settings()
-        import logging
-        logging.getLogger("reverse.auth_debug").warning(
-            f"[DEBUG] GITHUB_REDIRECT_URI from settings={_s.GITHUB_REDIRECT_URI!r} | "
-            f"os.environ={os.environ.get('GITHUB_REDIRECT_URI', 'NOT SET')!r}"
-        )
         auth_url = AuthService.get_login_redirect_url(redirect_target=redirect_url)
-        logging.getLogger("reverse.auth_debug").warning(f"[DEBUG] Generated auth_url redirect_uri portion: {auth_url.split('redirect_uri=')[1].split('&')[0] if 'redirect_uri=' in auth_url else 'N/A'}")
     except AuthServiceError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message)
     return RedirectResponse(url=auth_url, status_code=status.HTTP_307_TEMPORARY_REDIRECT)
@@ -242,32 +225,38 @@ def get_authenticated_user_profile(
     )
 
 
-@router.get("/dev-login", summary="Dev Environment Login Helper")
-def dev_login(
-    user_id: int = Query(..., description="User ID to simulate login for"),
-    redirect_url: str = Query("/rewards", description="Destination URL"),
-    session: Session = Depends(get_db),
-):
-    """Dev authentication helper that sets an access token cookie for local/test browser verification."""
-    user = session.get(UserModel, user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    from app.security.auth import create_access_token
-    token = create_access_token(
-        user_id=user.id,
-        github_id=user.github_id,
-        github_username=user.github_username,
-        is_admin=user.is_admin,
-    )
-    resp = RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)
-    resp.set_cookie(
-        key="access_token",
-        value=token,
-        httponly=True,
-        secure=False,
-        samesite="lax",
-        max_age=86400,
-        path="/",
-    )
-    return resp
+if _settings.ENVIRONMENT == "development":
+    @router.get("/dev-login", summary="Dev Environment Login Helper")
+    def dev_login(
+        user_id: int = Query(..., description="User ID to simulate login for"),
+        redirect_url: str = Query("/rewards", description="Destination URL"),
+        session: Session = Depends(get_db),
+    ):
+        """Dev authentication helper that sets an access token cookie for local/test browser verification."""
+        if not redirect_url.startswith("/") or redirect_url.startswith("//") or redirect_url.startswith("/\\"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid redirect URL: open redirect rejected",
+            )
+        user = session.get(UserModel, user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        from app.security.auth import create_access_token
+        token = create_access_token(
+            user_id=user.id,
+            github_id=user.github_id,
+            github_username=user.github_username,
+            is_admin=user.is_admin,
+        )
+        resp = RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)
+        resp.set_cookie(
+            key="access_token",
+            value=token,
+            httponly=True,
+            secure=False,
+            samesite="lax",
+            max_age=86400,
+            path="/",
+        )
+        return resp
 
