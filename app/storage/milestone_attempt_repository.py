@@ -147,7 +147,8 @@ class MilestoneAttemptRepository:
                 user_id=user_id,
                 job_id=job_id,
                 milestone_tier=milestone_tier,
-                submitted_code=submitted_code,
+                submitted_code="",
+                last_run_code=submitted_code,
                 status="not_started",
                 last_run_stdout=stdout,
                 last_run_stderr=stderr,
@@ -158,12 +159,12 @@ class MilestoneAttemptRepository:
             )
             session.add(attempt)
         else:
-            attempt.submitted_code = submitted_code
+            # Scratchpad runs store in last_run_code and NEVER overwrite submitted_code or status
+            attempt.last_run_code = submitted_code
             attempt.last_run_stdout = stdout
             attempt.last_run_stderr = stderr
             attempt.last_run_exit_code = exit_code
             attempt.last_run_at = now
-            # Never touches status or counts as an attempt on Run
             attempt.updated_at = now
 
         session.commit()

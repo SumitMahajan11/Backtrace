@@ -398,3 +398,73 @@ def test_fill_the_blanks_submission_and_immediate_hints(client, create_user, tes
     assert data_submit["verification"]["structurally_verified"] is True
 
 
+def test_run_does_not_overwrite_submitted_code_or_status(client, test_db, create_user):
+    """
+    Verification that /run scratch executions NEVER overwrite submitted_code
+    or the graded attempt status.
+    """
+    SessionLocal, _ = test_db
+    user = create_user(github_id=2002, username="coder_bob")
+    token = create_access_token(user_id=user.id, github_id=user.github_id, github_username=user.github_username)
+
+    with SessionLocal() as session:
+        job = AnalysisJobRepository.create_job(
+            session=session,
+            user_id=user.id,
+            repo_url="https://github.com/example/math-lib",
+            status="completed",
+        )
+        AnalysisJobRepository.update_job_status(
+            session=session,
+            job_id=job.id,
+            status="completed",
+            graph_data={
+                "nodes": [
+                    {
+                        "id": "math_tool.py",
+                        "tier": 0,
+                        "exports": ["compute_answer"],
+                    }
+                ],
+                "milestones": [
+                    {"tier": 0, "included_files": ["math_tool.py"]},
+                ],
+            },
+        )
+        job_id = job.id
+
+    client.cookies.set("access_token", token)
+
+    # 1. Submit a valid solution
+    submit_code = "def compute_answer():\n    return 42\n"
+    resp_submit = client.post(
+        f"/api/attempts/{job_id}/0",
+        json={"submitted_code": submit_code, "language": "python", "mode": "guess"},
+    )
+    assert resp_submit.status_code == 200
+    sub_data = resp_submit.json()["attempt"]
+    assert sub_data["submitted_code"] == submit_code
+    assert sub_data["status"] == "structurally_verified"
+
+    # 2. Run scratch code that is completely different
+    scratch_code = "print('temporary scratch run debugging')\n"
+    resp_run = client.post(
+        f"/api/attempts/{job_id}/0/run",
+        json={"submitted_code": scratch_code, "language": "python"},
+    )
+    assert resp_run.status_code == 200
+    run_data = resp_run.json()["attempt"]
+    assert run_data["submitted_code"] == submit_code  # Unchanged!
+    assert run_data["status"] == "structurally_verified"  # Unchanged!
+    assert run_data["last_run_code"] == scratch_code
+
+    # 3. GET the attempt record
+    resp_get = client.get(f"/api/attempts/{job_id}/0")
+    assert resp_get.status_code == 200
+    get_data = resp_get.json()["attempt"]
+    assert get_data["submitted_code"] == submit_code  # Still unchanged!
+    assert get_data["status"] == "structurally_verified"  # Still unchanged!
+    assert get_data["last_run_code"] == scratch_code
+
+
+

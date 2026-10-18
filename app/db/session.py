@@ -98,6 +98,8 @@ def init_db(target_engine=engine) -> None:
 
             if "milestone_attempts" in tables:
                 columns = [col["name"] for col in inspector.get_columns("milestone_attempts")]
+                if "last_run_code" not in columns:
+                    conn.execute(text("ALTER TABLE milestone_attempts ADD COLUMN last_run_code TEXT"))
                 if "last_run_stdout" not in columns:
                     conn.execute(text("ALTER TABLE milestone_attempts ADD COLUMN last_run_stdout TEXT"))
                 if "last_run_stderr" not in columns:

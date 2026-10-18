@@ -282,6 +282,7 @@ class MilestoneAttemptModel(Base):
     job_id: int = Column(Integer, ForeignKey("analysis_jobs.id", ondelete="CASCADE"), nullable=False, index=True)
     milestone_tier: int = Column(Integer, nullable=False, index=True)
     submitted_code: str = Column(Text, nullable=False, default="")
+    last_run_code: Optional[str] = Column(Text, nullable=True)
     status: str = Column(String(32), nullable=False, default="not_started")  # not_started, attempting, structurally_verified
     hint_level_revealed: int = Column(Integer, nullable=False, default=0)
     implementation_revealed: bool = Column(Boolean, nullable=False, default=False)
