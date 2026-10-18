@@ -33,7 +33,13 @@ class SecurityHeadersAndBodySizeMiddleware:
             await self.app(scope, receive, send)
             return
 
+        response_sent = False
+
         async def custom_send(message):
+            nonlocal response_sent
+            if response_sent:
+                # Suppress downstream messages after 413 response has already completed
+                return
             if message.get("type") == "http.response.start":
                 raw_headers = list(message.get("headers", []))
                 # Filter out existing security headers to prevent duplicates
@@ -69,7 +75,7 @@ class SecurityHeadersAndBodySizeMiddleware:
         bytes_received = 0
 
         async def custom_receive():
-            nonlocal bytes_received
+            nonlocal bytes_received, response_sent
             message = await receive()
             if message.get("type") == "http.request":
                 body = message.get("body", b"")
@@ -80,8 +86,13 @@ class SecurityHeadersAndBodySizeMiddleware:
                         content={"detail": "Request body exceeds 25 MB limit"},
                         headers=SECURITY_HEADERS,
                     )
-                    await response(scope, receive, custom_send)
-                    return
+                    response_sent = True
+                    await response(scope, receive, send)
+                    return {"type": "http.disconnect"}
             return message
 
-        await self.app(scope, custom_receive, custom_send)
+        try:
+            await self.app(scope, custom_receive, custom_send)
+        except Exception:
+            if not response_sent:
+                raise

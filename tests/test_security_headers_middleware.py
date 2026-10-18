@@ -60,6 +60,40 @@ def test_request_body_over_limit_via_content_length_header_rejected(middleware_a
     assert response.headers.get("referrer-policy") == "strict-origin-when-cross-origin"
 
 
+def test_request_body_over_limit_chunked_streaming_rejected(middleware_app):
+    client = TestClient(middleware_app)
+
+    def chunk_generator():
+        chunk = b"x" * (1024 * 1024)  # 1 MB chunk
+        for _ in range(26):  # 26 MB total (> 25 MB)
+            yield chunk
+
+    response = client.post("/upload", content=chunk_generator())
+
+    assert response.status_code == status.HTTP_413_REQUEST_ENTITY_TOO_LARGE
+    assert "exceeds 25 MB limit" in response.json()["detail"]
+    assert response.headers.get("x-content-type-options") == "nosniff"
+    assert response.headers.get("x-frame-options") == "DENY"
+    assert response.headers.get("referrer-policy") == "strict-origin-when-cross-origin"
+
+
+def test_request_body_under_limit_chunked_streaming_accepted(middleware_app):
+    client = TestClient(middleware_app)
+
+    def chunk_generator():
+        chunk = b"y" * (1024 * 1024)  # 1 MB chunk
+        for _ in range(3):  # 3 MB total
+            yield chunk
+
+    response = client.post("/upload", content=chunk_generator())
+
+    assert response.status_code == 200
+    assert response.json()["received_bytes"] == 3 * 1024 * 1024
+    assert response.headers.get("x-content-type-options") == "nosniff"
+    assert response.headers.get("x-frame-options") == "DENY"
+    assert response.headers.get("referrer-policy") == "strict-origin-when-cross-origin"
+
+
 def test_main_app_includes_security_headers():
     from app.main import app
 
