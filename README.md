@@ -225,6 +225,16 @@ For in-depth architectural reasoning, design logs, and operational manuals:
 
 ---
 
+## ⚠️ Deployment Limitations
+
+When deploying Backtrace in local WSL/Docker environments, be aware of the following operational constraints:
+
+1. **WSL2 Runtime Lifecycle**: The backend services and Docker containers run inside the WSL2 Linux environment. The deployment remains active only while the WSL2 VM is awake and Docker Desktop is actively running. If the Windows host goes to sleep, or if the WSL VM idles out, background tasks and API servers will pause.
+2. **Ephemeral Cloudflare Quick Tunnel**: The default deployment uses Cloudflare quick tunnels (`trycloudflare.com`). Each restart of the `cloudflared` container provisions a new ephemeral public URL. Persistent production deployments require configuring a static named tunnel via `CLOUDFLARE_TUNNEL_TOKEN`.
+3. **GitHub OAuth Host Binding**: GitHub OAuth redirection (`GITHUB_REDIRECT_URI`) is strictly bound to `http://localhost:8000/auth/github/callback` in development mode. Because GitHub OAuth app configurations do not permit wildcards or dynamically changing tunnel hostnames, full GitHub OAuth login workflows function strictly on `localhost`, while quick tunnels serve direct API and public dashboard inspection.
+
+---
+
 ## 🤝 Contributing
 
 1. Fork the repository
