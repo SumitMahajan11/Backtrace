@@ -28,7 +28,7 @@ if ($tokenLine) {
 
 # Bring up the compose stack
 Write-Host "📦 Orchestrating Docker Compose services..." -ForegroundColor Cyan
-docker compose -f docker-compose.yml up -d
+docker compose -f docker-compose.yml up -d --build
 
 Write-Host "`n⏳ Waiting for backtrace-app health check to report healthy..." -ForegroundColor Cyan
 $MaxRetries = 30

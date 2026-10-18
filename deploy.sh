@@ -28,7 +28,7 @@ fi
 
 # Bring up the compose stack
 echo "📦 Orchestrating Docker Compose services..."
-docker compose -f docker-compose.yml up -d
+docker compose -f docker-compose.yml up -d --build
 
 echo ""
 echo "⏳ Waiting for backtrace-app health check to report healthy..."
