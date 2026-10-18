@@ -132,9 +132,3 @@ def get_health(response: Response) -> Dict[str, Any]:
     response.status_code = status_code
     return payload
 
-
-@app.get("/debug/trigger-error", tags=["Debug"], summary="Trigger test unhandled exception for Sentry validation")
-def trigger_test_error():
-    """Triggers an unhandled exception to verify Sentry event capture and PII redaction."""
-    raise RuntimeError("Live Sentry Verification: Unhandled test error triggered at runtime")
-

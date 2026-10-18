@@ -71,6 +71,14 @@ def test_debug_env_deleted_in_development():
         assert resp.status_code == 404
 
 
+def test_debug_trigger_error_deleted():
+    """Verify /debug/trigger-error is completely removed and returns 404."""
+    import app.main
+    with TestClient(app.main.app) as client:
+        resp = client.get("/debug/trigger-error")
+        assert resp.status_code == 404
+
+
 def test_dev_login_open_redirect_rejected_in_development(test_db, monkeypatch):
     """In development mode, open redirect targets (absolute URLs, protocol-relative URLs) are rejected."""
     monkeypatch.setenv("ENVIRONMENT", "development")
