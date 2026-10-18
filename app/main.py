@@ -78,6 +78,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from app.security.headers import SecurityHeadersAndBodySizeMiddleware
+app.add_middleware(SecurityHeadersAndBodySizeMiddleware)
+
 
 @app.exception_handler(Exception)
 async def global_unhandled_exception_handler(request: Request, exc: Exception):
