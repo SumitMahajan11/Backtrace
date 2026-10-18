@@ -37,6 +37,8 @@ flowchart TD
     L10 --> L11["<b>Layer 11: Web UI & Dashboard</b><br>Interactive Progress Tracking, Gamified Challenges"]
 ```
 
+Tier 3 checks structure only; behavior is verified only when real tests exist (Tiers 1-2).
+
 ---
 
 ## 📂 Project Directory Structure
