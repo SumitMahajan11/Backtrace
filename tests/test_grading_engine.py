@@ -282,6 +282,63 @@ def test_grade_attempt_tier_3_structural_only_missing_symbols():
     assert len(result["verification"]["missing_symbols"]) > 0
 
 
+def test_grade_attempt_tier_3_rejects_stub_functions():
+    mock_exec = MagicMock()
+    mock_exec.execute.return_value = {
+        "stdout": "",
+        "stderr": "",
+        "exit_code": 0,
+        "execution_time_ms": 10.0,
+        "timed_out": False,
+    }
+    engine = GradingEngine(execution_verifier=mock_exec)
+    graph_data = {
+        "milestones": [{"tier": 1, "included_files": ["math_helper.py"]}],
+        "nodes": [{"id": "math_helper.py", "tier": 1, "exports": ["compute_answer"]}],
+    }
+    job = MockJob(repo_url="https://github.com/custom/unknown-repo", repo_name="custom/unknown-repo", graph_data=graph_data)
+
+    # All stub variations should fail grading
+    stubs = [
+        "def compute_answer():\n    pass",
+        "def compute_answer():\n    ...",
+        'def compute_answer():\n    """Docstring only."""',
+        "def compute_answer():\n    raise NotImplementedError",
+    ]
+    for code in stubs:
+        res = engine.grade_attempt(job, 1, code, "python", graph_data)
+        assert res["passed"] is False
+        assert res["status"] == "attempting"
+        assert res["verification"]["grading_tier_label"] == "TIER 3: STRUCTURE CHECK (STATIC AST)"
+        assert "unimplemented placeholder stub" in res["verification"]["error_message"]
+
+
+def test_grade_attempt_tier_3_honest_label_and_summary():
+    mock_exec = MagicMock()
+    mock_exec.execute.return_value = {
+        "stdout": "",
+        "stderr": "",
+        "exit_code": 0,
+        "execution_time_ms": 10.0,
+        "timed_out": False,
+    }
+    engine = GradingEngine(execution_verifier=mock_exec)
+    graph_data = {
+        "milestones": [{"tier": 1, "included_files": ["math_helper.py"]}],
+        "nodes": [{"id": "math_helper.py", "tier": 1, "exports": ["compute_answer"]}],
+    }
+    job = MockJob(repo_url="https://github.com/custom/unknown-repo", repo_name="custom/unknown-repo", graph_data=graph_data)
+
+    code = "def compute_answer():\n    return 42"
+    res = engine.grade_attempt(job, 1, code, "python", graph_data)
+    assert res["passed"] is True
+    assert res["status"] == "structurally_verified"
+    assert res["verification"]["grading_tier_label"] == "TIER 3: STRUCTURE CHECK (STATIC AST)"
+    assert res["verification"]["behavior_verified"] is False
+    assert "behavior unverified by automated tests" in res["details"]["summary"]
+
+
+
 def test_db_persistence_of_grading_method():
     init_db()
     with get_db_session() as db:

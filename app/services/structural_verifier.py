@@ -30,12 +30,14 @@ class SymbolDefinition:
         arg_count: Optional[int] = None,
         args: Optional[List[str]] = None,
         is_async: bool = False,
+        is_stub: bool = False,
     ):
         self.name = name
         self.kind = kind.lower()
         self.arg_count = arg_count
         self.args = args or []
         self.is_async = is_async
+        self.is_stub = is_stub
 
     def to_dict(self) -> Dict[str, Any]:
         d: Dict[str, Any] = {
@@ -46,6 +48,8 @@ class SymbolDefinition:
             d["arg_count"] = self.arg_count
         if self.args:
             d["args"] = self.args
+        if self.is_stub:
+            d["is_stub"] = True
         return d
 
     def matches(self, other: SymbolDefinition) -> bool:
@@ -73,6 +77,41 @@ class SymbolDefinition:
             return False
 
         return True
+
+
+def _is_stub_body(body: List[ast.stmt]) -> bool:
+    """
+    Checks if a function or method body consists solely of stub/placeholder statements:
+    - pass
+    - ... (Ellipsis) or None
+    - docstring only
+    - raise NotImplementedError or raise NotImplementedError(...)
+    - docstring followed by any of the above
+    """
+    meaningful_stmts = []
+    for i, stmt in enumerate(body):
+        # First statement can be a docstring
+        if i == 0 and isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Constant) and isinstance(stmt.value.value, str):
+            continue
+        meaningful_stmts.append(stmt)
+
+    if not meaningful_stmts:
+        return True
+
+    def _is_trivial_stmt(s: ast.stmt) -> bool:
+        if isinstance(s, ast.Pass):
+            return True
+        if isinstance(s, ast.Expr) and isinstance(s.value, ast.Constant):
+            if s.value.value in (..., None) or isinstance(s.value.value, str):
+                return True
+        if isinstance(s, ast.Raise):
+            if isinstance(s.exc, ast.Call) and isinstance(s.exc.func, ast.Name) and s.exc.func.id in ("NotImplementedError", "NotImplemented"):
+                return True
+            if isinstance(s.exc, ast.Name) and s.exc.id in ("NotImplementedError", "NotImplemented"):
+                return True
+        return False
+
+    return all(_is_trivial_stmt(s) for s in meaningful_stmts)
 
 
 class StructuralVerifier:
@@ -174,24 +213,28 @@ class StructuralVerifier:
                             arg_names = [a.arg for a in item.args.args]
                             # Count positional + keyword-only args
                             total_args = len(item.args.args) + len(item.args.kwonlyargs)
+                            is_stub = _is_stub_body(item.body)
                             method_sym = SymbolDefinition(
                                 name=item.name,
                                 kind="method",
                                 arg_count=total_args,
                                 args=arg_names,
                                 is_async=isinstance(item, ast.AsyncFunctionDef),
+                                is_stub=is_stub,
                             )
                             symbols.append(method_sym)
 
                 elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                     arg_names = [a.arg for a in node.args.args]
                     total_args = len(node.args.args) + len(node.args.kwonlyargs)
+                    is_stub = _is_stub_body(node.body)
                     func_sym = SymbolDefinition(
                         name=node.name,
                         kind="function",
                         arg_count=total_args,
                         args=arg_names,
                         is_async=isinstance(node, ast.AsyncFunctionDef),
+                        is_stub=is_stub,
                     )
                     symbols.append(func_sym)
 
@@ -237,10 +280,11 @@ class StructuralVerifier:
         Statically verifies submitted code against expected symbols.
 
         Returns structured diff:
-        - missing_symbols: Expected symbols not found
-        - present_symbols: Expected symbols matched
+        - missing_symbols: Expected symbols not found (or stubbed out)
+        - present_symbols: Expected symbols matched with real implementations
         - extra_symbols: Symbols present in code but not expected (informational)
-        - structurally_verified: True if all expected symbols are present and code is syntactically valid
+        - stub_symbols: Expected symbols whose submitted implementation is a stub placeholder
+        - structurally_verified: True if all expected symbols are present, non-stub, and code is syntactically valid
         """
         # 1. Normalize expected symbols into SymbolDefinition objects
         norm_expected: List[SymbolDefinition] = []
@@ -277,17 +321,28 @@ class StructuralVerifier:
                 "missing_symbols": [e.to_dict() for e in norm_expected],
                 "present_symbols": [],
                 "extra_symbols": [],
+                "stub_symbols": [],
             }
 
         # 3. Perform matching: name + kind + rough signature shape
         matched_parsed_indices: Set[int] = set()
         present_symbols: List[Dict[str, Any]] = []
         missing_symbols: List[Dict[str, Any]] = []
+        stub_symbols: List[Dict[str, Any]] = []
 
         for exp in norm_expected:
             match_found = False
             for idx, sym in enumerate(parsed_symbols):
                 if exp.matches(sym):
+                    if sym.is_stub:
+                        stub_symbols.append({
+                            "expected": exp.to_dict(),
+                            "matched": sym.to_dict(),
+                            "reason": "Function body is a placeholder stub (pass, ..., docstring, or NotImplementedError)",
+                        })
+                        # Stubs cannot satisfy expected contracts
+                        continue
+
                     matched_parsed_indices.add(idx)
                     present_symbols.append({
                         "expected": exp.to_dict(),
@@ -297,7 +352,11 @@ class StructuralVerifier:
                     break
 
             if not match_found:
-                missing_symbols.append(exp.to_dict())
+                exp_dict = exp.to_dict()
+                stub_match = next((s for s in stub_symbols if s["expected"]["name"] == exp.name), None)
+                if stub_match:
+                    exp_dict["reason"] = stub_match["reason"]
+                missing_symbols.append(exp_dict)
 
         # 4. Extra symbols (present in code, but not in expected table)
         extra_symbols: List[Dict[str, Any]] = [
@@ -306,14 +365,20 @@ class StructuralVerifier:
             if idx not in matched_parsed_indices
         ]
 
-        # Structurally verified if no missing expected symbols and at least one symbol verified
-        is_verified = (len(missing_symbols) == 0 and len(norm_expected) > 0)
+        # Structurally verified if no missing expected symbols, no stub implementations, and at least one symbol verified
+        is_verified = (len(missing_symbols) == 0 and len(norm_expected) > 0 and len(stub_symbols) == 0)
+
+        err_msg = None
+        if stub_symbols:
+            stub_names = [s["expected"]["name"] for s in stub_symbols]
+            err_msg = f"Function body for {', '.join(stub_names)} is an unimplemented placeholder stub (pass/.../docstring/NotImplementedError)."
 
         return {
             "structurally_verified": is_verified,
             "syntax_valid": True,
-            "error_message": None,
+            "error_message": err_msg,
             "missing_symbols": missing_symbols,
             "present_symbols": present_symbols,
             "extra_symbols": extra_symbols,
+            "stub_symbols": stub_symbols,
         }

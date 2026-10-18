@@ -148,7 +148,7 @@ import os
 os.system("echo PWNED > {canary_file.as_posix()}")
 
 def target_func():
-    pass
+    return "safe"
 """
     expected = [{"name": "target_func", "kind": "function"}]
 
@@ -158,3 +158,41 @@ def target_func():
     assert not canary_file.exists()
     assert res["structurally_verified"] is True
     assert any(s["matched"]["name"] == "target_func" for s in res["present_symbols"])
+
+
+def test_verifier_rejects_stub_function_bodies(verifier):
+    """Test that functions with only pass, ..., docstring, or raise NotImplementedError fail verification."""
+    stub_cases = [
+        ("pass", "def calculate():\n    pass"),
+        ("ellipsis", "def calculate():\n    ..."),
+        ("docstring", 'def calculate():\n    """Only a docstring description."""'),
+        ("raise_bare", "def calculate():\n    raise NotImplementedError"),
+        ("raise_call", 'def calculate():\n    raise NotImplementedError("TODO")'),
+        ("doc_and_pass", 'def calculate():\n    """Docstring"""\n    pass'),
+        ("doc_and_ellipsis", 'def calculate():\n    """Docstring"""\n    ...'),
+    ]
+    expected = [{"name": "calculate", "kind": "function"}]
+
+    for name, code in stub_cases:
+        res = verifier.verify(code, expected, language="python")
+        assert res["structurally_verified"] is False, f"Case {name} should have failed verification"
+        assert len(res["stub_symbols"]) == 1, f"Case {name} should have 1 stub symbol"
+        assert res["stub_symbols"][0]["expected"]["name"] == "calculate"
+        assert "unimplemented placeholder stub" in res["error_message"]
+
+
+def test_verifier_accepts_valid_bodies(verifier):
+    """Test that real implementations (even returning False or simple expressions) pass verification."""
+    valid_cases = [
+        ("return_false", "def calculate():\n    return False"),
+        ("return_true", "def calculate():\n    return True"),
+        ("assign_and_return", "def calculate():\n    x = 10\n    return x * 2"),
+    ]
+    expected = [{"name": "calculate", "kind": "function"}]
+
+    for name, code in valid_cases:
+        res = verifier.verify(code, expected, language="python")
+        assert res["structurally_verified"] is True, f"Case {name} should pass verification"
+        assert len(res["stub_symbols"]) == 0
+        assert len(res["present_symbols"]) == 1
+

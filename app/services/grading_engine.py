@@ -418,15 +418,18 @@ class GradingEngine:
                 "exit_code": exit_code,
                 "degraded_mode": degraded_mode,
                 "summary": (
-                    "AST contracts matched (execution engine offline - structural verification succeeded)"
+                    "AST structure check passed (execution engine offline - structural verification succeeded; behavior unverified)"
                     if passed and degraded_mode
                     else (
-                        "AST contracts matched and code executed without error"
+                        "AST structure check passed (syntax & contracts matched; behavior unverified by automated tests)"
                         if passed
                         else (
-                            "AST contracts missing"
-                            if not ast_verified
-                            else f"Code raised runtime error (exit {exit_code})"
+                            ast_verification.get("error_message")
+                            or (
+                                "AST contracts missing or function bodies are unimplemented stubs"
+                                if not ast_verified
+                                else f"Code raised runtime error (exit {exit_code})"
+                            )
                         )
                     )
                 ),
@@ -435,7 +438,9 @@ class GradingEngine:
             ast_verification["structurally_verified"] = passed
             ast_verification["is_verified"] = passed
             ast_verification["grading_method"] = "structural_only"
-            ast_verification["grading_tier_label"] = "TIER 3: STATIC AST DIFF"
+            ast_verification["grading_tier_label"] = "TIER 3: STRUCTURE CHECK (STATIC AST)"
+            ast_verification["verification_type"] = "structure_only"
+            ast_verification["behavior_verified"] = False
             if not runs_without_error and exit_code != 0:
                 ast_verification["runtime_warning"] = f"Code failed with exit code {exit_code}"
 

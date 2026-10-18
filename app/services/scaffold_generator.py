@@ -39,17 +39,21 @@ class PythonScaffoldVisitor(ast.NodeTransformer):
 
         if not meaningful_stmts:
             return True
-        if len(meaningful_stmts) == 1:
-            s = meaningful_stmts[0]
+
+        def _is_trivial_stmt(s: ast.stmt) -> bool:
             if isinstance(s, ast.Pass):
                 return True
-            if isinstance(s, ast.Expr) and isinstance(s.value, ast.Constant) and s.value.value in (..., None):
-                return True
-            if isinstance(s, ast.Raise) and isinstance(s.exc, ast.Call):
-                func = s.exc.func
-                if isinstance(func, ast.Name) and func.id in ("NotImplementedError", "NotImplemented"):
+            if isinstance(s, ast.Expr) and isinstance(s.value, ast.Constant):
+                if s.value.value in (..., None) or isinstance(s.value.value, str):
                     return True
-        return False
+            if isinstance(s, ast.Raise):
+                if isinstance(s.exc, ast.Call) and isinstance(s.exc.func, ast.Name) and s.exc.func.id in ("NotImplementedError", "NotImplemented"):
+                    return True
+                if isinstance(s.exc, ast.Name) and s.exc.id in ("NotImplementedError", "NotImplemented"):
+                    return True
+            return False
+
+        return all(_is_trivial_stmt(s) for s in meaningful_stmts)
 
     def _contains_redaction_marker(self, node: ast.AST) -> bool:
         """Checks whether the AST node or any subnode contains a redaction marker."""
