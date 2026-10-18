@@ -8,7 +8,7 @@
 
 set -euo pipefail
 
-ENV_FILE=".env.production"
+ENV_FILE=".env"
 if [ ! -f "$ENV_FILE" ]; then
     echo "❌ Error: $ENV_FILE not found! Please create it before deploying."
     exit 1

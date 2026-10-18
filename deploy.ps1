@@ -7,7 +7,7 @@
 
 $ErrorActionPreference = "Stop"
 
-$EnvFile = ".env.production"
+$EnvFile = ".env"
 if (-not (Test-Path $EnvFile)) {
     Write-Error "Error: $EnvFile not found! Please create it before deploying."
     exit 1

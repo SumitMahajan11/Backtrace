@@ -3,6 +3,8 @@ services:
     image: nginx:alpine
     container_name: backtrace_nginx
     restart: unless-stopped
+    profiles:
+      - nginx
     ports:
       - "80:80"
       - "443:443"
