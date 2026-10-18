@@ -79,46 +79,9 @@ class Base(DeclarativeBase):
 
 
 def init_db(target_engine=engine) -> None:
-    """Creates tables if they do not exist and applies lightweight column migrations for SQLite."""
+    """Creates tables if they do not exist."""
     import app.models.db  # noqa: F401 - ensure models are registered
     Base.metadata.create_all(bind=target_engine)
-
-    # Lightweight column migrations
-    try:
-        from sqlalchemy import inspect, text
-        inspector = inspect(target_engine)
-        tables = inspector.get_table_names()
-        with target_engine.connect() as conn:
-            if "analysis_jobs" in tables:
-                col_names = [col["name"] for col in inspector.get_columns("analysis_jobs")]
-                if "commit_ref" not in col_names:
-                    conn.execute(text("ALTER TABLE analysis_jobs ADD COLUMN commit_ref VARCHAR(255)"))
-                if "subpath" not in col_names:
-                    conn.execute(text("ALTER TABLE analysis_jobs ADD COLUMN subpath VARCHAR(500)"))
-
-            if "milestone_attempts" in tables:
-                columns = [col["name"] for col in inspector.get_columns("milestone_attempts")]
-                if "last_run_code" not in columns:
-                    conn.execute(text("ALTER TABLE milestone_attempts ADD COLUMN last_run_code TEXT"))
-                if "last_run_stdout" not in columns:
-                    conn.execute(text("ALTER TABLE milestone_attempts ADD COLUMN last_run_stdout TEXT"))
-                if "last_run_stderr" not in columns:
-                    conn.execute(text("ALTER TABLE milestone_attempts ADD COLUMN last_run_stderr TEXT"))
-                if "last_run_exit_code" not in columns:
-                    conn.execute(text("ALTER TABLE milestone_attempts ADD COLUMN last_run_exit_code INTEGER"))
-                if "last_run_at" not in columns:
-                    conn.execute(text("ALTER TABLE milestone_attempts ADD COLUMN last_run_at TIMESTAMP"))
-                if "grading_method" not in columns:
-                    conn.execute(text("ALTER TABLE milestone_attempts ADD COLUMN grading_method VARCHAR(32) DEFAULT 'structural_only' NOT NULL"))
-                if "grading_details_json" not in columns:
-                    conn.execute(text("ALTER TABLE milestone_attempts ADD COLUMN grading_details_json TEXT"))
-
-            if "points_ledger" in tables:
-                if target_engine.dialect.name == "postgresql":
-                    conn.execute(text("ALTER TABLE points_ledger ALTER COLUMN job_id DROP NOT NULL;"))
-            conn.commit()
-    except Exception:
-        pass
 
 
 @contextmanager
