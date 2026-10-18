@@ -6,6 +6,7 @@ from app.parser.registry import ParserRegistry
 from app.parser.schema import ImportCategory
 
 
+@pytest.mark.timeout(30)
 def test_js_commonjs_and_es_module_imports():
     code = """
 const express = require('express');
@@ -19,7 +20,8 @@ async function loadModule() {
     const lazy = await import('./lazyModule');
 }
     """
-    parser = JavaScriptLanguageParser()
+    parser = JavaScriptLanguageParser(timeout_seconds=30.0)
+    parser.subprocess_timeout_seconds = 30.0
     all_files = {
         "src/index.ts",
         "src/utils/helper.ts",

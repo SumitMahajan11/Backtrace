@@ -25,10 +25,17 @@ class SubprocessLanguageParser(BaseLanguageParser):
         """Base command invocation list (e.g. ['node', 'scripts/parse_js.js'])."""
         pass
 
+    def __init__(self, timeout_seconds: float = 10.0):
+        self._timeout_seconds = timeout_seconds
+
     @property
     def subprocess_timeout_seconds(self) -> float:
         """Default timeout for subprocess execution."""
-        return 10.0
+        return getattr(self, "_timeout_seconds", 10.0)
+
+    @subprocess_timeout_seconds.setter
+    def subprocess_timeout_seconds(self, value: float) -> None:
+        self._timeout_seconds = value
 
     def check_binary_available(self) -> bool:
         """Verifies if the executable tool is present on the system."""

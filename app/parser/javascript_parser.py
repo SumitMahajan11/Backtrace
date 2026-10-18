@@ -13,6 +13,9 @@ SCRIPT_PATH = Path(__file__).resolve().parent.parent.parent / "scripts" / "parse
 class JavaScriptLanguageParser(SubprocessLanguageParser):
     """JavaScript and TypeScript static structural parser using @babel/parser AST via Node subprocess."""
 
+    def __init__(self, timeout_seconds: float = 30.0):
+        super().__init__(timeout_seconds=timeout_seconds)
+
     @property
     def language_name(self) -> str:
         return "javascript"
