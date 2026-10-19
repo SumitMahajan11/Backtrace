@@ -334,6 +334,12 @@ class ExecutionVerifier:
 
         from app.services.piston_health import piston_health_monitor
 
+        # If sandbox is disabled by configuration, reject execution immediately
+        if not piston_health_monitor.is_sandbox_enabled():
+            raise ExecutionVerifierConnectionError(
+                "Code execution sandbox is currently unavailable. Please try again shortly."
+            )
+
         # If Piston is marked unhealthy and fallback is permitted, execute locally
         if not piston_health_monitor.is_healthy:
             if self.allow_local_fallback:

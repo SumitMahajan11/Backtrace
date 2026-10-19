@@ -167,6 +167,10 @@ class SubscriptionModel(Base):
 
     user = relationship("UserModel", back_populates="subscription")
 
+    __table_args__ = (
+        UniqueConstraint("user_id"),
+    )
+
 
 class UsageEventModel(Base):
     """Immutable audit log for billing quota calculation and usage analysis."""
