@@ -118,7 +118,7 @@ Make sure you have [Docker Desktop](https://www.docker.com/products/docker-deskt
 If you prefer running without Docker:
 
 #### 1. Prerequisites
-- **Python 3.11+** installed
+- **Python 3.11+** installed (runtime environment verified on Python 3.13.7; Docker image uses `python:3.13-slim`)
 - **Git** installed
 - *(Optional)* Go, Rust, or Node.js if compiling native companion parsers
 

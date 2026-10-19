@@ -63,6 +63,7 @@ tests/fixtures/real_repos/
 tests/fixtures/real_repos_locked/
 
 # Temporary & Scratch / Debug scripts & local reports
+.iac_cache/
 scratch/
 scratch_*.py
 debug_*.py
