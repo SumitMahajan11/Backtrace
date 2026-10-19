@@ -5,7 +5,7 @@ In production mode, all required credentials must be explicitly provided without
 """
 
 from functools import lru_cache
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -88,6 +88,12 @@ class Settings(BaseSettings):
     POINTS_QUOTA_REWARD_AMOUNT: int = 2  # Number of repos added per quota redemption
     ENABLE_PUBLIC_LEADERBOARD: bool = True  # Feature flag for public community ranking
 
+    # Sandbox & Execution Controls
+    SANDBOX_ENABLED: Optional[bool] = None
+
+    # Ingestion Limits
+    MAX_REPO_MB: int = 200
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
@@ -108,11 +114,25 @@ class Settings(BaseSettings):
                 return "development"
         return v
 
+    @field_validator("CORS_ORIGINS", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, v: Any) -> list[str]:
+        if isinstance(v, str):
+            return [o.strip() for o in v.split(",") if o.strip()]
+        return v
+
     @model_validator(mode="after")
     def validate_production_configuration(self) -> "Settings":
         """Strict fail-fast validation when ENVIRONMENT=production."""
+        if self.SANDBOX_ENABLED is None:
+            # Default false in production, true in development/test
+            object.__setattr__(self, "SANDBOX_ENABLED", self.ENVIRONMENT != "production")
+
         if self.ENVIRONMENT != "production":
             return self
+
+        # In production, ensure DEBUG is strictly disabled
+        object.__setattr__(self, "DEBUG", False)
 
         errors = []
 

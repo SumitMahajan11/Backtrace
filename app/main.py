@@ -50,9 +50,11 @@ async def lifespan(app: FastAPI):
     get_settings.cache_clear()
     init_db()
     from app.services.piston_health import piston_health_monitor
-    piston_health_monitor.start_background_task()
+    if piston_health_monitor.is_sandbox_enabled():
+        piston_health_monitor.start_background_task()
     yield
-    piston_health_monitor.stop_background_task()
+    if piston_health_monitor.is_sandbox_enabled():
+        piston_health_monitor.stop_background_task()
 
 
 app = FastAPI(
@@ -64,11 +66,17 @@ app = FastAPI(
 )
 
 # CORS Configuration
-ALLOWED_ORIGINS = [
-    origin.strip()
-    for origin in os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:8000,https://app.backtrace.dev").split(",")
-    if origin.strip()
-]
+_raw_cors = os.getenv("CORS_ALLOWED_ORIGINS") or os.getenv("CORS_ORIGINS")
+if _raw_cors:
+    ALLOWED_ORIGINS = [origin.strip() for origin in _raw_cors.split(",") if origin.strip()]
+elif settings.CORS_ORIGINS:
+    ALLOWED_ORIGINS = settings.CORS_ORIGINS if isinstance(settings.CORS_ORIGINS, list) else [o.strip() for o in str(settings.CORS_ORIGINS).split(",") if o.strip()]
+else:
+    ALLOWED_ORIGINS = [
+        "http://localhost:3000",
+        "http://localhost:8000",
+        "https://app.backtrace.dev",
+    ]
 
 app.add_middleware(
     CORSMiddleware,

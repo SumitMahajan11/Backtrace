@@ -281,10 +281,11 @@ class RedisTokenBucketRateLimiter:
 
             if redis is not None and target_url:
                 try:
+                    conn_timeout = max(self.redis_timeout, 1.5) if target_url.startswith("rediss://") else min(0.05, self.redis_timeout)
                     pool = redis.ConnectionPool.from_url(
                         target_url,
-                        socket_connect_timeout=min(0.05, self.redis_timeout),
-                        socket_timeout=min(0.05, self.redis_timeout),
+                        socket_connect_timeout=conn_timeout,
+                        socket_timeout=conn_timeout if target_url.startswith("rediss://") else min(0.05, self.redis_timeout),
                         max_connections=20,
                         decode_responses=True,
                     )

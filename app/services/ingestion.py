@@ -40,6 +40,21 @@ from app.utils.url_validator import (
 MAX_REPO_FILE_LIMIT_V1 = 150
 
 
+def get_max_repo_mb() -> int:
+    """Retrieves maximum repository ingestion size limit in MB from env or settings."""
+    env_mb = os.getenv("MAX_REPO_MB")
+    if env_mb:
+        try:
+            return int(env_mb)
+        except ValueError:
+            pass
+    try:
+        from app.core.config import get_settings
+        return int(get_settings().MAX_REPO_MB)
+    except Exception:
+        return 200
+
+
 def check_repo_size_preflight(
     github_url: str,
     commit_ref: Optional[str] = None,
@@ -157,6 +172,9 @@ def check_repo_size_preflight(
             data = resp.json()
             tree_items = data.get("tree", [])
 
+            max_repo_mb = get_max_repo_mb()
+            max_repo_bytes = max_repo_mb * 1024 * 1024
+            total_size_bytes = 0
             file_count = 0
             for item in tree_items:
                 if item.get("type") != "blob":
@@ -174,12 +192,19 @@ def check_repo_size_preflight(
                     continue
 
                 file_count += 1
+                if size is not None:
+                    total_size_bytes += size
 
             if file_count > max_file_limit:
                 raise RepoTooLargeError(
                     f"Found {file_count} supported files (limit: {max_file_limit} files)",
                     file_count=file_count,
                     limit=max_file_limit,
+                )
+
+            if total_size_bytes > max_repo_bytes:
+                raise IngestionLimitExceededError(
+                    f"Repository size ({round(total_size_bytes / (1024 * 1024), 2)} MB) exceeds maximum allowed cap of {max_repo_mb} MB."
                 )
 
             return file_count
@@ -191,8 +216,10 @@ def check_repo_size_preflight(
 class IngestionService:
     """Service orchestrating safe GitHub repository ingestion."""
 
-    def __init__(self, max_file_limit: int = MAX_REPO_FILE_LIMIT_V1, timeout_seconds: float = 60.0):
+    def __init__(self, max_file_limit: int = MAX_REPO_FILE_LIMIT_V1, max_repo_mb: Optional[int] = None, timeout_seconds: float = 60.0):
         self.max_file_limit = max_file_limit
+        self.max_repo_mb = max_repo_mb if max_repo_mb is not None else get_max_repo_mb()
+        self.max_repo_bytes = self.max_repo_mb * 1024 * 1024
         self.timeout_seconds = timeout_seconds
         self.secret_scanner = SecretScanner()
 
@@ -319,6 +346,7 @@ class IngestionService:
         skipped_items: List[SkippedItem] = []
 
         valid_file_count = 0
+        total_size_bytes = 0
 
         for root, dirs, files in os.walk(base_dir, followlinks=False):
             rel_root = Path(root).relative_to(base_dir)
@@ -380,11 +408,17 @@ class IngestionService:
                     )
                     continue
 
-                # 7. File count limit check
+                # 7. File count and repository size limit check
                 valid_file_count += 1
                 if valid_file_count > self.max_file_limit:
                     raise IngestionLimitExceededError(
                         f"Repository file count exceeds maximum allowed cap of {self.max_file_limit} files for v1."
+                    )
+
+                total_size_bytes += file_size
+                if total_size_bytes > self.max_repo_bytes:
+                    raise IngestionLimitExceededError(
+                        f"Repository size ({round(total_size_bytes / (1024 * 1024), 2)} MB) exceeds maximum allowed cap of {self.max_repo_mb} MB."
                     )
 
                 # 8. Read text content safely and redact secrets

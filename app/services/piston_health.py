@@ -45,13 +45,32 @@ class PistonHealthMonitor:
         self._bg_task: Optional[asyncio.Task] = None
         self._is_running: bool = False
 
+    def is_sandbox_enabled(self) -> bool:
+        """Checks whether sandbox code execution is enabled in settings or environment."""
+        env_val = os.getenv("SANDBOX_ENABLED")
+        if env_val is not None:
+            return env_val.lower().strip() in ("true", "1", "yes", "on")
+        try:
+            from app.core.config import get_settings
+            settings = get_settings()
+            if settings.SANDBOX_ENABLED is not None:
+                return bool(settings.SANDBOX_ENABLED)
+            return settings.ENVIRONMENT != "production"
+        except Exception:
+            return os.getenv("ENVIRONMENT", "").lower() != "production"
+
     @property
     def is_healthy(self) -> bool:
         """Returns immediate boolean readiness flag for fast-fail execution gates."""
+        if not self.is_sandbox_enabled():
+            return False
         return self._is_healthy
 
     def check_health_sync(self) -> Dict[str, Any]:
         """Synchronously probes Piston /api/v2/runtimes endpoint and updates state."""
+        if not self.is_sandbox_enabled():
+            self._is_healthy = False
+            return self.get_status()
         url = f"{self.piston_url}/api/v2/runtimes"
         start_time = time.perf_counter()
         now_iso = datetime.now(timezone.utc).isoformat()
@@ -104,6 +123,9 @@ class PistonHealthMonitor:
 
     async def check_health_async(self) -> Dict[str, Any]:
         """Asynchronously probes Piston /api/v2/runtimes endpoint and updates state."""
+        if not self.is_sandbox_enabled():
+            self._is_healthy = False
+            return self.get_status()
         url = f"{self.piston_url}/api/v2/runtimes"
         start_time = time.perf_counter()
         now_iso = datetime.now(timezone.utc).isoformat()
@@ -136,6 +158,14 @@ class PistonHealthMonitor:
 
     def get_status(self) -> Dict[str, Any]:
         """Returns structured health report dictionary."""
+        if not self.is_sandbox_enabled():
+            return {
+                "status": "disabled",
+                "is_available": False,
+                "message": "Sandbox execution is disabled by configuration (SANDBOX_ENABLED=false)",
+                "latency_ms": 0.0,
+                "runtimes_count": 0,
+            }
         status_str = "healthy" if self._is_healthy else "unhealthy"
         payload: Dict[str, Any] = {
             "status": status_str,
@@ -163,6 +193,9 @@ class PistonHealthMonitor:
 
     def start_background_task(self) -> None:
         """Spawns background polling task in current asyncio event loop."""
+        if not self.is_sandbox_enabled():
+            logger.info("Sandbox execution is disabled (SANDBOX_ENABLED=false); skipping Piston health check loop.")
+            return
         if self._is_running:
             return
         self._is_running = True
