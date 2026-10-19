@@ -260,6 +260,15 @@ def test_sse_progress_stream_emits_stage_transitions(client, create_user, test_d
     assert "stage_5" in stage_names
     assert "stage_10" in stage_names
 
+    # Verify strictly monotonic progress
+    percentages = [e["percentage"] for e in events if e.get("type") == "progress"]
+    assert len(percentages) > 0
+    assert all(percentages[i] <= percentages[i+1] for i in range(len(percentages) - 1)), f"Non-monotonic percentages: {percentages}"
+
+    # Verify zero duplicate stage_complete events
+    completed_stages = [e["stage"] for e in events if e.get("type") == "stage_complete"]
+    assert len(completed_stages) == len(set(completed_stages)), f"Duplicate stage_complete events detected: {completed_stages}"
+
     # Final event must be completed
     assert events[-1]["type"] == "completed"
     assert events[-1]["job_id"] == str(job_id)

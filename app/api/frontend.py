@@ -747,12 +747,7 @@ async def analysis_progress_events(
                         user_id=active_user_id,
                         job_id=job_id,
                         error_category="pipeline_error",
-
                     )
-                loop.call_soon_threadsafe(
-                    event_queue.put_nowait,
-                    make_stage_complete_payload("stage_10"),
-                )
                 loop.call_soon_threadsafe(event_queue.put_nowait, None)
 
             except Exception as exc:
@@ -799,6 +794,7 @@ async def analysis_progress_events(
         t.start()
 
         # Stream SSE events
+        emitted_completed_stages = set()
         while True:
             if await request.is_disconnected():
                 break
@@ -806,6 +802,11 @@ async def analysis_progress_events(
                 item = await asyncio.wait_for(event_queue.get(), timeout=0.25)
                 if item is None:
                     break
+                if isinstance(item, dict) and item.get("type") == "stage_complete":
+                    s_key = item.get("stage")
+                    if s_key in emitted_completed_stages:
+                        continue
+                    emitted_completed_stages.add(s_key)
                 yield f"data: {json.dumps(item)}\n\n"
             except asyncio.TimeoutError:
                 if not t.is_alive() and event_queue.empty():
