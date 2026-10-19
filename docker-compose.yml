@@ -229,7 +229,7 @@ services:
   cloudflared:
     image: cloudflare/cloudflared:latest
     container_name: backtrace_cloudflared
-    restart: "on-failure:3"
+    restart: unless-stopped
     command: tunnel --no-autoupdate --url http://backtrace-app:8000
     depends_on:
       backtrace-app:
