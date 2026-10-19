@@ -495,10 +495,15 @@ async def analysis_progress_events(
         loop = asyncio.get_running_loop()
         event_queue = asyncio.Queue()
 
+        last_emitted_pct = [0]
+        completed_stages = set()
+
         def make_progress_payload(ui_key: str, pct: int, msg: str) -> dict:
             meta = STAGE_METADATA.get(ui_key, {})
             layer_name = meta.get("layer", "")
             est_rem = metrics_collector.estimate_remaining_duration_seconds(layer_name)
+            effective_pct = max(last_emitted_pct[0], pct)
+            last_emitted_pct[0] = effective_pct
             return {
                 "type": "progress",
                 "job_id": job_id,
@@ -506,7 +511,7 @@ async def analysis_progress_events(
                 "stage_index": meta.get("index", 1),
                 "stage_total": 11,
                 "stage_name": meta.get("name", "Analysis Stage"),
-                "percentage": pct,
+                "percentage": effective_pct,
                 "message": msg,
                 "estimated_remaining_seconds": est_rem,
             }
@@ -523,14 +528,12 @@ async def analysis_progress_events(
             }
 
         # Step 0: Initial Auth & Security Gate
+        completed_stages.add("stage_0")
         yield f"data: {json.dumps(make_progress_payload('stage_0', 10, 'Consent & Auth Gate verified'))}\n\n"
         yield f"data: {json.dumps(make_stage_complete_payload('stage_0'))}\n\n"
 
         stage_sequence_map = {
-            "ingestion": [
-                ("stage_1", 18, "Executing shallow git clone into isolated container..."),
-                ("stage_2", 28, "Scanning repository tree hierarchy and language manifests..."),
-            ],
+            "ingestion": [],  # Stages 1 and 2 are emitted directly by run_full_pipeline_sync during clone and discovery
             "parsing": [
                 ("stage_3", 38, "Parsing concrete syntax trees across source files..."),
                 ("stage_4", 48, "Extracting global symbol table and exported declarations..."),
@@ -544,8 +547,6 @@ async def analysis_progress_events(
             ],
             "synthesis": [
                 ("stage_8", 88, "Building interactive call-graphs and comprehension quiz checkpoints..."),
-                ("stage_9", 94, "Persisting synthesized architecture report to primary database..."),
-                ("stage_10", 100, "Finalizing execution metrics and recording pipeline telemetry..."),
             ],
             "complete": [],
         }
@@ -554,6 +555,9 @@ async def analysis_progress_events(
             stage_name = ev.stage.value if hasattr(ev.stage, "value") else str(ev.stage)
             stage_items = stage_sequence_map.get(stage_name, [])
             for ui_key, pct, default_msg in stage_items:
+                if ui_key in completed_stages:
+                    continue
+                completed_stages.add(ui_key)
                 msg = default_msg
                 loop.call_soon_threadsafe(
                     event_queue.put_nowait,
@@ -563,6 +567,7 @@ async def analysis_progress_events(
                     event_queue.put_nowait,
                     make_stage_complete_payload(ui_key),
                 )
+
 
         def run_full_pipeline_sync():
             from app.services.ingestion import IngestionService
@@ -621,7 +626,7 @@ async def analysis_progress_events(
                 current_stage_key = "stage_1"
                 loop.call_soon_threadsafe(
                     event_queue.put_nowait,
-                    make_progress_payload("stage_1", 15, "Cloning repository securely into isolated sandbox..."),
+                    make_progress_payload("stage_1", 18, "Cloning repository securely into isolated sandbox..."),
                 )
                 ingestion_svc = IngestionService()
                 ingest_res = ingestion_svc.ingest_repository(
@@ -629,6 +634,7 @@ async def analysis_progress_events(
                     commit_ref=target_commit_ref,
                     subpath=target_subpath,
                 )
+                completed_stages.add("stage_1")
                 loop.call_soon_threadsafe(
                     event_queue.put_nowait,
                     make_stage_complete_payload("stage_1"),
@@ -641,8 +647,9 @@ async def analysis_progress_events(
                 current_stage_key = "stage_2"
                 loop.call_soon_threadsafe(
                     event_queue.put_nowait,
-                    make_progress_payload("stage_2", 25, f"Discovered {len(file_paths)} files across AST parsers"),
+                    make_progress_payload("stage_2", 28, f"Discovered {len(file_paths)} files across AST parsers"),
                 )
+                completed_stages.add("stage_2")
                 loop.call_soon_threadsafe(
                     event_queue.put_nowait,
                     make_stage_complete_payload("stage_2"),
@@ -657,6 +664,7 @@ async def analysis_progress_events(
                     file_contents=ingest_res.file_contents,
                     progress_callback=on_pipeline_event,
                 )
+
 
                 # 4. Format Real Report, Graph, and Quiz
                 md_report = ""
@@ -710,6 +718,7 @@ async def analysis_progress_events(
                         execution_time_seconds=exec_duration,
                         resolved_sha=resolved_head_sha,
                     )
+                completed_stages.add("stage_9")
                 loop.call_soon_threadsafe(
                     event_queue.put_nowait,
                     make_stage_complete_payload("stage_9"),
@@ -717,9 +726,14 @@ async def analysis_progress_events(
 
                 # 6. Telemetry & Metrics (Stage 10)
                 current_stage_key = "stage_10"
+                completed_stages.add("stage_10")
                 loop.call_soon_threadsafe(
                     event_queue.put_nowait,
                     make_progress_payload("stage_10", 100, "Recording telemetry and metrics..."),
+                )
+                loop.call_soon_threadsafe(
+                    event_queue.put_nowait,
+                    make_stage_complete_payload("stage_10"),
                 )
                 from app.monitoring.posthog import analytics
                 if pipeline_res.success:
@@ -733,6 +747,7 @@ async def analysis_progress_events(
                         user_id=active_user_id,
                         job_id=job_id,
                         error_category="pipeline_error",
+
                     )
                 loop.call_soon_threadsafe(
                     event_queue.put_nowait,
