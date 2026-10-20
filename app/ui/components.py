@@ -25,6 +25,46 @@ from app.ui.sanitizer import sanitize_text, render_safe_markdown, truncate_text_
 SANDBOX_DISABLED_BANNER_TEXT = "Code execution is turned off on this free demo. Running user code safely needs an isolated sandbox server, which this host can't provide. Everything else works, and structure checks still run. See the full run-and-grade flow in the video."
 
 
+def get_narration_source(
+    job: Any = None,
+    raw_markdown: Optional[str] = None,
+    graph_data: Optional[Dict[str, Any]] = None,
+) -> str:
+    """Extracts narration source ('llm' or 'template') from job, graph_data, or markdown."""
+    if graph_data and isinstance(graph_data, dict):
+        src = graph_data.get("narration_source")
+        if src in ("llm", "template"):
+            return src
+    if job:
+        if isinstance(job, dict):
+            src = job.get("narration_source")
+            if src in ("llm", "template"):
+                return src
+            gd = job.get("graph_data")
+            if isinstance(gd, dict) and gd.get("narration_source") in ("llm", "template"):
+                return gd.get("narration_source")
+        else:
+            src = getattr(job, "narration_source", None)
+            if src in ("llm", "template"):
+                return src
+            gd = getattr(job, "graph_data", None)
+            if isinstance(gd, dict) and gd.get("narration_source") in ("llm", "template"):
+                return gd.get("narration_source")
+    md = raw_markdown or (getattr(job, "report_markdown", None) if job else None)
+    if md and isinstance(md, str):
+        match = re.search(r"<!--\s*narration_source:\s*(llm|template)\s*-->", md)
+        if match:
+            return match.group(1)
+    return "template"
+
+
+def get_narration_label(source: str) -> str:
+    """Returns honest label based on narration source."""
+    if source == "llm":
+        return "LLM Step-by-Step Narration"
+    return "Step-by-step narration (template)"
+
+
 
 def nav_shell(
     current_user: Optional[UserModel] = None,
@@ -1334,7 +1374,7 @@ def dashboard_view(
                 "stage_4": "Global Symbol Table",
                 "stage_5": "Directed Dependency Graph",
                 "stage_6": "Architecture Domain Mapping",
-                "stage_7": "LLM Step-by-Step Narration",
+                "stage_7": get_narration_label(get_narration_source(job)),
                 "stage_8": "Graph & Quiz Generation",
                 "stage_9": "Persistence",
                 "stage_10": "Telemetry & Quota Allocation",
@@ -1640,6 +1680,25 @@ def progress_view(
     initial_badge_html = '<span class="badge badge-failed">ANALYSIS JOB FAILED</span>' if is_failed_initially else '<span class="badge" style="background: var(--brass-soft); color: var(--brass); border-color: var(--brass-border);">IN PROGRESS</span>'
     initial_desc_text = safe_job_error if (is_failed_initially and safe_job_error) else ("Analysis job execution failed." if is_failed_initially else "Initializing 11-Layer Analysis Pipeline...")
 
+    # Determine honest stage_7 narration label
+    job_src = None
+    if job:
+        if isinstance(job, dict):
+            job_src = job.get("narration_source")
+            if not job_src and isinstance(job.get("graph_data"), dict):
+                job_src = job.get("graph_data", {}).get("narration_source")
+        else:
+            job_src = getattr(job, "narration_source", None)
+            if not job_src and isinstance(getattr(job, "graph_data", None), dict):
+                job_src = getattr(job, "graph_data", {}).get("narration_source")
+
+    if job_src in ("llm", "template"):
+        stage_7_title = get_narration_label(job_src)
+    elif job_status == "completed":
+        stage_7_title = get_narration_label(get_narration_source(job))
+    else:
+        stage_7_title = "LLM Step-by-Step Narration"
+
     stages_data = [
         (
             "stage_0",
@@ -1700,7 +1759,7 @@ def progress_view(
         (
             "stage_7",
             "07",
-            "LLM Step-by-Step Narration",
+            stage_7_title,
             '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 0 1 10 10c0 5.523-4.477 10-10 10a9.96 9.96 0 0 1-4.887-1.277L2 22l1.277-5.113A9.96 9.96 0 0 1 2 12C2 6.477 6.477 2 12 2z"></path></svg>',
             "Synthesizing an architectural reading order and explaining how components collaborate.",
             "Synthesized chronological reading order, subsystem responsibilities, and structural rationale.",
@@ -2672,6 +2731,8 @@ def report_view(
     domain_dist = parsed_md.get("domain_distribution", [])
     milestones_data = parsed_md.get("milestones", [])
     safe_markdown_html = render_safe_markdown(raw_markdown)
+    narration_src = get_narration_source(job=job, raw_markdown=raw_markdown, graph_data=graph_data)
+    narration_label = get_narration_label(narration_src)
 
     # Evaluation of Sandbox and Public Demo configuration
     sandbox_enabled = piston_health_monitor.is_sandbox_enabled()
@@ -4270,6 +4331,7 @@ def report_view(
                     <h2 style="font-size: 1.45rem; font-weight: 500; margin-top: 0.15rem;">Step-by-Step Milestones &amp; Learning Guide</h2>
                 </div>
                 <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <span class="chip" id="narration-source-label"><span class="chip-dot brass"></span> {narration_label}</span>
                     <span class="chip"><span class="chip-dot brass"></span> {len(milestones_data)} Milestones</span>
                 </div>
             </div>
@@ -4291,6 +4353,9 @@ def report_view(
                         Section 03 // Architectural Reading Sequence
                     </div>
                     <h2 style="font-size: 1.45rem; font-weight: 500; margin-top: 0.15rem;">Step-by-Step Milestones &amp; Learning Guide</h2>
+                </div>
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <span class="chip" id="narration-source-label"><span class="chip-dot brass"></span> {narration_label}</span>
                 </div>
             </div>
             <p style="color: var(--text-secondary); font-size: 0.85rem;">No structured milestone steps found in this report.</p>

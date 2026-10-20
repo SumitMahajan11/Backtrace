@@ -216,7 +216,11 @@ class PipelineOrchestrator:
                 file_contents=file_contents,
             )
             c_res = self.stage_c.compute_confidence_scores(b_res, commit_history=hist_res)
-            d_res = self.stage_d.generate_narration(c_res, b_res, file_contents=file_contents, llm_provider=llm_provider)
+            effective_llm_provider = llm_provider
+            if effective_llm_provider is None:
+                from app.sequence.llm_client import get_default_llm_provider
+                effective_llm_provider = get_default_llm_provider()
+            d_res = self.stage_d.generate_narration(c_res, b_res, file_contents=file_contents, llm_provider=effective_llm_provider)
             metrics_collector.record_layer_metric("layer_6_sequence_reasoning", (time.time() - s4_start) * 1000, run_id=active_run_id)
 
             # -------------------------------------------------------------

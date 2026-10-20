@@ -91,6 +91,7 @@ class GraphExportFormatter:
             "edges": file_edges,
             "tier_groups": tier_groups,
             "milestone_edges": milestone_edges,
+            "narration_source": getattr(report, "narration_source", "template"),
         }
 
     def format_mermaid(self, report: SynthesizedRepositoryReport) -> str:

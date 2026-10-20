@@ -66,9 +66,8 @@ class NarrationEngine:
                     prompt_used=user_prompt,
                 )
             except Exception as e:
-                import traceback
-                print(f"\n[LLM PROVIDER EXCEPTION]: {type(e).__name__}: {e}")
-                traceback.print_exc()
+                import logging
+                logging.getLogger(__name__).warning("LLM provider execution failed: %s", type(e).__name__)
                 pass
 
         # 4. Deterministic Fallback Generation
@@ -403,6 +402,7 @@ class NarrationEngine:
             steps=steps,
             isolated_files_summary=iso_summary,
             prompt_used=prompt_used,
+            source="template",
         )
 
     def _get_sorted_domain_paths(self, paths: List[str]) -> List[str]:
@@ -734,6 +734,7 @@ class NarrationEngine:
             steps=merged_steps,
             isolated_files_summary=fallback.isolated_files_summary,
             prompt_used=prompt_used,
+            source="llm",
         )
 
     def _validate_milestone_prose(

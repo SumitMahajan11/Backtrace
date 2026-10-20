@@ -158,6 +158,8 @@ class SynthesisEngine:
                         })
 
         timestamp_str = datetime.now(timezone.utc).isoformat()
+        narration_source = getattr(narration_result, "source", "template")
+        metadata["narration_source"] = narration_source
 
         return SynthesizedRepositoryReport(
             repo_name=repo_name,
@@ -169,6 +171,7 @@ class SynthesisEngine:
             file_symbols=symbols_by_file,
             file_dependencies=file_dependencies,
             metadata=metadata,
+            narration_source=narration_source,
         )
 
     def _determine_architectural_role(self, step: BuildStepNarrative) -> str:

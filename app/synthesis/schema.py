@@ -54,3 +54,4 @@ class SynthesizedRepositoryReport(BaseModel):
     file_symbols: Dict[str, List[str]] = Field(default_factory=dict)
     file_dependencies: List[Dict[str, Any]] = Field(default_factory=list)
     metadata: Dict[str, Any] = Field(default_factory=dict)
+    narration_source: str = "template"

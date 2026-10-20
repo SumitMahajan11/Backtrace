@@ -95,6 +95,12 @@ This checklist outlines the dashboard actions in order for deploying Backtrace t
    - `POSTHOG_API_KEY`
    - `POSTHOG_HOST`
 
+   **LLM Narration Provider (Optional):**
+   - `LLM_PROVIDER`
+   - `GROQ_API_KEY`
+   - `GROQ_MODEL`
+   When LLM_PROVIDER=groq, snippets of analyzed repo code are sent to Groq.
+
 7. Click **Deploy Web Service**.
 
 ---

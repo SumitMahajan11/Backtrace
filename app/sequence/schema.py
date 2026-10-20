@@ -108,4 +108,5 @@ class SequenceNarrationResult(BaseModel):
     steps: List[BuildStepNarrative] = Field(default_factory=list)
     isolated_files_summary: str
     prompt_used: Optional[str] = None
+    source: str = "template"  # "llm" or "template"
 

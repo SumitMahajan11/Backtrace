@@ -17,7 +17,8 @@ class MarkdownReportFormatter:
 
         # 1. Header & Title
         lines.append(f"# Architectural Reverse-Engineering Report: `{report.repo_name}`")
-        lines.append(f"*Synthesized at: {report.synthesis_timestamp}*\n")
+        lines.append(f"*Synthesized at: {report.synthesis_timestamp}*")
+        lines.append(f"<!-- narration_source: {getattr(report, 'narration_source', 'template')} -->\n")
 
         # 2. Executive Architecture Overview
         lines.append("## 1. Executive Architecture Overview")

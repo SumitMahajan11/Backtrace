@@ -676,6 +676,7 @@ async def analysis_progress_events(
                     graph_data = {
                         "nodes": dag.get("nodes", []),
                         "edges": dag.get("edges", []),
+                        "narration_source": dag.get("narration_source", "template"),
                     }
                     quiz_dict = QuizFormatter().generate_quiz(pipeline_res.report)
                     quiz_data = {"questions": quiz_dict.get("questions", [])}
