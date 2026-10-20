@@ -32,6 +32,7 @@ from app.ui.components import (
     report_view,
     rewards_view,
     settings_view,
+    showcase_view,
 )
 from app.ui.sanitizer import sanitize_text
 
@@ -829,24 +830,27 @@ def show_report(
 ):
     """
     Render finalized analysis report (Markdown, Graph, Quiz).
-    Strict IDOR check: Users can only view reports for their own jobs.
+    Strict IDOR check: Users can only view reports for their own jobs unless is_showcase is True.
     """
     if not user:
-        return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
+        job = AnalysisJobRepository.get_job_by_id(session, job_id)
+        if not job or not getattr(job, "is_showcase", False):
+            return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
+    else:
+        job = AnalysisJobRepository.get_job_by_id(session, job_id)
+        if not job:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Analysis job not found",
+            )
+        if not getattr(job, "is_showcase", False) and job.user_id != user.id:
+            # Strict IDOR check
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access forbidden: You do not own this analysis job",
+            )
 
-    job = AnalysisJobRepository.get_job_by_id(session, job_id)
-    if not job:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Analysis job not found",
-        )
-
-    if job.user_id != user.id:
-        # Strict IDOR check
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access forbidden: You do not own this analysis job",
-        )
+    is_showcase = bool(getattr(job, "is_showcase", False))
 
     if job.status != "completed":
         return RedirectResponse(url=f"/progress/{job.id}", status_code=status.HTTP_302_FOUND)
@@ -856,26 +860,28 @@ def show_report(
     quiz_data = job.quiz_data if isinstance(job.quiz_data, dict) else None
 
     # Retrieve all persisted milestone attempts for this user and job
-    attempts = MilestoneAttemptRepository.get_attempts_for_job(
-        session=session,
-        user_id=user.id,
-        job_id=job.id,
-    )
-    attempts_by_tier = {a.milestone_tier: a for a in attempts}
+    attempts_by_tier = {}
+    if user and not is_showcase:
+        attempts = MilestoneAttemptRepository.get_attempts_for_job(
+            session=session,
+            user_id=user.id,
+            job_id=job.id,
+        )
+        attempts_by_tier = {a.milestone_tier: a for a in attempts}
 
     # Query file contents from FileContentService (Part A & D)
     from app.services.file_content_service import FileContentService
     file_contents = FileContentService.get_file_contents_for_job(session=session, job=job)
     redacted_files = FileContentService.get_redacted_files_for_job(session=session, job=job)
 
-    billing_status = BillingService.get_user_billing_status(user, session)
+    billing_status = BillingService.get_user_billing_status(user, session) if user else None
     return HTMLResponse(
         content=report_view(
             job=job,
             raw_markdown=raw_markdown,
             graph_data=graph_data,
             quiz_data=quiz_data,
-            current_user=user,
+            current_user=None if is_showcase else user,
             billing_status=billing_status,
             attempts_by_tier=attempts_by_tier,
             file_contents=file_contents,
@@ -895,8 +901,15 @@ def show_milestone_editor_route(
     """
     Direct linked route to milestone editor for a specific tier.
     Redirects to /report/{job_id}#milestone-editor-card-{tier} with IDOR protection.
+    If showcase job, redirects to /report/{job_id}.
     """
     if not user:
+        job = AnalysisJobRepository.get_job_by_id(session, job_id)
+        if job and getattr(job, "is_showcase", False):
+            return RedirectResponse(
+                url=f"/report/{job.id}",
+                status_code=status.HTTP_302_FOUND,
+            )
         return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
 
     job = AnalysisJobRepository.get_job_by_id(session, job_id)
@@ -904,6 +917,12 @@ def show_milestone_editor_route(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Analysis job not found",
+        )
+
+    if getattr(job, "is_showcase", False):
+        return RedirectResponse(
+            url=f"/report/{job.id}",
+            status_code=status.HTTP_302_FOUND,
         )
 
     if job.user_id != user.id:
@@ -917,3 +936,21 @@ def show_milestone_editor_route(
         url=f"/report/{job.id}#milestone-editor-card-{tier}",
         status_code=status.HTTP_302_FOUND,
     )
+
+
+@router.get("/showcase", response_class=HTMLResponse, summary="Public Showcase Directory")
+def list_showcase(
+    request: Request,
+    user: Optional[UserModel] = Depends(get_current_user_optional),
+    session: Session = Depends(get_db),
+):
+    """
+    Public directory of showcase jobs.
+    """
+    showcase_jobs = (
+        session.query(AnalysisJobModel)
+        .filter(AnalysisJobModel.is_showcase.is_(True))
+        .order_by(AnalysisJobModel.created_at.desc())
+        .all()
+    )
+    return HTMLResponse(content=showcase_view(jobs=showcase_jobs, current_user=user))
