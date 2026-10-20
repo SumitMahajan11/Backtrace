@@ -178,6 +178,29 @@ class PointsEngine:
         Appends immutable record to PointsLedgerModel.
         If degraded_mode is True, awards 0 points and creates no ledger row.
         """
+        # Check SANDBOX_ENABLED setting (same setting the rest of the app uses)
+        from app.services.piston_health import piston_health_monitor
+        from app.core.config import get_settings
+
+        sandbox_enabled = piston_health_monitor.is_sandbox_enabled()
+        try:
+            cfg = get_settings()
+            if cfg.SANDBOX_ENABLED is False:
+                sandbox_enabled = False
+        except Exception:
+            pass
+
+        if not sandbox_enabled:
+            logger.info(
+                f"[Points Award Skipped] Sandbox execution disabled (SANDBOX_ENABLED=false) for user_id={user_id}, job_id={job.id}, tier={milestone_tier}. 0 points awarded, no ledger entry."
+            )
+            return PointsAwardResult(
+                points_awarded=0,
+                multiplier_applied=0.0,
+                reason="sandbox_disabled",
+                ledger_entry=None,
+            )
+
         is_degraded = bool(degraded_mode)
         if not is_degraded and hasattr(attempt, "grading_details_json") and attempt.grading_details_json:
             try:

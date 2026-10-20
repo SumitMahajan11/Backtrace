@@ -3689,19 +3689,19 @@ def report_view(
             btn_submit_fill_label = "Submit Verification"
             run_note_html = ""
             submit_note_html = ""
+            submit_fill_note_html = ""
 
             if not sandbox_enabled:
                 btn_run_disabled = 'disabled title="Run is unavailable on this demo" style="cursor: not-allowed; opacity: 0.5;"'
                 btn_run_fill_disabled = 'disabled title="Run is unavailable on this demo" style="cursor: not-allowed; opacity: 0.5;"'
                 run_note_html = '<div class="demo-run-note" style="font-family: \'IBM Plex Mono\', monospace; font-size: 0.6875rem; color: var(--text-tertiary); margin-top: 0.25rem;">Run is unavailable on this demo.</div>'
+                submit_fill_note_html = '<div class="demo-submit-note" style="font-family: \'IBM Plex Mono\', monospace; font-size: 0.6875rem; color: var(--text-tertiary); margin-top: 0.25rem;">No points are awarded on this demo.</div>'
 
                 if requires_execution:
                     btn_submit_disabled = 'disabled title="Grading this milestone needs code execution, which is off on this demo" style="cursor: not-allowed; opacity: 0.5;"'
-                    btn_submit_fill_disabled = 'disabled title="Grading this milestone needs code execution, which is off on this demo" style="cursor: not-allowed; opacity: 0.5;"'
                     submit_note_html = '<div class="demo-submit-note" style="font-family: \'IBM Plex Mono\', monospace; font-size: 0.6875rem; color: var(--text-tertiary); margin-top: 0.25rem;">Grading this milestone needs code execution, which is off on this demo.</div>'
                 else:
                     btn_submit_label = "Check structure"
-                    btn_submit_fill_label = "Check structure"
                     submit_note_html = '<div class="demo-submit-note" style="font-family: \'IBM Plex Mono\', monospace; font-size: 0.6875rem; color: var(--text-tertiary); margin-top: 0.25rem;">Structure check only. No points are awarded on this demo.</div>'
                     if not has_any_real_source:
                         btn_submit_disabled = 'disabled title="Reference source unavailable" style="cursor: not-allowed; opacity: 0.45;"'
@@ -4199,7 +4199,7 @@ def report_view(
                                                 <span class="chip-dot teal pulse"></span> Verifying Blanks...
                                             </span>
                                         </div>
-                                        {submit_note_html}
+                                        {submit_fill_note_html}
                                     </div>
 
                                     <!-- Immediate Hint Action Button (Always available immediately in Fill mode) -->
