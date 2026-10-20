@@ -8,16 +8,22 @@ from __future__ import annotations
 
 import html
 import json
+import os
 import re
 from collections import Counter
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from app.formatters.graph_formatter import DOMAIN_COLOR_DEFS, DOMAIN_HEX_COLORS
 from app.models.db import UserModel
+from app.services.grading_engine import GradingEngine
 from app.services.hint_engine import HintEngine
+from app.services.piston_health import piston_health_monitor
 from app.services.scaffold_generator import ScaffoldGenerator
 from app.services.structural_verifier import StructuralVerifier
 from app.ui.sanitizer import sanitize_text, render_safe_markdown, truncate_text_clean
+
+SANDBOX_DISABLED_BANNER_TEXT = "Code execution is turned off on this free demo. Running user code safely needs an isolated sandbox server, which this host can't provide. Everything else works, and structure checks still run. See the full run-and-grade flow in the video."
+
 
 
 def nav_shell(
@@ -2667,6 +2673,26 @@ def report_view(
     milestones_data = parsed_md.get("milestones", [])
     safe_markdown_html = render_safe_markdown(raw_markdown)
 
+    # Evaluation of Sandbox and Public Demo configuration
+    sandbox_enabled = piston_health_monitor.is_sandbox_enabled()
+    demo_video_url = os.getenv("DEMO_VIDEO_URL", "")
+
+    if not sandbox_enabled:
+        video_link_html = (
+            f' <a href="{html.escape(demo_video_url)}" target="_blank" rel="noopener noreferrer" style="color: var(--teal); font-weight: 600; text-decoration: underline;">Watch the video</a>'
+            if demo_video_url
+            else ""
+        )
+        sandbox_banner_html = f"""
+        <div id="sandbox-disabled-banner" class="stratum-card" style="background: rgba(245, 158, 11, 0.08); border: 1px solid var(--amber); border-left: 4px solid var(--amber); padding: 1rem 1.25rem; margin-bottom: 1.5rem; border-radius: 4px;">
+            <div style="font-size: 0.875rem; line-height: 1.5; color: var(--text-primary);">
+                {SANDBOX_DISABLED_BANNER_TEXT}{video_link_html}
+            </div>
+        </div>
+        """
+    else:
+        sandbox_banner_html = ""
+
     # Graph stats
     nodes = graph_data.get("nodes", []) if graph_data else []
     edges = graph_data.get("edges", []) if graph_data else []
@@ -3654,6 +3680,33 @@ def report_view(
                 # Run Code remains enabled as an unmetered sandbox scratchpad, while Submit Verification requires reference source
                 btn_submit_disabled = 'disabled title="Reference source unavailable" style="cursor: not-allowed; opacity: 0.45;"'
 
+            grading_method, _ = GradingEngine().determine_grading_tier(job, m_tier, graph_data or {})
+            requires_execution = grading_method in ("real_tests", "expected_output")
+
+            btn_run_fill_disabled = ""
+            btn_submit_fill_disabled = ""
+            btn_submit_label = "Submit Verification"
+            btn_submit_fill_label = "Submit Verification"
+            run_note_html = ""
+            submit_note_html = ""
+
+            if not sandbox_enabled:
+                btn_run_disabled = 'disabled title="Run is unavailable on this demo" style="cursor: not-allowed; opacity: 0.5;"'
+                btn_run_fill_disabled = 'disabled title="Run is unavailable on this demo" style="cursor: not-allowed; opacity: 0.5;"'
+                run_note_html = '<div class="demo-run-note" style="font-family: \'IBM Plex Mono\', monospace; font-size: 0.6875rem; color: var(--text-tertiary); margin-top: 0.25rem;">Run is unavailable on this demo.</div>'
+
+                if requires_execution:
+                    btn_submit_disabled = 'disabled title="Grading this milestone needs code execution, which is off on this demo" style="cursor: not-allowed; opacity: 0.5;"'
+                    btn_submit_fill_disabled = 'disabled title="Grading this milestone needs code execution, which is off on this demo" style="cursor: not-allowed; opacity: 0.5;"'
+                    submit_note_html = '<div class="demo-submit-note" style="font-family: \'IBM Plex Mono\', monospace; font-size: 0.6875rem; color: var(--text-tertiary); margin-top: 0.25rem;">Grading this milestone needs code execution, which is off on this demo.</div>'
+                else:
+                    btn_submit_label = "Check structure"
+                    btn_submit_fill_label = "Check structure"
+                    submit_note_html = '<div class="demo-submit-note" style="font-family: \'IBM Plex Mono\', monospace; font-size: 0.6875rem; color: var(--text-tertiary); margin-top: 0.25rem;">Structure check only. No points are awarded on this demo.</div>'
+                    if not has_any_real_source:
+                        btn_submit_disabled = 'disabled title="Reference source unavailable" style="cursor: not-allowed; opacity: 0.45;"'
+
+
             # Starter signature from real file content (ScaffoldGenerator convention)
             starter_code = ""
             if fill_files_data and fill_files_data[0].get("has_real_source", True):
@@ -3920,29 +3973,39 @@ def report_view(
                             </div>
 
                             <!-- Actions & Submission Toolbar (Prompt 16: Run vs Submit) -->
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
-                                <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-top: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
+                                <div style="display: flex; align-items: flex-start; gap: 0.5rem; flex-wrap: wrap;">
                                     <!-- Run Action Button (Unmetered, no grading, real stdout/stderr/exit code) -->
-                                    <button type="button" id="btn-run-{m_tier}" onclick="runMilestoneCode('{job_id}', {m_tier})" {btn_run_disabled} class="btn btn-sm btn-secondary" style="font-family: 'IBM Plex Mono', monospace; letter-spacing: 0.02em; border-color: var(--brass-border); color: var(--brass);">
-                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none">
-                                            <polygon points="5 3 19 12 5 21 5 3"></polygon>
-                                        </svg>
-                                        Run Code
-                                    </button>
-                                    <span id="indicator-spinner-run-{m_tier}" style="display: none; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--text-secondary); align-items: center; gap: 0.3rem;">
-                                        <span class="chip-dot brass pulse"></span> Executing in Sandbox...
-                                    </span>
+                                    <div style="display: flex; flex-direction: column; align-items: flex-start;">
+                                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                            <button type="button" id="btn-run-{m_tier}" onclick="runMilestoneCode('{job_id}', {m_tier})" {btn_run_disabled} class="btn btn-sm btn-secondary" style="font-family: 'IBM Plex Mono', monospace; letter-spacing: 0.02em; border-color: var(--brass-border); color: var(--brass);">
+                                                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+                                                    <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                                                </svg>
+                                                Run Code
+                                            </button>
+                                            <span id="indicator-spinner-run-{m_tier}" style="display: none; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--text-secondary); align-items: center; gap: 0.3rem;">
+                                                <span class="chip-dot brass pulse"></span> Executing in Sandbox...
+                                            </span>
+                                        </div>
+                                        {run_note_html}
+                                    </div>
 
                                     <!-- Submit Action Button (Structural Check + Runtime Execution + Graded Attempt State) -->
-                                    <button type="button" id="btn-submit-{m_tier}" onclick="submitMilestoneCode('{job_id}', {m_tier})" {btn_submit_disabled} class="btn btn-sm btn-primary" style="font-family: 'IBM Plex Mono', monospace; letter-spacing: 0.02em;">
-                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                            <polyline points="20 6 9 17 4 12"></polyline>
-                                        </svg>
-                                        Submit Verification
-                                    </button>
-                                    <span id="indicator-spinner-{m_tier}" style="display: none; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--text-secondary); align-items: center; gap: 0.3rem;">
-                                        <span class="chip-dot teal pulse"></span> Verifying &amp; Running...
-                                    </span>
+                                    <div style="display: flex; flex-direction: column; align-items: flex-start;">
+                                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                            <button type="button" id="btn-submit-{m_tier}" onclick="submitMilestoneCode('{job_id}', {m_tier})" {btn_submit_disabled} class="btn btn-sm btn-primary" style="font-family: 'IBM Plex Mono', monospace; letter-spacing: 0.02em;">
+                                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <polyline points="20 6 9 17 4 12"></polyline>
+                                                </svg>
+                                                {btn_submit_label}
+                                            </button>
+                                            <span id="indicator-spinner-{m_tier}" style="display: none; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--text-secondary); align-items: center; gap: 0.3rem;">
+                                                <span class="chip-dot teal pulse"></span> Verifying &amp; Running...
+                                            </span>
+                                        </div>
+                                        {submit_note_html}
+                                    </div>
 
                                     <!-- Hint Action Button (Unlocked after 1st submission) -->
                                     <button type="button" id="btn-hint-{m_tier}" data-hint-level="{hint_level}" onclick="openHintConfirmModal('{job_id}', {m_tier})" class="btn btn-sm btn-secondary" style="{hint_btn_display} font-family: 'IBM Plex Mono', monospace; font-size: 0.8rem; border-color: var(--brass-border); color: var(--brass);" {hint_btn_disabled}>
@@ -4105,29 +4168,39 @@ def report_view(
                             </div>
 
                             <!-- Actions Toolbar (Run / Submit / Immediate Hints / Reveal) -->
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
-                                <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-top: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
+                                <div style="display: flex; align-items: flex-start; gap: 0.5rem; flex-wrap: wrap;">
                                     <!-- Run Action Button -->
-                                    <button type="button" id="btn-run-fill-{m_tier}" onclick="runMilestoneFillCode('{job_id}', {m_tier})" class="btn btn-sm btn-secondary" style="font-family: 'IBM Plex Mono', monospace; letter-spacing: 0.02em; border-color: var(--teal-border); color: var(--teal);">
-                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none">
-                                            <polygon points="5 3 19 12 5 21 5 3"></polygon>
-                                        </svg>
-                                        Run Code
-                                    </button>
-                                    <span id="indicator-spinner-run-fill-{m_tier}" style="display: none; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--text-secondary); align-items: center; gap: 0.3rem;">
-                                        <span class="chip-dot teal pulse"></span> Executing in Sandbox...
-                                    </span>
+                                    <div style="display: flex; flex-direction: column; align-items: flex-start;">
+                                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                            <button type="button" id="btn-run-fill-{m_tier}" onclick="runMilestoneFillCode('{job_id}', {m_tier})" {btn_run_fill_disabled} class="btn btn-sm btn-secondary" style="font-family: 'IBM Plex Mono', monospace; letter-spacing: 0.02em; border-color: var(--teal-border); color: var(--teal);">
+                                                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+                                                    <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                                                </svg>
+                                                Run Code
+                                            </button>
+                                            <span id="indicator-spinner-run-fill-{m_tier}" style="display: none; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--text-secondary); align-items: center; gap: 0.3rem;">
+                                                <span class="chip-dot teal pulse"></span> Executing in Sandbox...
+                                            </span>
+                                        </div>
+                                        {run_note_html}
+                                    </div>
 
                                     <!-- Submit Verification Button -->
-                                    <button type="button" id="btn-submit-fill-{m_tier}" onclick="submitMilestoneFillCode('{job_id}', {m_tier})" class="btn btn-sm btn-primary" style="font-family: 'IBM Plex Mono', monospace; letter-spacing: 0.02em; background: var(--teal); color: #0f172a; border-color: var(--teal-border);">
-                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                            <polyline points="20 6 9 17 4 12"></polyline>
-                                        </svg>
-                                        Submit Verification
-                                    </button>
-                                    <span id="indicator-spinner-fill-{m_tier}" style="display: none; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--text-secondary); align-items: center; gap: 0.3rem;">
-                                        <span class="chip-dot teal pulse"></span> Verifying Blanks...
-                                    </span>
+                                    <div style="display: flex; flex-direction: column; align-items: flex-start;">
+                                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                            <button type="button" id="btn-submit-fill-{m_tier}" onclick="submitMilestoneFillCode('{job_id}', {m_tier})" {btn_submit_fill_disabled} class="btn btn-sm btn-primary" style="font-family: 'IBM Plex Mono', monospace; letter-spacing: 0.02em; background: var(--teal); color: #0f172a; border-color: var(--teal-border);">
+                                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <polyline points="20 6 9 17 4 12"></polyline>
+                                                </svg>
+                                                {btn_submit_fill_label}
+                                            </button>
+                                            <span id="indicator-spinner-fill-{m_tier}" style="display: none; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--text-secondary); align-items: center; gap: 0.3rem;">
+                                                <span class="chip-dot teal pulse"></span> Verifying Blanks...
+                                            </span>
+                                        </div>
+                                        {submit_note_html}
+                                    </div>
 
                                     <!-- Immediate Hint Action Button (Always available immediately in Fill mode) -->
                                     <button type="button" id="btn-hint-fill-{m_tier}" data-hint-level="{hint_level}" onclick="openHintConfirmModal('{job_id}', {m_tier}, 'fill')" class="btn btn-sm btn-secondary" style="display: inline-flex; font-family: 'IBM Plex Mono', monospace; font-size: 0.8rem; border-color: var(--brass-border); color: var(--brass);">
@@ -4334,6 +4407,7 @@ def report_view(
     graph_nodes_json = json.dumps(nodes).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
     graph_edges_json = json.dumps(edges).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
     fill_files_map_json = json.dumps(all_fill_files_map).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
+    sandbox_banner_js_val = json.dumps(SANDBOX_DISABLED_BANNER_TEXT) if not sandbox_enabled else '""'
 
     extra_scripts = f"""
     <!-- CodeMirror Assets -->
@@ -4346,6 +4420,8 @@ def report_view(
         const GRAPH_NODES = {graph_nodes_json};
         const GRAPH_EDGES = {graph_edges_json};
         const ALL_FILL_FILES = {fill_files_map_json};
+        const DEMO_VIDEO_URL = {json.dumps(demo_video_url)};
+        const SANDBOX_DISABLED_BANNER_TEXT = {sandbox_banner_js_val};
         window.fillFilesData = ALL_FILL_FILES;
         window.cmEditors = {{}};
         window.cmFillEditors = {{}};
@@ -4353,6 +4429,31 @@ def report_view(
         window.activeGuessFileIdx = {{}};
         window.fillFileDrafts = {{}};
         window.activeFillFileIdx = {{}};
+
+        function render503Notice(targetPanel, demoVideoUrl) {{
+            if (!targetPanel) return;
+            targetPanel.style.display = 'block';
+            targetPanel.textContent = '';
+            const bannerBox = document.createElement('div');
+            bannerBox.className = 'stratum-card sandbox-503-banner';
+            bannerBox.style.cssText = 'background: rgba(245, 158, 11, 0.08); border: 1px solid var(--amber); border-left: 4px solid var(--amber); padding: 1rem 1.25rem; margin: 0.75rem 0; border-radius: 4px; font-size: 0.875rem; line-height: 1.5; color: var(--text-primary);';
+
+            const textSpan = document.createElement('span');
+            textSpan.textContent = SANDBOX_DISABLED_BANNER_TEXT;
+            bannerBox.appendChild(textSpan);
+
+            if (demoVideoUrl) {{
+                const link = document.createElement('a');
+                link.href = demoVideoUrl;
+                link.target = '_blank';
+                link.rel = 'noopener noreferrer';
+                link.style.cssText = 'color: var(--teal); font-weight: 600; text-decoration: underline; margin-left: 0.35rem;';
+                link.textContent = 'Watch the video';
+                bannerBox.appendChild(link);
+            }}
+            targetPanel.appendChild(bannerBox);
+        }}
+
 
         function initCodeEditors() {{
             // 1. Initialize Guess It CodeMirror Editors
@@ -4677,11 +4778,19 @@ def report_view(
                 }});
 
                 if (!resp.ok) {{
+                    if (resp.status === 503) {{
+                        render503Notice(consolePanel, DEMO_VIDEO_URL);
+                        return;
+                    }}
                     const errData = await resp.json().catch(() => ({{}}));
                     const msg = errData.detail || ('HTTP ' + resp.status + ' execution error');
                     if (consolePanel) {{
                         consolePanel.style.display = 'block';
-                        consolePanel.innerHTML = '<div style="color: var(--crimson); font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.8125rem;">Execution Error: ' + escapeHtml(msg) + '</div>';
+                        consolePanel.textContent = '';
+                        const errBox = document.createElement('div');
+                        errBox.style.cssText = "color: var(--crimson); font-family: 'IBM Plex Mono', monospace; font-size: 0.8125rem;";
+                        errBox.textContent = 'Execution Error: ' + msg;
+                        consolePanel.appendChild(errBox);
                     }}
                     return;
                 }}
@@ -4695,7 +4804,11 @@ def report_view(
                 console.error('Execution run failed', e);
                 if (consolePanel) {{
                     consolePanel.style.display = 'block';
-                    consolePanel.innerHTML = '<div style="color: var(--crimson); font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.8125rem;">Execution Network Error: ' + escapeHtml(e.message) + '</div>';
+                    consolePanel.textContent = '';
+                    const errBox = document.createElement('div');
+                    errBox.style.cssText = "color: var(--crimson); font-family: 'IBM Plex Mono', monospace; font-size: 0.8125rem;";
+                    errBox.textContent = 'Execution Network Error: ' + e.message;
+                    consolePanel.appendChild(errBox);
                 }}
             }} finally {{
                 if (btn) btn.disabled = false;
@@ -4736,11 +4849,19 @@ def report_view(
                 }});
 
                 if (!resp.ok) {{
+                    if (resp.status === 503) {{
+                        render503Notice(diffPanel, DEMO_VIDEO_URL);
+                        return;
+                    }}
                     const errData = await resp.json().catch(() => ({{}}));
                     const msg = errData.detail || ('HTTP ' + resp.status + ' error occurred');
                     if (diffPanel) {{
                         diffPanel.style.display = 'block';
-                        diffPanel.innerHTML = '<div style="color: var(--crimson); font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.8125rem;">Verification Error: ' + escapeHtml(msg) + '</div>';
+                        diffPanel.textContent = '';
+                        const errBox = document.createElement('div');
+                        errBox.style.cssText = "color: var(--crimson); font-family: 'IBM Plex Mono', monospace; font-size: 0.8125rem;";
+                        errBox.textContent = 'Verification Error: ' + msg;
+                        diffPanel.appendChild(errBox);
                     }}
                     return;
                 }}
@@ -4834,11 +4955,19 @@ def report_view(
                 }});
 
                 if (!resp.ok) {{
+                    if (resp.status === 503) {{
+                        render503Notice(consolePanel, DEMO_VIDEO_URL);
+                        return;
+                    }}
                     const errData = await resp.json().catch(() => ({{}}));
                     const msg = errData.detail || ('HTTP ' + resp.status + ' execution error');
                     if (consolePanel) {{
                         consolePanel.style.display = 'block';
-                        consolePanel.innerHTML = '<div style="color: var(--crimson); font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.8125rem;">Execution Error: ' + escapeHtml(msg) + '</div>';
+                        consolePanel.textContent = '';
+                        const errBox = document.createElement('div');
+                        errBox.style.cssText = "color: var(--crimson); font-family: 'IBM Plex Mono', monospace; font-size: 0.8125rem;";
+                        errBox.textContent = 'Execution Error: ' + msg;
+                        consolePanel.appendChild(errBox);
                     }}
                     return;
                 }}
@@ -4852,7 +4981,11 @@ def report_view(
                 console.error('Fill execution run failed', e);
                 if (consolePanel) {{
                     consolePanel.style.display = 'block';
-                    consolePanel.innerHTML = '<div style="color: var(--crimson); font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.8125rem;">Execution Network Error: ' + escapeHtml(e.message) + '</div>';
+                    consolePanel.textContent = '';
+                    const errBox = document.createElement('div');
+                    errBox.style.cssText = "color: var(--crimson); font-family: 'IBM Plex Mono', monospace; font-size: 0.8125rem;";
+                    errBox.textContent = 'Execution Network Error: ' + e.message;
+                    consolePanel.appendChild(errBox);
                 }}
             }} finally {{
                 if (btn) btn.disabled = false;
@@ -4897,11 +5030,19 @@ def report_view(
                 }});
 
                 if (!resp.ok) {{
+                    if (resp.status === 503) {{
+                        render503Notice(diffPanel, DEMO_VIDEO_URL);
+                        return;
+                    }}
                     const errData = await resp.json().catch(() => ({{}}));
                     const msg = errData.detail || ('HTTP ' + resp.status + ' error occurred');
                     if (diffPanel) {{
                         diffPanel.style.display = 'block';
-                        diffPanel.innerHTML = '<div style="color: var(--crimson); font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.8125rem;">Verification Error: ' + escapeHtml(msg) + '</div>';
+                        diffPanel.textContent = '';
+                        const errBox = document.createElement('div');
+                        errBox.style.cssText = "color: var(--crimson); font-family: 'IBM Plex Mono', monospace; font-size: 0.8125rem;";
+                        errBox.textContent = 'Verification Error: ' + msg;
+                        diffPanel.appendChild(errBox);
                     }}
                     return;
                 }}
@@ -6032,6 +6173,7 @@ def report_view(
 
         <!-- Tab 3: Milestones & Code Workspace Section -->
         <div class="report-tab-pane" id="tab-pane-milestones" role="tabpanel" aria-labelledby="tab-btn-milestones" style="display: none;">
+            {sandbox_banner_html}
             {milestones_spine_html}
         </div>
 

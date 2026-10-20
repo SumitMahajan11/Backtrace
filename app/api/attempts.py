@@ -187,12 +187,17 @@ def get_milestone_attempt(
 
     attempt_data = _serialize_attempt(attempt, current_user.id, job_id, milestone_tier)
 
+    grading_tier, _ = grading_engine.determine_grading_tier(job, milestone_tier, job.graph_data)
+    requires_execution = grading_tier in ("real_tests", "expected_output")
+
     return {
         "attempt": attempt_data,
         "expected_symbols": expected_symbols,
         "hint_1": hint_1_text,
         "hint_2": hint_2_text,
         "reference_implementation": reference_data,
+        "requires_execution": requires_execution,
+        "grading_method": grading_tier,
         "confirmation_copy": {
             "hint_1": HintEngine.SELECTED_HINT_1_CONFIRM,
             "hint_2": HintEngine.CONFIRM_HINT_2_COPY,

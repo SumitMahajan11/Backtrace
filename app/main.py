@@ -143,3 +143,17 @@ def get_health(response: Response) -> Dict[str, Any]:
     response.status_code = status_code
     return payload
 
+
+@app.get("/api/public-config", tags=["Configuration"], summary="Public System Configuration")
+@app.get("/public-config", include_in_schema=False)
+def get_public_config() -> Dict[str, Any]:
+    """Public system configuration flag endpoint. Returns only sandbox_enabled and demo_video_url."""
+    from app.services.piston_health import piston_health_monitor
+    sandbox_enabled = piston_health_monitor.is_sandbox_enabled()
+    demo_video_url = os.getenv("DEMO_VIDEO_URL", "")
+    return {
+        "sandbox_enabled": bool(sandbox_enabled),
+        "demo_video_url": demo_video_url,
+    }
+
+
