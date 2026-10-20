@@ -58,7 +58,7 @@ def seed_showcase_file(in_path: str) -> int:
         )
         if not showcase_user:
             showcase_user = UserModel(
-                github_id=99999999,
+                github_id=-1,
                 github_username="showcase_bot",
                 email="showcase@backtrace.internal",
                 is_admin=False,
