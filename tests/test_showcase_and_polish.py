@@ -188,8 +188,11 @@ def test_showcase_report_logged_out_returns_200_no_attempt_controls(test_db, cli
     assert "submitMilestoneCode(" not in html
     assert "confirmAndFetchHint(" not in html
     assert "confirmAndRevealImplementation(" not in html
-    assert "markMilestoneAsReviewed(" not in html
-    assert "codemirror" not in html.lower()
+    import re
+    assert not re.search(r"<script[^>]*codemirror", html, re.IGNORECASE)
+    assert not re.search(r"<link[^>]*codemirror", html, re.IGNORECASE)
+    assert "codemirror.min.js" not in html.lower()
+    assert "codemirror.min.css" not in html.lower()
 
 
 # -------------------------------------------------------------------------

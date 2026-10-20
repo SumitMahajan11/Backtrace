@@ -280,6 +280,10 @@ def page_shell(
 
         /* High-Contrast Scrollbar for Code Viewers & Editors */
         .read-code-pre,
+        .CodeMirror,
+        .CodeMirror-scroll,
+        .CodeMirror-vscrollbar,
+        .CodeMirror-hscrollbar,
         pre.read-code-pre,
         pre,
         textarea {{{{
@@ -287,18 +291,27 @@ def page_shell(
             scrollbar-color: #525e75 #13171f;
         }}}}
         .read-code-pre::-webkit-scrollbar,
+        .CodeMirror-scroll::-webkit-scrollbar,
+        .CodeMirror-vscrollbar::-webkit-scrollbar,
+        .CodeMirror-hscrollbar::-webkit-scrollbar,
         pre::-webkit-scrollbar,
         textarea::-webkit-scrollbar {{{{
             width: 9px;
             height: 9px;
         }}}}
         .read-code-pre::-webkit-scrollbar-track,
+        .CodeMirror-scroll::-webkit-scrollbar-track,
+        .CodeMirror-vscrollbar::-webkit-scrollbar-track,
+        .CodeMirror-hscrollbar::-webkit-scrollbar-track,
         pre::-webkit-scrollbar-track,
         textarea::-webkit-scrollbar-track {{{{
             background: #111317;
             border-radius: 4px;
         }}}}
         .read-code-pre::-webkit-scrollbar-thumb,
+        .CodeMirror-scroll::-webkit-scrollbar-thumb,
+        .CodeMirror-vscrollbar::-webkit-scrollbar-thumb,
+        .CodeMirror-hscrollbar::-webkit-scrollbar-thumb,
         pre::-webkit-scrollbar-thumb,
         textarea::-webkit-scrollbar-thumb {{{{
             background: #525e75;
@@ -306,6 +319,9 @@ def page_shell(
             border-radius: 4px;
         }}}}
         .read-code-pre::-webkit-scrollbar-thumb:hover,
+        .CodeMirror-scroll::-webkit-scrollbar-thumb:hover,
+        .CodeMirror-vscrollbar::-webkit-scrollbar-thumb:hover,
+        .CodeMirror-hscrollbar::-webkit-scrollbar-thumb:hover,
         pre::-webkit-scrollbar-thumb:hover,
         textarea::-webkit-scrollbar-thumb:hover {{{{
             background: var(--brass);
