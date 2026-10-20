@@ -280,10 +280,6 @@ def page_shell(
 
         /* High-Contrast Scrollbar for Code Viewers & Editors */
         .read-code-pre,
-        .CodeMirror,
-        .CodeMirror-scroll,
-        .CodeMirror-vscrollbar,
-        .CodeMirror-hscrollbar,
         pre.read-code-pre,
         pre,
         textarea {{{{
@@ -291,27 +287,18 @@ def page_shell(
             scrollbar-color: #525e75 #13171f;
         }}}}
         .read-code-pre::-webkit-scrollbar,
-        .CodeMirror-scroll::-webkit-scrollbar,
-        .CodeMirror-vscrollbar::-webkit-scrollbar,
-        .CodeMirror-hscrollbar::-webkit-scrollbar,
         pre::-webkit-scrollbar,
         textarea::-webkit-scrollbar {{{{
             width: 9px;
             height: 9px;
         }}}}
         .read-code-pre::-webkit-scrollbar-track,
-        .CodeMirror-scroll::-webkit-scrollbar-track,
-        .CodeMirror-vscrollbar::-webkit-scrollbar-track,
-        .CodeMirror-hscrollbar::-webkit-scrollbar-track,
         pre::-webkit-scrollbar-track,
         textarea::-webkit-scrollbar-track {{{{
             background: #111317;
             border-radius: 4px;
         }}}}
         .read-code-pre::-webkit-scrollbar-thumb,
-        .CodeMirror-scroll::-webkit-scrollbar-thumb,
-        .CodeMirror-vscrollbar::-webkit-scrollbar-thumb,
-        .CodeMirror-hscrollbar::-webkit-scrollbar-thumb,
         pre::-webkit-scrollbar-thumb,
         textarea::-webkit-scrollbar-thumb {{{{
             background: #525e75;
@@ -319,9 +306,6 @@ def page_shell(
             border-radius: 4px;
         }}}}
         .read-code-pre::-webkit-scrollbar-thumb:hover,
-        .CodeMirror-scroll::-webkit-scrollbar-thumb:hover,
-        .CodeMirror-vscrollbar::-webkit-scrollbar-thumb:hover,
-        .CodeMirror-hscrollbar::-webkit-scrollbar-thumb:hover,
         pre::-webkit-scrollbar-thumb:hover,
         textarea::-webkit-scrollbar-thumb:hover {{{{
             background: var(--brass);
@@ -1150,6 +1134,57 @@ def login_view(error: Optional[str] = None) -> str:
     </div>
     """
     return page_shell("Sign In", content)
+
+
+def showcase_view(
+    jobs: List[Any],
+    current_user: Optional[UserModel] = None,
+) -> str:
+    """Render the public showcase directory view."""
+    if not jobs:
+        items_html = """
+        <div style="padding: 2.5rem 1rem; text-align: center; color: var(--text-tertiary); font-family: 'IBM Plex Mono', monospace; font-size: 0.85rem;">
+            No showcase repositories are currently published.
+        </div>
+        """
+    else:
+        rows_html = ""
+        for job in jobs:
+            job_id = getattr(job, "id", None) if hasattr(job, "id") else (job.get("id") if isinstance(job, dict) else 0)
+            repo_name = sanitize_text(getattr(job, "repo_name", None) if hasattr(job, "repo_name") else (job.get("repo_name", "Repository") if isinstance(job, dict) else "Repository"))
+            rows_html += f"""
+            <li class="showcase-item" style="display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.25rem; background: var(--panel); border: 1px solid var(--hairline); border-radius: 4px; margin-bottom: 0.75rem;">
+                <span class="showcase-repo-name" style="font-weight: 600; font-size: 1rem; color: var(--text-primary);">{repo_name}</span>
+                <a href="/report/{job_id}" class="btn btn-sm btn-secondary showcase-link" style="font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem;">
+                    View Architecture Report &rarr;
+                </a>
+            </li>
+            """
+        items_html = f"""
+        <ul class="showcase-list" style="list-style: none; padding: 0; margin: 0;">
+            {rows_html}
+        </ul>
+        """
+
+    content = f"""
+    <div style="max-width: 800px; margin: 3rem auto 0 auto; padding: 0 1rem;">
+        <div class="stratum-card" style="padding: 2rem 2.25rem;">
+            <div style="margin-bottom: 1.5rem; border-bottom: 1px solid var(--hairline); padding-bottom: 1rem;">
+                <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--brass); text-transform: uppercase; letter-spacing: 0.05em;">
+                    Public Dossier Showcase
+                </div>
+                <h1 style="font-size: 1.75rem; font-weight: 500; margin-top: 0.25rem; letter-spacing: -0.02em;">
+                    Featured Repository Architectures
+                </h1>
+                <p style="color: var(--text-secondary); font-size: 0.875rem; line-height: 1.5; margin-top: 0.35rem;">
+                    Curated public showcase of reverse-engineered software architectures.
+                </p>
+            </div>
+            {items_html}
+        </div>
+    </div>
+    """
+    return page_shell("Showcase Directory", content, current_user=current_user, active_route="/showcase")
 
 
 def dashboard_view(
@@ -2702,7 +2737,7 @@ def report_view(
     raw_markdown: str,
     graph_data: Optional[Dict[str, Any]],
     quiz_data: Optional[Dict[str, Any]],
-    current_user: UserModel,
+    current_user: Optional[UserModel] = None,
     billing_status: Optional[Dict[str, Any]] = None,
     attempts_by_tier: Optional[Dict[int, Any]] = None,
     file_contents: Optional[Dict[str, str]] = None,
@@ -2735,16 +2770,28 @@ def report_view(
     narration_src = get_narration_source(job=job, raw_markdown=raw_markdown, graph_data=graph_data)
     narration_label = get_narration_label(narration_src)
 
+    is_showcase = bool(getattr(job, "is_showcase", False) if hasattr(job, "is_showcase") else (job.get("is_showcase", False) if isinstance(job, dict) else False))
+
     # Evaluation of Sandbox and Public Demo configuration
     sandbox_enabled = piston_health_monitor.is_sandbox_enabled()
     demo_video_url = os.getenv("DEMO_VIDEO_URL", "")
 
-    if not sandbox_enabled:
+    if is_showcase:
+        showcase_banner_html = """
+        <div id="showcase-banner" class="stratum-card" style="background: rgba(45, 212, 191, 0.08); border: 1px solid var(--teal); border-left: 4px solid var(--teal); padding: 1rem 1.25rem; margin-bottom: 1.5rem; border-radius: 4px;">
+            <div style="font-size: 0.875rem; line-height: 1.5; color: var(--text-primary); font-weight: 600;">
+                View-only showcase
+            </div>
+        </div>
+        """
+        sandbox_banner_html = ""
+    elif not sandbox_enabled:
         video_link_html = (
             f' <a href="{html.escape(demo_video_url)}" target="_blank" rel="noopener noreferrer" style="color: var(--teal); font-weight: 600; text-decoration: underline;">Watch the video</a>'
             if demo_video_url
             else ""
         )
+        showcase_banner_html = ""
         sandbox_banner_html = f"""
         <div id="sandbox-disabled-banner" class="stratum-card" style="background: rgba(245, 158, 11, 0.08); border: 1px solid var(--amber); border-left: 4px solid var(--amber); padding: 1rem 1.25rem; margin-bottom: 1.5rem; border-radius: 4px;">
             <div style="font-size: 0.875rem; line-height: 1.5; color: var(--text-primary);">
@@ -2753,6 +2800,7 @@ def report_view(
         </div>
         """
     else:
+        showcase_banner_html = ""
         sandbox_banner_html = ""
 
     # Graph stats
@@ -3421,7 +3469,11 @@ def report_view(
             escaped_code = html.escape(submitted_code)
 
             # Vessel state and Status Badge styling
-            if attempt_status == "structurally_verified":
+            if is_showcase:
+                vessel_cls = "milestone-vessel"
+                vessel_icon = m_num_str
+                status_chip = ""
+            elif attempt_status == "structurally_verified":
                 vessel_cls = "milestone-vessel verified"
                 vessel_icon = "✓"
                 status_chip = f'<span id="status-badge-{m_tier}" class="badge badge-teal" style="font-weight: 700;"><span class="chip-dot teal"></span> STRUCTURALLY VERIFIED</span>'
@@ -3904,6 +3956,71 @@ def report_view(
                 """
 
             reviewed_btn_text = "Reviewed &amp; Verified ✓" if attempt_status == "structurally_verified" else "Mark as Reviewed"
+            read_intro_label = "Architecture Implementation" if is_showcase else "Read through this milestone's actual implementation"
+
+            if is_showcase:
+                items_html += f"""
+            <div class="milestone-item" id="milestone-stratum-{m_tier}" style="display: flex; gap: 1.25rem; align-items: flex-start; position: relative; margin-bottom: 2rem;">
+                <!-- Step Vessel -->
+                <div id="milestone-vessel-{m_tier}" class="{vessel_cls}" style="flex-shrink: 0; width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: 'IBM Plex Mono', monospace; font-size: 0.85rem; font-weight: 700; z-index: 2; transition: all 200ms ease;">
+                    <span id="milestone-vessel-text-{m_tier}">{vessel_icon}</span>
+                </div>
+                <!-- Milestone Body Card -->
+                <div class="milestone-body" style="flex: 1; background: var(--panel); border: 1px solid var(--hairline); border-radius: 4px; padding: 1.35rem 1.55rem; box-shadow: 0 2px 12px rgba(0,0,0,0.08);">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.45rem;">
+                        <div>
+                            <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                                <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--brass); font-weight: 600; letter-spacing: 0.05em;">MILESTONE {m_tier}</span>
+                                <span style="color: var(--hairline);">/</span>
+                                <h3 style="font-size: 1.2rem; font-weight: 600; color: var(--text-primary); margin: 0; font-family: 'Newsreader', Georgia, serif;">{m_title}</h3>
+                            </div>
+                            {f'<div style="font-size: 0.8125rem; font-style: italic; color: var(--text-secondary); margin-top: 0.15rem;">{m_role}</div>' if m_role else ''}
+                        </div>
+                        <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+                            {status_chip}
+                            {_render_confidence_badge_with_tooltip(m_conf_badge)}
+                        </div>
+                    </div>
+
+                    <p style="color: var(--text-primary); font-size: 0.875rem; line-height: 1.55; margin: 0.5rem 0;">
+                        {m_summary}
+                    </p>
+
+                    {f'<div style="font-size: 0.75rem; color: var(--text-tertiary); font-family: \'IBM Plex Mono\', monospace; margin-bottom: 0.5rem;"><span style="color: var(--text-secondary); font-weight: 600;">Composition:</span> {m_comp}</div>' if m_comp else ''}
+
+                    <!-- Included Files Tray -->
+                    <div style="margin-top: 0.65rem;">
+                        <div style="font-size: 0.6875rem; font-family: 'IBM Plex Mono', monospace; color: var(--text-tertiary); margin-bottom: 0.35rem; font-weight: 600; text-transform: uppercase;">
+                            Included Files ({len(m_files)})
+                        </div>
+                        <div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">
+                            {files_chips_html}
+                        </div>
+                    </div>
+
+                    {symbols_html}
+                    {citations_html}
+                    {notes_html}
+
+                    <!-- Milestone Implementation & Engagement Workspace -->
+                    <div class="milestone-editor-wrapper" id="milestone-editor-card-{m_tier}" style="margin-top: 1.25rem; border-top: 1px solid var(--hairline-soft); padding-top: 1.15rem;">
+                        <!-- Mode 2 Workspace: Just Read It (Read-Only Real File Implementation View) -->
+                        <div id="workspace-read-{m_tier}" class="milestone-mode-workspace read-mode" style="display: block;">
+                            <div style="font-family: 'IBM Plex Sans', sans-serif; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.4rem;">
+                                <span style="color: var(--teal); font-weight: 600;">ℹ</span> Architecture Implementation
+                            </div>
+
+                            {read_file_picker_container_html}
+
+                            <div class="read-file-panes-container" style="border-radius: 4px; overflow: hidden;">
+                                {read_file_panes_html}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            """
+                continue
 
             items_html += f"""
             <div class="milestone-item" id="milestone-stratum-{m_tier}" style="display: flex; gap: 1.25rem; align-items: flex-start; position: relative; margin-bottom: 2rem;">
@@ -4291,7 +4408,7 @@ def report_view(
                         <!-- Mode 2 Workspace: Just Read It (Read-Only Real File Implementation View) -->
                         <div id="workspace-read-{m_tier}" class="milestone-mode-workspace read-mode" style="display: none;">
                             <div style="font-family: 'IBM Plex Sans', sans-serif; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.4rem;">
-                                <span style="color: var(--teal); font-weight: 600;">ℹ</span> Read through this milestone's actual implementation
+                                <span style="color: var(--teal); font-weight: 600;">ℹ</span> {read_intro_label}
                             </div>
 
                             {read_file_picker_container_html}
@@ -4475,8 +4592,168 @@ def report_view(
     fill_files_map_json = json.dumps(all_fill_files_map).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
     sandbox_banner_js_val = json.dumps(SANDBOX_DISABLED_BANNER_TEXT) if not sandbox_enabled else '""'
 
-    extra_scripts = f"""
-    <!-- CodeMirror Assets -->
+    if is_showcase:
+        extra_scripts = f"""
+        <script>
+            const GRAPH_NODES = {graph_nodes_json};
+            const GRAPH_EDGES = {graph_edges_json};
+
+            function switchMilestoneReadFile(tier, fileIdx) {{
+                const panes = document.querySelectorAll('[id^="read-file-pane-' + tier + '-"]');
+                panes.forEach(p => {{ p.style.display = 'none'; }});
+
+                const targetPane = document.getElementById('read-file-pane-' + tier + '-' + fileIdx);
+                if (targetPane) targetPane.style.display = 'block';
+
+                const tabs = document.querySelectorAll('[id^="read-tab-btn-' + tier + '-"]');
+                tabs.forEach(t => {{
+                    t.style.background = 'transparent';
+                    t.style.color = 'var(--text-secondary)';
+                    t.style.borderColor = 'var(--hairline)';
+                    t.classList.remove('active');
+                }});
+
+                const activeTab = document.getElementById('read-tab-btn-' + tier + '-' + fileIdx);
+                if (activeTab) {{
+                    activeTab.style.background = 'var(--panel)';
+                    activeTab.style.color = 'var(--teal)';
+                    activeTab.style.borderColor = 'var(--teal-border)';
+                    activeTab.classList.add('active');
+                }}
+            }}
+
+            function filterDagNodes(query) {{
+                query = (query || '').toLowerCase().trim();
+                const nodes = document.querySelectorAll('.dag-node');
+                const edges = document.querySelectorAll('.dag-edge');
+                
+                if (!query) {{
+                    nodes.forEach(n => {{ n.style.opacity = '1'; }});
+                    edges.forEach(e => {{ e.style.opacity = '0.45'; e.setAttribute('stroke', 'var(--hairline-strong)'); }});
+                    return;
+                }}
+                
+                const matchedIds = new Set();
+                nodes.forEach(n => {{
+                    const id = (n.getAttribute('data-node-id') || '').toLowerCase();
+                    const domain = (n.getAttribute('data-domain') || '').toLowerCase();
+                    if (id.includes(query) || domain.includes(query)) {{
+                        n.style.opacity = '1';
+                        matchedIds.add(n.getAttribute('data-node-id'));
+                    }} else {{
+                        n.style.opacity = '0.15';
+                    }}
+                }});
+                
+                edges.forEach(e => {{
+                    const s = (e.getAttribute('data-source') || '').toLowerCase();
+                    const t = (e.getAttribute('data-target') || '').toLowerCase();
+                    if (matchedIds.has(s) && matchedIds.has(t)) {{
+                        e.style.opacity = '0.9';
+                        e.setAttribute('stroke', 'var(--brass)');
+                    }} else {{
+                        e.style.opacity = '0.08';
+                    }}
+                }});
+            }}
+
+            function resetDagFilter() {{
+                const input = document.getElementById('dag-search-input');
+                if (input) input.value = '';
+                filterDagNodes('');
+            }}
+
+            function selectDagNode(nodeId) {{
+                if (!nodeId) return;
+                const node = GRAPH_NODES.find(n => (n.id === nodeId || n.path === nodeId || n.name === nodeId));
+                const detailBox = document.getElementById('dag-node-detail-card');
+                if (detailBox && node) {{
+                    document.getElementById('dag-detail-label').textContent = node.label || node.id || 'Node';
+                    document.getElementById('dag-detail-path').textContent = node.path || node.id || '—';
+                    document.getElementById('dag-detail-domain').textContent = (node.domain || node.type || 'module').toUpperCase();
+                    document.getElementById('dag-detail-tier').textContent = 'Tier ' + (node.tier !== undefined ? node.tier : '—');
+                    const exp = node.exports || [];
+                    document.getElementById('dag-detail-exports').textContent = Array.isArray(exp) ? exp.join(', ') : (exp || 'None');
+                    detailBox.style.display = 'block';
+                }}
+                const allNodes = document.querySelectorAll('.dag-node');
+                allNodes.forEach(n => {{
+                    const box = n.querySelector('.dag-node-box');
+                    if (box) {{
+                        box.setAttribute('stroke', n.getAttribute('data-node-id') === nodeId ? 'var(--brass)' : 'var(--hairline)');
+                        box.setAttribute('stroke-width', n.getAttribute('data-node-id') === nodeId ? '2' : '1');
+                    }}
+                }});
+            }}
+
+            function hoverDagNode(nodeId) {{
+                const edges = document.querySelectorAll('.dag-edge');
+                edges.forEach(e => {{
+                    if (e.getAttribute('data-source') === nodeId || e.getAttribute('data-target') === nodeId) {{
+                        e.style.opacity = '1';
+                        e.setAttribute('stroke-width', '2.5');
+                    }}
+                }});
+            }}
+
+            function unhoverDagNode() {{
+                const edges = document.querySelectorAll('.dag-edge');
+                edges.forEach(e => {{
+                    e.style.opacity = '0.45';
+                    e.setAttribute('stroke-width', '1.5');
+                }});
+            }}
+
+            function verifyQuizAnswer(qIdx, correctIdx) {{
+                const selected = document.querySelector('input[name="quiz_q_' + qIdx + '"]:checked');
+                const feedback = document.getElementById('quiz-feedback-' + qIdx);
+                const explanation = document.getElementById('quiz-explanation-' + qIdx);
+                if (!selected) {{
+                    if (feedback) {{
+                        feedback.style.display = 'inline-block';
+                        feedback.style.background = 'rgba(245, 158, 11, 0.15)';
+                        feedback.style.color = 'var(--amber)';
+                        feedback.textContent = 'Please select an option first.';
+                    }}
+                    return;
+                }}
+                const val = parseInt(selected.value, 10);
+                if (val === correctIdx) {{
+                    if (feedback) {{
+                        feedback.style.display = 'inline-block';
+                        feedback.style.background = 'rgba(45, 212, 191, 0.15)';
+                        feedback.style.color = 'var(--teal)';
+                        feedback.textContent = '✓ Correct Answer';
+                    }}
+                }} else {{
+                    if (feedback) {{
+                        feedback.style.display = 'inline-block';
+                        feedback.style.background = 'rgba(239, 68, 68, 0.15)';
+                        feedback.style.color = 'var(--crimson)';
+                        feedback.textContent = '✗ Incorrect. Check explanation below.';
+                    }}
+                }}
+                if (explanation) explanation.style.display = 'block';
+            }}
+
+            function switchReportTab(tabId) {{
+                const panes = document.querySelectorAll('.report-tab-pane');
+                panes.forEach(p => {{ p.style.display = 'none'; }});
+                const btns = document.querySelectorAll('.report-tab-btn');
+                btns.forEach(b => {{ b.classList.remove('active'); b.setAttribute('aria-selected', 'false'); }});
+                const targetPane = document.getElementById('tab-pane-' + tabId);
+                const targetBtn = document.getElementById('tab-btn-' + tabId);
+                if (targetPane) targetPane.style.display = 'block';
+                if (targetBtn) {{
+                    targetBtn.classList.add('active');
+                    targetBtn.setAttribute('aria-selected', 'true');
+                }}
+            }}
+        </script>
+        """
+    else:
+        extra_scripts = f"""
+        <!-- CodeMirror Assets -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
@@ -5957,9 +6234,26 @@ def report_view(
     </script>
     """
 
-    extra_head = """
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+    codemirror_head = "" if is_showcase else """    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
+    <style>
+        .CodeMirror {
+            font-family: 'IBM Plex Mono', monospace !important;
+            font-size: 0.8125rem !important;
+            height: 200px !important;
+            border-radius: 4px;
+            background: #181920 !important;
+        }
+        .CodeMirror-gutters {
+            background: #121318 !important;
+            border-right: 1px solid var(--hairline) !important;
+        }
+        .CodeMirror-linenumber {
+            color: var(--text-tertiary) !important;
+        }
+    </style>
+"""
+    extra_head = codemirror_head + """
     <style>
         /* Tabbed Report Navigation Styles */
         .report-tabs-nav {
@@ -6130,22 +6424,7 @@ def report_view(
             margin-bottom: 0 !important;
         }
 
-        /* CodeMirror & Spine Vessel Styles */
-        .CodeMirror {
-            font-family: 'IBM Plex Mono', monospace !important;
-            font-size: 0.8125rem !important;
-            height: 200px !important;
-            border-radius: 4px;
-            background: #181920 !important;
-        }
-        .CodeMirror-gutters {
-            background: #121318 !important;
-            border-right: 1px solid var(--hairline) !important;
-        }
-        .CodeMirror-linenumber {
-            color: var(--text-tertiary) !important;
-        }
-
+        /* Spine Vessel Styles */
         .milestone-vessel.not-started {
             background: var(--panel-raised) !important;
             border: 1px solid var(--hairline-strong) !important;
@@ -6172,14 +6451,21 @@ def report_view(
     </style>
     """
 
+    back_link_html = """
+                <a href="/showcase" style="display: inline-flex; align-items: center; gap: 0.4rem; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
+                    &larr; BACK TO SHOWCASE DIRECTORY
+                </a>""" if is_showcase else """
+                <a href="/dashboard" style="display: inline-flex; align-items: center; gap: 0.4rem; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
+                    &larr; BACK TO DASHBOARD LEDGER
+                </a>"""
+
     content = f"""
     <div style="max-width: 1040px; margin: 0 auto;">
+        {showcase_banner_html}
         <!-- Top Dossier Navigation & Meta Bar -->
         <div style="margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
             <div>
-                <a href="/dashboard" style="display: inline-flex; align-items: center; gap: 0.4rem; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
-                    &larr; BACK TO DASHBOARD LEDGER
-                </a>
+                {back_link_html}
                 <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
                     <h1 style="font-size: 2.15rem; font-weight: 500; letter-spacing: -0.02em;">Architecture Report: <span style="font-style: italic; color: var(--brass);">{repo_name}</span></h1>
                 </div>
@@ -6252,9 +6538,9 @@ def report_view(
     return page_shell(
         f"Architecture Report: {repo_name}",
         content,
-        current_user=current_user,
-        active_route="/report",
-        billing_status=billing_status,
+        current_user=None if is_showcase else current_user,
+        active_route="/showcase" if is_showcase else "/report",
+        billing_status=None if is_showcase else billing_status,
         extra_head=extra_head,
         extra_scripts=extra_scripts,
     )
