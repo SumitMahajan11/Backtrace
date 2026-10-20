@@ -14,6 +14,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    false,
 )
 from sqlalchemy.orm import relationship
 
@@ -213,6 +214,7 @@ class AnalysisJobModel(Base):
     markdown_output: str = Column(Text, nullable=False, default="")
     graph_output_json: str = Column(Text, nullable=False, default="{}")
     quiz_output_json: str = Column(Text, nullable=False, default="{}")
+    is_showcase: bool = Column(Boolean, nullable=False, default=False, server_default=false())
     created_at: datetime = Column(DateTime, nullable=False, default=utc_now)
     updated_at: datetime = Column(DateTime, nullable=False, default=utc_now, onupdate=utc_now)
 
