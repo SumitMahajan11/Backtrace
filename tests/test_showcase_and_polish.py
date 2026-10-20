@@ -549,3 +549,12 @@ def test_export_showcase_secret_detection():
     # Ensure values are not leaked into the keys of dirty_matches
     for k in dirty_matches.keys():
         assert "sk-123" not in k
+
+
+# -------------------------------------------------------------------------
+# Test: Exact match REDACTED skip in export secret scanner
+# -------------------------------------------------------------------------
+def test_export_showcase_redacted_exact_match():
+    assert count_secret_matches('api_key = "[REDACTED]"') == 0
+    assert count_secret_matches('api_key = "abcdefgh[REDACTED]"') >= 1
+

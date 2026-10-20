@@ -49,7 +49,7 @@ def count_secret_matches(text: str) -> int:
     for pat in SECRET_PATTERNS:
         matches = pat.findall(text)
         for m in matches:
-            if isinstance(m, str) and "[REDACTED]" in m:
+            if isinstance(m, str) and m.strip() == "[REDACTED]":
                 continue
             total += 1
     return total
