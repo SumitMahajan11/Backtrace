@@ -308,12 +308,17 @@ def submit_milestone_attempt(
     # Server-side Points Award Engine Hook (Prompt 23)
     points_award_data = None
     if new_status == "structurally_verified":
+        is_degraded = bool(
+            grading_result.get("degraded_mode")
+            or (grading_details and grading_details.get("degraded_mode", False))
+        )
         award_res = PointsEngine.award_points_for_milestone(
             session=session,
             user_id=current_user.id,
             job=job,
             milestone_tier=milestone_tier,
             attempt=attempt,
+            degraded_mode=is_degraded,
         )
         points_award_data = award_res.to_dict()
 

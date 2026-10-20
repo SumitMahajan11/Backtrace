@@ -252,6 +252,7 @@ class GradingEngine:
                 "verification": fill_result,
                 "execution": exec_result,
                 "details": grading_details,
+                "degraded_mode": False,
             }
 
         grading_tier, context_info = self.determine_grading_tier(job, milestone_tier, g_data)
@@ -314,6 +315,7 @@ class GradingEngine:
                 "verification": ast_verification,
                 "execution": exec_result,
                 "details": grading_details,
+                "degraded_mode": False,
             }
 
         # =================================================================
@@ -377,6 +379,7 @@ class GradingEngine:
                 "verification": ast_verification,
                 "execution": exec_result,
                 "details": grading_details,
+                "degraded_mode": False,
             }
 
         # =================================================================
@@ -451,4 +454,6 @@ class GradingEngine:
                 "verification": ast_verification,
                 "execution": exec_result,
                 "details": grading_details,
+                "degraded_mode": degraded_mode,
             }
+

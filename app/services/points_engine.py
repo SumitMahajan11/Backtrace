@@ -105,11 +105,27 @@ class PointsEngine:
         job: AnalysisJobModel,
         attempt: MilestoneAttemptModel,
         is_first_solve: bool,
+        degraded_mode: bool = False,
     ) -> Tuple[int, float, str]:
         """
         Calculates the exact server-side point amount, multiplier, and reason.
         Enforces first-solve rules, complexity floors, and hint penalty decay.
         """
+        is_degraded = bool(degraded_mode)
+        if not is_degraded and hasattr(attempt, "grading_details_json") and attempt.grading_details_json:
+            try:
+                details = json.loads(attempt.grading_details_json)
+                if isinstance(details, dict) and details.get("degraded_mode"):
+                    is_degraded = True
+            except Exception:
+                pass
+
+        if is_degraded:
+            logger.info(
+                f"Milestone attempt tier={attempt.milestone_tier} graded in degraded mode for user={attempt.user_id}, job={job.id}. 0 points awarded."
+            )
+            return 0, 0.0, "degraded_mode"
+
         settings = get_settings()
 
         # 1. Enforce first solve only
@@ -154,12 +170,34 @@ class PointsEngine:
         job: AnalysisJobModel,
         milestone_tier: int,
         attempt: MilestoneAttemptModel,
+        degraded_mode: bool = False,
     ) -> PointsAwardResult:
         """
         Awards points upon milestone passing verification.
         Uses database transaction synchronization to prevent concurrent double-awarding.
         Appends immutable record to PointsLedgerModel.
+        If degraded_mode is True, awards 0 points and creates no ledger row.
         """
+        is_degraded = bool(degraded_mode)
+        if not is_degraded and hasattr(attempt, "grading_details_json") and attempt.grading_details_json:
+            try:
+                details = json.loads(attempt.grading_details_json)
+                if isinstance(details, dict) and details.get("degraded_mode"):
+                    is_degraded = True
+            except Exception:
+                pass
+
+        if is_degraded:
+            logger.info(
+                f"[Points Award Skipped] Degraded grading mode for user_id={user_id}, job_id={job.id}, tier={milestone_tier}. 0 points awarded, no ledger entry."
+            )
+            return PointsAwardResult(
+                points_awarded=0,
+                multiplier_applied=0.0,
+                reason="degraded_mode",
+                ledger_entry=None,
+            )
+
         settings = get_settings()
 
         with _points_mutex:
