@@ -48,7 +48,10 @@ def count_secret_matches(text: str) -> int:
     total = 0
     for pat in SECRET_PATTERNS:
         matches = pat.findall(text)
-        total += len(matches)
+        for m in matches:
+            if isinstance(m, str) and "[REDACTED]" in m:
+                continue
+            total += 1
     return total
 
 
@@ -154,6 +157,8 @@ def export_showcase_job(job_id: int, out_path: str) -> None:
 
     # Step 5b: Scan before writing
     secret_matches = scan_payload_for_secrets(payload)
+    total_matches = sum(secret_matches.values())
+    print(f"Secret-scan match count: {total_matches}")
     if secret_matches:
         for fpath, cnt in sorted(secret_matches.items()):
             print(f"Secret pattern match count in {fpath}: {cnt}")
