@@ -79,11 +79,11 @@ def test_groq_provider_success(sample_scored_result):
                     "content": (
                         "# Architectural Reading Guide\n"
                         "### Milestone 1: Configuration\n"
-                        "Start with configuration.\n\n"
+                        "Start by configuring the project environment and base settings modules.\n\n"
                         "### Milestone 2: Core Domain\n"
-                        "Next set up core app.\n\n"
+                        "Next study and assemble the core application modules and handlers.\n\n"
                         "### Milestone 3: Tests\n"
-                        "Finally run tests."
+                        "Finally execute the test suite to verify subsystem contracts and prevent regressions."
                     )
                 }
             }
@@ -330,11 +330,11 @@ def test_partial_failure_gives_source_template(sample_scored_result):
         return (
             "# Architectural Reading Guide\n"
             "### Milestone 1: Configuration\n"
-            "Start with config.\n\n"
+            "Start by configuring the project environment and base settings modules.\n\n"
             "### Milestone 2: Core Domain\n"
-            "Next study core app.\n\n"
+            "Next study and assemble the core application modules and handlers.\n\n"
             "### Milestone 3: Tests\n"
-            "Finally run tests."
+            "Finally execute the test suite to verify subsystem contracts and prevent regressions."
         )
 
     def fail_provider(sys_prompt: str, user_prompt: str) -> str:
@@ -362,11 +362,11 @@ def test_all_calls_succeed_gives_source_llm(sample_scored_result):
         return (
             "# Architectural Reading Guide\n"
             "### Milestone 1: Configuration\n"
-            "Start with config.\n\n"
+            "Start by configuring the project environment and base settings modules.\n\n"
             "### Milestone 2: Core Domain\n"
-            "Next study core app.\n\n"
+            "Next study and assemble the core application modules and handlers.\n\n"
             "### Milestone 3: Tests\n"
-            "Finally run tests."
+            "Finally execute the test suite to verify subsystem contracts and prevent regressions."
         )
 
     engine = NarrationEngine()
@@ -379,6 +379,60 @@ def test_all_calls_succeed_gives_source_llm(sample_scored_result):
     res2 = engine.generate_narration(sample_scored_result, llm_provider=ok_provider)
     assert res2.source == "llm"
     assert get_narration_label(res2.source) == "LLM Step-by-Step Narration"
+
+
+def test_honest_narration_all_milestones_llm(sample_scored_result):
+    """Prove: When provider call succeeds and every milestone's prose came from the LLM, source is 'llm'."""
+    def all_llm_provider(sys_prompt: str, user_prompt: str) -> str:
+        return (
+            "# Architectural Reading Guide\n"
+            "### Milestone 1: Configuration\n"
+            "Start by configuring the project environment and base settings modules.\n\n"
+            "### Milestone 2: Core Domain\n"
+            "Next study and assemble the core application modules and handlers.\n\n"
+            "### Milestone 3: Tests\n"
+            "Finally execute the test suite to verify subsystem contracts and prevent regressions."
+        )
+
+    engine = NarrationEngine()
+    res = engine.generate_narration(sample_scored_result, llm_provider=all_llm_provider)
+    assert res.source == "llm"
+    assert get_narration_label(res.source) == "LLM Step-by-Step Narration"
+    assert len(res.steps) == 3
+    # Verify no step fell back
+    for s in res.steps:
+        assert s.pedagogical_explanation.startswith("**Role:**")
+
+
+def test_honest_narration_one_milestone_fell_back(sample_scored_result):
+    """Prove: If even one milestone fell back to template (e.g. invalid file reference), source is 'template'."""
+    def fallback_one_milestone_provider(sys_prompt: str, user_prompt: str) -> str:
+        return (
+            "# Architectural Reading Guide\n"
+            "### Milestone 1: Configuration\n"
+            "Start by configuring the project environment and base settings modules.\n\n"
+            "### Milestone 2: Core Domain\n"
+            "Next configure non_existent_cross_file.py which does not belong here.\n\n"
+            "### Milestone 3: Tests\n"
+            "Finally execute the test suite to verify subsystem contracts and prevent regressions."
+        )
+
+    engine = NarrationEngine()
+    res = engine.generate_narration(sample_scored_result, llm_provider=fallback_one_milestone_provider)
+    # Because Milestone 2 fell back, overall source must be honest: "template"
+    assert res.source == "template"
+    assert get_narration_label(res.source) == "Step-by-step narration (template)"
+
+
+def test_honest_narration_call_failed(sample_scored_result):
+    """Prove: If the provider call fails, overall source is 'template'."""
+    def failing_provider(sys_prompt: str, user_prompt: str) -> str:
+        raise httpx.RequestError("Connection reset by peer")
+
+    engine = NarrationEngine()
+    res = engine.generate_narration(sample_scored_result, llm_provider=failing_provider)
+    assert res.source == "template"
+    assert get_narration_label(res.source) == "Step-by-step narration (template)"
 
 
 def test_time_budget_switches_to_templates(sample_scored_result):

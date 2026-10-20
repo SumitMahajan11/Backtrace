@@ -772,9 +772,22 @@ class NarrationEngine:
         except Exception:
             pass
 
-        # Honesty calibration: source is "llm" only if every provider call in the run succeeded.
-        # Otherwise "template".
-        final_source = "llm" if (not self._provider_failed and self._provider_calls > 0 and self._provider_successes == self._provider_calls) else "template"
+        # Honesty calibration: source is "llm" only if every provider call in the run succeeded
+        # AND every milestone's prose came from the LLM without falling back to template.
+        # Any milestone that fell back to template gives "template".
+        any_fallback = any(item.get("used_fallback", False) for item in validation_audit)
+        has_milestones = len(fallback.steps) > 0
+        provider_ok = (
+            not self._provider_failed
+            and self._provider_calls > 0
+            and self._provider_successes == self._provider_calls
+        )
+        all_milestones_llm = (
+            has_milestones
+            and len(validation_audit) == len(fallback.steps)
+            and not any_fallback
+        )
+        final_source = "llm" if (provider_ok and all_milestones_llm) else "template"
 
         return SequenceNarrationResult(
             overview=overview,
