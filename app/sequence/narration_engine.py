@@ -31,10 +31,22 @@ CRITICAL PEDAGOGICAL RULES & GUARDRAILS:
 
 
 NarrationLLMCallable = Callable[[str, str], str]  # (system_prompt, user_prompt) -> raw_response_text
-
-
 class NarrationEngine:
     """Generates pedagogical step-by-step build sequence narratives from Stage C scored ordering results."""
+
+    def __init__(self, time_budget: float = 60.0):
+        self.time_budget = time_budget
+        self._provider_failed: bool = False
+        self._provider_calls: int = 0
+        self._provider_successes: int = 0
+        self._elapsed_provider_time: float = 0.0
+
+    def reset_run(self) -> None:
+        """Resets fail-fast failure state, call counts, and elapsed provider time for a new narration run."""
+        self._provider_failed = False
+        self._provider_calls = 0
+        self._provider_successes = 0
+        self._elapsed_provider_time = 0.0
 
     def generate_narration(
         self,
@@ -42,6 +54,7 @@ class NarrationEngine:
         refined_result: Optional[RefinedOrderingResult] = None,
         file_contents: Optional[Dict[str, str]] = None,
         llm_provider: Optional[NarrationLLMCallable] = None,
+        time_budget: Optional[float] = None,
     ) -> SequenceNarrationResult:
         """
         Generates structured build sequence narration using LLM if available,
@@ -53,22 +66,53 @@ class NarrationEngine:
         # 2. Build User Prompt for LLM
         user_prompt = self._build_user_prompt(scored_result, refined_result)
 
-        # 3. If LLM provider supplied, attempt LLM generation
+        # 3. If LLM provider supplied, attempt LLM generation with fail-fast and time budget
         if llm_provider:
-            try:
-                raw_response = llm_provider(STAGE_D_SYSTEM_PROMPT, user_prompt)
-                # Parse or wrap LLM response into structured result
-                return self._parse_or_wrap_llm_response(
-                    raw_response=raw_response,
-                    scored_result=scored_result,
-                    refined_result=refined_result,
-                    disclosure=disclosure,
-                    prompt_used=user_prompt,
-                )
-            except Exception as e:
+            budget = self.time_budget if time_budget is None else time_budget
+            if self._provider_failed:
                 import logging
-                logging.getLogger(__name__).warning("LLM provider execution failed: %s", type(e).__name__)
-                pass
+                logging.getLogger(__name__).warning("LLM provider skipped: fail-fast triggered by prior failure in this run.")
+            elif self._elapsed_provider_time >= budget:
+                import logging
+                logging.getLogger(__name__).warning("LLM provider skipped: total time budget of %.1fs exhausted (spent %.2fs).", budget, self._elapsed_provider_time)
+            else:
+                import time
+                t0 = time.time()
+                self._provider_calls += 1
+                try:
+                    raw_response = llm_provider(STAGE_D_SYSTEM_PROMPT, user_prompt)
+                    duration = time.time() - t0
+                    self._elapsed_provider_time += duration
+                    if self._elapsed_provider_time > budget:
+                        import logging
+                        logging.getLogger(__name__).warning(
+                            "LLM provider exceeded total time budget (%.2fs spent / %.1fs budget). Switching to templates.",
+                            self._elapsed_provider_time,
+                            budget,
+                        )
+                        self._provider_failed = True
+                        return self._generate_deterministic_narration(
+                            scored_result=scored_result,
+                            refined_result=refined_result,
+                            disclosure=disclosure,
+                            prompt_used=user_prompt,
+                        )
+
+                    self._provider_successes += 1
+                    # Parse or wrap LLM response into structured result
+                    return self._parse_or_wrap_llm_response(
+                        raw_response=raw_response,
+                        scored_result=scored_result,
+                        refined_result=refined_result,
+                        disclosure=disclosure,
+                        prompt_used=user_prompt,
+                    )
+                except Exception as e:
+                    duration = time.time() - t0
+                    self._elapsed_provider_time += duration
+                    self._provider_failed = True
+                    import logging
+                    logging.getLogger(__name__).warning("LLM provider execution failed: %s. Fail-fast activated.", type(e).__name__)
 
         # 4. Deterministic Fallback Generation
         return self._generate_deterministic_narration(
@@ -728,13 +772,17 @@ class NarrationEngine:
         except Exception:
             pass
 
+        # Honesty calibration: source is "llm" only if every provider call in the run succeeded.
+        # Otherwise "template".
+        final_source = "llm" if (not self._provider_failed and self._provider_calls > 0 and self._provider_successes == self._provider_calls) else "template"
+
         return SequenceNarrationResult(
             overview=overview,
             confidence_disclosure=disclosure,
             steps=merged_steps,
             isolated_files_summary=fallback.isolated_files_summary,
             prompt_used=prompt_used,
-            source="llm",
+            source=final_source,
         )
 
     def _validate_milestone_prose(

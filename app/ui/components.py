@@ -1692,12 +1692,13 @@ def progress_view(
             if not job_src and isinstance(getattr(job, "graph_data", None), dict):
                 job_src = getattr(job, "graph_data", {}).get("narration_source")
 
-    if job_src in ("llm", "template"):
-        stage_7_title = get_narration_label(job_src)
-    elif job_status == "completed":
-        stage_7_title = get_narration_label(get_narration_source(job))
+    if job_status == "completed":
+        if job_src in ("llm", "template"):
+            stage_7_title = get_narration_label(job_src)
+        else:
+            stage_7_title = get_narration_label(get_narration_source(job))
     else:
-        stage_7_title = "LLM Step-by-Step Narration"
+        stage_7_title = "Step-by-step narration"
 
     stages_data = [
         (

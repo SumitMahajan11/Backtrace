@@ -301,3 +301,126 @@ def test_narration_label_text_for_both_sources(mock_user):
     )
     assert "Step-by-step narration (template)" in report_html_tpl
     assert "LLM Step-by-Step Narration" not in report_html_tpl
+
+
+def test_first_failure_halts_further_provider_calls(sample_scored_result):
+    """Prove (a): First provider failure halts further provider calls in that run."""
+    call_count = 0
+
+    def failing_provider(sys_prompt: str, user_prompt: str) -> str:
+        nonlocal call_count
+        call_count += 1
+        raise httpx.ConnectError("Connection refused")
+
+    engine = NarrationEngine()
+    # First call: attempts provider, encounters failure, falls back to template
+    res1 = engine.generate_narration(sample_scored_result, llm_provider=failing_provider)
+    assert call_count == 1
+    assert res1.source == "template"
+
+    # Second call in same run: fail-fast skips provider invocation entirely
+    res2 = engine.generate_narration(sample_scored_result, llm_provider=failing_provider)
+    assert call_count == 1  # No additional provider call made
+    assert res2.source == "template"
+
+
+def test_partial_failure_gives_source_template(sample_scored_result):
+    """Prove (b): Partial failure (some provider calls succeed, some fail) gives source 'template'."""
+    def ok_provider(sys_prompt: str, user_prompt: str) -> str:
+        return (
+            "# Architectural Reading Guide\n"
+            "### Milestone 1: Configuration\n"
+            "Start with config.\n\n"
+            "### Milestone 2: Core Domain\n"
+            "Next study core app.\n\n"
+            "### Milestone 3: Tests\n"
+            "Finally run tests."
+        )
+
+    def fail_provider(sys_prompt: str, user_prompt: str) -> str:
+        raise httpx.RequestError("Network dropped during provider call")
+
+    engine = NarrationEngine()
+    # Call 1 succeeds
+    res1 = engine.generate_narration(sample_scored_result, llm_provider=ok_provider)
+    assert res1.source == "llm"
+
+    # Call 2 fails in the same run -> partial failure across run's provider calls
+    res2 = engine.generate_narration(sample_scored_result, llm_provider=fail_provider)
+    assert res2.source == "template"
+    assert get_narration_label(res2.source) == "Step-by-step narration (template)"
+
+    # Call 3 in same run: fail-fast activated, also returns template
+    res3 = engine.generate_narration(sample_scored_result, llm_provider=ok_provider)
+    assert res3.source == "template"
+    assert get_narration_label(res3.source) == "Step-by-step narration (template)"
+
+
+def test_all_calls_succeed_gives_source_llm(sample_scored_result):
+    """Prove (c): When all provider calls in the run succeed, source is 'llm'."""
+    def ok_provider(sys_prompt: str, user_prompt: str) -> str:
+        return (
+            "# Architectural Reading Guide\n"
+            "### Milestone 1: Configuration\n"
+            "Start with config.\n\n"
+            "### Milestone 2: Core Domain\n"
+            "Next study core app.\n\n"
+            "### Milestone 3: Tests\n"
+            "Finally run tests."
+        )
+
+    engine = NarrationEngine()
+    # Single call succeeds
+    res1 = engine.generate_narration(sample_scored_result, llm_provider=ok_provider)
+    assert res1.source == "llm"
+    assert get_narration_label(res1.source) == "LLM Step-by-Step Narration"
+
+    # Second call in same run also succeeds -> all calls succeed -> source is 'llm'
+    res2 = engine.generate_narration(sample_scored_result, llm_provider=ok_provider)
+    assert res2.source == "llm"
+    assert get_narration_label(res2.source) == "LLM Step-by-Step Narration"
+
+
+def test_time_budget_switches_to_templates(sample_scored_result):
+    """Prove (d): Exceeding the 60s total time budget switches to templates."""
+    called = False
+
+    def slow_provider(sys_prompt: str, user_prompt: str) -> str:
+        nonlocal called
+        called = True
+        return "# Guide\n### Milestone 1: Config\nStep 1."
+
+    engine = NarrationEngine(time_budget=60.0)
+    # Simulate that prior calls in this run consumed 65 seconds
+    engine._elapsed_provider_time = 65.0
+
+    result = engine.generate_narration(sample_scored_result, llm_provider=slow_provider)
+
+    # Provider should be skipped due to exhausted time budget
+    assert called is False
+    assert result.source == "template"
+    assert get_narration_label(result.source) == "Step-by-step narration (template)"
+
+
+def test_llm_provider_unset_makes_no_httpx_call(monkeypatch):
+    """Prove (e): With LLM_PROVIDER unset, get_default_llm_provider returns None with no httpx call."""
+    monkeypatch.delenv("LLM_PROVIDER", raising=False)
+
+    with patch("httpx.Client") as mock_client:
+        provider = get_default_llm_provider()
+        assert provider is None
+        mock_client.assert_not_called()
+
+
+def test_progress_page_shows_neutral_label_for_running_job(mock_user):
+    """Prove (f): Progress page shows 'Step-by-step narration' and not 'LLM Step-by-Step Narration' for a running job."""
+    running_job = {
+        "id": 999,
+        "repo_url": "https://github.com/test/repo",
+        "repo_name": "repo",
+        "status": "running",
+        "narration_source": "llm",  # Even if source was prematurely set or speculative
+    }
+    html = progress_view(running_job, mock_user)
+    assert "Step-by-step narration" in html
+    assert "LLM Step-by-Step Narration" not in html

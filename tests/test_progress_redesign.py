@@ -137,7 +137,7 @@ def test_progress_view_renders_11_distinct_stages(client, create_user, test_db):
         ("STAGE 04", "Global Symbol Table", "function signatures"),
         ("STAGE 05", "Directed Dependency Graph", "dependency graph"),
         ("STAGE 06", "Architecture Domain Mapping", "levels"),
-        ("STAGE 07", "LLM Step-by-Step Narration", "chronological reading order"),
+        ("STAGE 07", "Step-by-step narration", "chronological reading order"),
         ("STAGE 08", "Graph & Quiz Generation", "interactive visual dependency graph"),
         ("STAGE 09", "Persistence & Architecture Report Assembly", "persisted final report"),
         ("STAGE 10", "Telemetry & Quota Allocation", "tracked AST token metrics"),

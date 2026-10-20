@@ -436,7 +436,7 @@ STAGE_METADATA: Dict[str, Dict[str, Any]] = {
     "stage_4": {"index": 5, "total": 11, "name": "Global Symbol Table", "layer": "layer_2_parsing"},
     "stage_5": {"index": 6, "total": 11, "name": "Directed Dependency Graph", "layer": "layer_4_segmentation"},
     "stage_6": {"index": 7, "total": 11, "name": "Architecture Domain Mapping", "layer": "layer_4_segmentation"},
-    "stage_7": {"index": 8, "total": 11, "name": "LLM Step-by-Step Narration", "layer": "layer_6_sequence_reasoning"},
+    "stage_7": {"index": 8, "total": 11, "name": "Step-by-step narration", "layer": "layer_6_sequence_reasoning"},
     "stage_8": {"index": 9, "total": 11, "name": "Graph & Quiz Generation", "layer": "layer_7_synthesis"},
     "stage_9": {"index": 10, "total": 11, "name": "Persistence & Architecture Report Assembly", "layer": "layer_7_synthesis"},
     "stage_10": {"index": 11, "total": 11, "name": "Telemetry & Quota Allocation", "layer": "layer_7_synthesis"},

@@ -85,31 +85,30 @@ def create_ollama_provider(
 
 def get_default_llm_provider() -> Optional[NarrationLLMCallable]:
     """
-    Detects available LLM providers in priority order:
+    Detects configured LLM provider:
     1. Groq if LLM_PROVIDER=groq.
-    2. Local Ollama if active on 127.0.0.1:11434.
-    3. None (falls back to deterministic template).
+    2. Local Ollama if LLM_PROVIDER=ollama (probes local Ollama on 127.0.0.1:11434).
+    3. None if LLM_PROVIDER is unset or any other value (makes no network call).
     """
     provider_env = os.getenv("LLM_PROVIDER", "").strip().lower()
     if provider_env == "groq":
         return create_groq_provider()
-
-    # Check for local Ollama
-    try:
-        with httpx.Client(timeout=1.0) as client:
-            res = client.get("http://127.0.0.1:11434/api/tags")
-            if res.status_code == 200:
-                tags = res.json().get("models", [])
-                model_names = [m.get("name", "") for m in tags]
-                if not model_names:
-                    return None
-                chosen_model = model_names[0]
-                for name in model_names:
-                    if "llama" in name:
-                        chosen_model = name
-                        break
-                return create_ollama_provider(model=chosen_model)
-    except Exception:
-        pass
+    elif provider_env == "ollama":
+        try:
+            with httpx.Client(timeout=1.0) as client:
+                res = client.get("http://127.0.0.1:11434/api/tags")
+                if res.status_code == 200:
+                    tags = res.json().get("models", [])
+                    model_names = [m.get("name", "") for m in tags]
+                    if not model_names:
+                        return None
+                    chosen_model = model_names[0]
+                    for name in model_names:
+                        if "llama" in name:
+                            chosen_model = name
+                            break
+                    return create_ollama_provider(model=chosen_model)
+        except Exception:
+            pass
 
     return None
