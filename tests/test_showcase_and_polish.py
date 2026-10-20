@@ -188,6 +188,7 @@ def test_showcase_report_logged_out_returns_200_no_attempt_controls(test_db, cli
     assert "submitMilestoneCode(" not in html
     assert "confirmAndFetchHint(" not in html
     assert "confirmAndRevealImplementation(" not in html
+    assert "markMilestoneAsReviewed(" not in html
     import re
     assert not re.search(r"<script[^>]*codemirror", html, re.IGNORECASE)
     assert not re.search(r"<link[^>]*codemirror", html, re.IGNORECASE)
@@ -272,6 +273,58 @@ def test_logged_out_attempts_and_points_apis_return_401(test_db, client):
 
 
 # -------------------------------------------------------------------------
+# Test: Logged-in non-owner calls attempts and points endpoints for showcase job
+# -------------------------------------------------------------------------
+def test_logged_in_non_owner_cannot_call_attempts_or_points_for_showcase(test_db, client):
+    SessionLocal, _ = test_db
+    with SessionLocal() as session:
+        owner = create_user_helper(session, 2001, "showcase_owner_alpha", "alpha@showcase.internal")
+        stranger = create_user_helper(session, 2002, "showcase_stranger_beta", "beta@stranger.internal")
+        job = create_job_helper(session, owner.id, "showcase-secured-job", is_showcase=True)
+        job_id = job.id
+        stranger_id = stranger.id
+        stranger_github_id = stranger.github_id
+        stranger_username = stranger.github_username
+
+    token = create_access_token(
+        user_id=stranger_id,
+        github_id=stranger_github_id,
+        github_username=stranger_username,
+    )
+    client.cookies.set("access_token", token)
+
+    # 1. Run endpoint
+    r_run = client.post(f"/api/attempts/{job_id}/1/run", json={"code": "x = 1"})
+    assert r_run.status_code in (401, 403, 404)
+    assert r_run.status_code != 200
+
+    # 2. Submit endpoint
+    r_sub = client.post(f"/api/attempts/{job_id}/1", json={"submitted_code": "x = 1"})
+    assert r_sub.status_code in (401, 403, 404)
+    assert r_sub.status_code != 200
+
+    # 3. Hint endpoint
+    r_hint = client.post(f"/api/attempts/{job_id}/1/hint")
+    assert r_hint.status_code in (401, 403, 404)
+    assert r_hint.status_code != 200
+
+    # 4. Reveal endpoint
+    r_rev = client.post(f"/api/attempts/{job_id}/1/reveal")
+    assert r_rev.status_code in (401, 403, 404)
+    assert r_rev.status_code != 200
+
+    # 5. Review endpoint
+    r_revw = client.post(f"/api/attempts/{job_id}/1/review")
+    assert r_revw.status_code in (401, 403, 404)
+    assert r_revw.status_code != 200
+
+    # 6. Points endpoint for job
+    r_pts = client.get(f"/api/points/job/{job_id}")
+    assert r_pts.status_code in (401, 403, 404)
+    assert r_pts.status_code != 200
+
+
+# -------------------------------------------------------------------------
 # Test (e): Owner's name or email is absent from the showcase page
 # -------------------------------------------------------------------------
 def test_owner_name_and_email_absent_from_showcase_page(test_db, client):
@@ -290,7 +343,7 @@ def test_owner_name_and_email_absent_from_showcase_page(test_db, client):
     assert resp.status_code == 200
     assert secret_username not in resp.text
     assert secret_email not in resp.text
-    assert str(owner_id) not in resp.text or f"user_id: {owner_id}" not in resp.text
+    assert f"user_id: {owner_id}" not in resp.text and f'"user_id": {owner_id}' not in resp.text and f"user_id={owner_id}" not in resp.text
 
     # Logged-in as another user visit
     with SessionLocal() as session:
