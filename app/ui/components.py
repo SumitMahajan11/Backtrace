@@ -1275,7 +1275,16 @@ def privacy_view(current_user: Optional[UserModel] = None) -> str:
                         When a repository is analyzed, Backtrace records repository metadata (GitHub URL, commit hash, clone status, and analysis timestamp) in the <code>repos</code> table.
                     </p>
                     <p style="margin-bottom: 0.75rem;">
-                        Cloned repository file trees and raw text file contents are stored in the <code>ingestion_results</code> table. Before any file content is stored, all code is scanned by our secret scanner and any detected credentials, API tokens, passwords, and secrets are automatically redacted in-place with <code>[REDACTED]</code>.
+                        Cloned repository file trees and raw text file contents are stored in the <code>ingestion_results</code> table. Before any file content is stored, secrets are scanned and redacted on a best-effort basis.
+                    </p>
+                    <p style="margin-bottom: 0.75rem;">
+                        User profile records are stored in the <code>users</code> table: <code>id</code>, <code>github_id</code>, <code>github_username</code>, <code>email</code>, <code>avatar_url</code>, <code>created_at</code>, <code>is_admin</code>. GitHub OAuth access tokens are not stored.
+                    </p>
+                    <p style="margin-bottom: 0.75rem;">
+                        Analysis jobs and execution state are stored in the <code>analysis_jobs</code> table: <code>id</code>, <code>user_id</code>, <code>repo_name</code>, <code>github_url</code>, <code>commit_ref</code>, <code>resolved_sha</code>, <code>subpath</code>, <code>status</code>, <code>run_id</code>, <code>failed_stage</code>, <code>error_message</code>, <code>execution_time_seconds</code>, <code>markdown_output</code>, <code>graph_output_json</code>, <code>quiz_output_json</code>, <code>is_showcase</code>, <code>created_at</code>, <code>updated_at</code>.
+                    </p>
+                    <p style="margin-bottom: 0.75rem;">
+                        Interactive milestone attempts are stored in the <code>milestone_attempts</code> table: <code>id</code>, <code>user_id</code>, <code>job_id</code>, <code>milestone_tier</code>, <code>submitted_code</code>, <code>last_run_code</code>, <code>status</code>, <code>hint_level_revealed</code>, <code>implementation_revealed</code>, <code>last_run_stdout</code>, <code>last_run_stderr</code>, <code>last_run_exit_code</code>, <code>last_run_at</code>, <code>grading_method</code>, <code>grading_details_json</code>, <code>created_at</code>, <code>updated_at</code>.
                     </p>
                     <p>
                         The synthesized architecture report, interactive dependency graphs, guided milestones, and quiz questions are stored in the <code>analysis_results</code> table. System logs record execution run IDs, stage names, and error types, but never raw file contents or authentication tokens.
@@ -1285,7 +1294,7 @@ def privacy_view(current_user: Optional[UserModel] = None) -> str:
                 <section>
                     <h2 style="font-size: 1.25rem; color: var(--text-primary); margin-bottom: 0.5rem; font-weight: 600;">How long</h2>
                     <p>
-                        Cloned repository data, ingested files, and analysis records are kept for a default retention period of 30 days. An automated background cleanup worker periodically purges all expired records whose retention period has elapsed unless marked with a retention extension.
+                        Cloned repository data, ingested files, and analysis records are kept for a default retention period of 30 days. Showcase repos are kept until removed. An automated background cleanup worker periodically purges all expired records whose retention period has elapsed unless marked with a retention extension.
                     </p>
                 </section>
 
@@ -1349,9 +1358,6 @@ def pricing_view(current_user: Optional[UserModel] = None) -> str:
                         <ul style="list-style: none; padding: 0; margin: 0 0 1.5rem 0; font-size: 0.9rem; line-height: 1.8; color: var(--text-secondary);">
                             <li>&check; <strong>5 repository analyses</strong> per month</li>
                             <li>&check; <strong>100 MB</strong> repository size cap</li>
-                            <li>&check; Full interactive dependency graph</li>
-                            <li>&check; Milestone code workspace &amp; quiz</li>
-                            <li>&check; Earn extra quota bonus via rewards</li>
                         </ul>
                     </div>
                     <a href="{cta_href}" class="btn btn-secondary" style="width: 100%; justify-content: center; font-size: 0.9rem;">
@@ -1364,20 +1370,17 @@ def pricing_view(current_user: Optional[UserModel] = None) -> str:
                     <div>
                         <div style="display: flex; justify-content: space-between; align-items: center;">
                             <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--brass); text-transform: uppercase; font-weight: 600;">Monthly Subscription</div>
-                            <span class="badge" style="background: var(--brass-soft); color: var(--brass); font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; padding: 0.15rem 0.45rem; border: 1px solid var(--brass-border); border-radius: 3px;">PRO</span>
+                            <span class="badge" style="background: var(--panel); color: var(--text-secondary); font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; padding: 0.15rem 0.45rem; border: 1px solid var(--hairline); border-radius: 3px;">Coming soon</span>
                         </div>
                         <h2 style="font-size: 1.5rem; font-weight: 600; margin: 0.25rem 0 1rem 0; color: var(--text-primary);">Pro Plan</h2>
                         <ul style="list-style: none; padding: 0; margin: 0 0 1.5rem 0; font-size: 0.9rem; line-height: 1.8; color: var(--text-secondary);">
                             <li>&check; <strong>Unlimited repository analyses</strong></li>
                             <li>&check; Bypasses standard monthly quota</li>
-                            <li>&check; Priority processing queue</li>
-                            <li>&check; Billed monthly via secure Stripe checkout</li>
-                            <li>&check; Full access to all architectural tools</li>
                         </ul>
                     </div>
-                    <a href="{cta_href}" class="btn btn-primary" style="width: 100%; justify-content: center; font-size: 0.9rem;">
-                        Upgrade to Pro
-                    </a>
+                    <button class="btn btn-secondary" disabled style="width: 100%; justify-content: center; font-size: 0.9rem; opacity: 0.6; cursor: not-allowed;">
+                        Coming soon
+                    </button>
                 </div>
             </div>
         </div>

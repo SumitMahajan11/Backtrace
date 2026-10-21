@@ -132,7 +132,7 @@ def test_login_page_renders_github_oauth_button(client):
     """
     resp = client.get("/login")
     assert resp.status_code == 200
-    assert "Welcome to Backtrace" in resp.text
+    assert "Understand any codebase without reading every file." in resp.text
     assert "Sign in with GitHub" in resp.text
     assert "/auth/github/login" in resp.text
 
