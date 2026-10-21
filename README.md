@@ -9,6 +9,14 @@
 
 ---
 
+## 🌐 Live Demo
+
+Visit the live deployment at [https://backtrace-pbsk.onrender.com](https://backtrace-pbsk.onrender.com).
+
+The demo runs on a free instance and the first request after idle can take about a minute. You can also explore public architectural dossiers directly in the [/showcase](https://backtrace-pbsk.onrender.com/showcase).
+
+---
+
 ## 🌟 What is Backtrace?
 
 Traditional code exploration tools (like DeepWiki or typical RAG searchers) explain **what a codebase is right now**. 

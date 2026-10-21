@@ -1171,7 +1171,18 @@ def login_view(error: Optional[str] = None) -> str:
         </div>
     </div>
     """
-    return page_shell("Backtrace - Understand any GitHub repository", content, active_route="/login")
+    extra_head = """
+    <meta name="description" content="Understand any codebase without reading every file.">
+    <meta property="og:title" content="Backtrace - Understand any GitHub repository">
+    <meta property="og:description" content="Understand any codebase without reading every file.">
+    <meta property="og:type" content="website">
+    """
+    return page_shell(
+        "Backtrace - Understand any GitHub repository",
+        content,
+        active_route="/login",
+        extra_head=extra_head,
+    )
 
 
 def showcase_view(
@@ -1225,7 +1236,19 @@ def showcase_view(
         </div>
     </div>
     """
-    return page_shell("Showcase Directory", content, current_user=current_user, active_route="/showcase")
+    extra_head = """
+    <meta name="description" content="Understand any codebase without reading every file.">
+    <meta property="og:title" content="Backtrace - Featured Repository Architectures">
+    <meta property="og:description" content="Understand any codebase without reading every file.">
+    <meta property="og:type" content="website">
+    """
+    return page_shell(
+        "Showcase Directory",
+        content,
+        current_user=current_user,
+        active_route="/showcase",
+        extra_head=extra_head,
+    )
 
 
 def privacy_view(current_user: Optional[UserModel] = None) -> str:

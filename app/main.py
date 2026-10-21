@@ -144,6 +144,12 @@ def get_health(response: Response) -> Dict[str, Any]:
     return payload
 
 
+@app.get("/healthz", tags=["Health"], summary="Liveness Probe")
+def get_healthz() -> Dict[str, str]:
+    """Lightweight liveness probe returning 200 without database access."""
+    return {"status": "ok"}
+
+
 @app.get("/api/public-config", tags=["Configuration"], summary="Public System Configuration")
 @app.get("/public-config", include_in_schema=False)
 def get_public_config() -> Dict[str, Any]:

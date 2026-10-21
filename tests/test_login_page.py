@@ -94,3 +94,29 @@ def test_pricing_page_public_and_sections(client):
     assert "100 MB" in response.text
     assert "Unlimited repository analyses" in response.text
 
+
+def test_healthz_endpoint(client):
+    """GET /healthz returns {"status": "ok"} with status 200 without database access or login."""
+    response = client.get("/healthz")
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+
+
+def test_login_opengraph_tags(client):
+    """GET /login contains property="og:title", og:description, og:type, and meta description."""
+    response = client.get("/login")
+    assert response.status_code == 200
+    assert 'property="og:title"' in response.text
+    assert 'property="og:description"' in response.text
+    assert 'property="og:type"' in response.text
+    assert '<meta name="description"' in response.text
+    assert 'content="Understand any codebase without reading every file."' in response.text
+
+    showcase_resp = client.get("/showcase")
+    assert showcase_resp.status_code == 200
+    assert 'property="og:title"' in showcase_resp.text
+    assert 'property="og:description"' in showcase_resp.text
+    assert 'property="og:type"' in showcase_resp.text
+    assert '<meta name="description"' in showcase_resp.text
+
+
