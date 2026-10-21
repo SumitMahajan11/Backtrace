@@ -157,6 +157,8 @@ def test_retention_pruning_removes_old_backups(temp_backup_env):
     old_file = backup_dir / "backtrace_backup_20260101_000000Z.sqlite.gz"
     old_file.write_bytes(b"old backup data")
     old_time = time.time() - (10 * 86400)
+    if datetime.fromtimestamp(old_time, tz=timezone.utc).weekday() == 6:
+        old_time -= 86400
     os.utime(old_file, (old_time, old_time))
 
     # Create fresh backup

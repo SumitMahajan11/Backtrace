@@ -12,7 +12,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     # Environment mode
-    ENVIRONMENT: Literal["development", "test", "production"] = "development"
+    ENVIRONMENT: Literal["development", "test", "production"] = "production"
+    RETENTION_CLEANUP_ENABLED: bool = True
     APP_NAME: str = "Backtrace"
     API_PREFIX: str = "/api"
     DEBUG: bool = False

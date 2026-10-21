@@ -120,3 +120,30 @@ def test_login_opengraph_tags(client):
     assert '<meta name="description"' in showcase_resp.text
 
 
+def test_privacy_and_login_do_not_contain_30_days_or_auto_purged(client):
+    """Assert exact new 30-day retention sentences while ensuring 'automatically purged' is absent."""
+    privacy_resp = client.get("/privacy")
+    assert privacy_resp.status_code == 200
+    assert (
+        "Repository file text is deleted automatically after 30 days (showcase repos are kept). "
+        "Reports, graphs, your submitted milestone code and run output are kept until you ask for deletion."
+    ) in privacy_resp.text
+    assert "automatically purged" not in privacy_resp.text.lower()
+
+    login_resp = client.get("/login")
+    assert login_resp.status_code == 200
+    assert (
+        "Repository files are stored with secrets scanned and redacted (best effort) and deleted after 30 days. "
+        "Reports are kept until you ask us to delete them."
+    ) in login_resp.text
+    assert "automatically purged" not in login_resp.text.lower()
+
+
+def test_pricing_does_not_contain_priority_or_price_id(client):
+    """/pricing does not contain 'priority' or 'price_'."""
+    response = client.get("/pricing")
+    assert response.status_code == 200
+    assert "priority" not in response.text.lower()
+    assert "price_" not in response.text.lower()
+
+

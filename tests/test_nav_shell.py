@@ -80,7 +80,7 @@ def test_nav_shell_unauthenticated_on_login(client):
 
     assert "Backtrace" in html
     assert "theme-toggle" in html
-    assert "Sign in with GitHub. Read-only." in html
+    assert "Sign In" not in html
     assert "nav-link-dashboard" not in html
     assert "nav-link-settings" not in html
     assert "nav-logout-btn" not in html

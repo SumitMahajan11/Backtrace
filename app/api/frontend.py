@@ -454,7 +454,7 @@ async def analysis_progress_events(
     session: Session = Depends(get_db),
 ):
     """
-    Server-Sent Events endpoint streaming live 11-layer pipeline execution status.
+    Server-Sent Events endpoint streaming live Backtrace pipeline execution status.
     Strictly authenticates and verifies user ownership before streaming any data.
     """
     if not user:

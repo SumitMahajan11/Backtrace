@@ -1,5 +1,4 @@
-"""Main FastAPI Application Entrypoint for Backtrace Analysis Engine."""
-
+import asyncio
 import os
 import logging
 from contextlib import asynccontextmanager
@@ -52,14 +51,46 @@ async def lifespan(app: FastAPI):
     from app.services.piston_health import piston_health_monitor
     if piston_health_monitor.is_sandbox_enabled():
         piston_health_monitor.start_background_task()
+
+    retention_task = None
+    current_settings = get_settings()
+    if getattr(current_settings, "RETENTION_CLEANUP_ENABLED", True):
+        import logging
+        retention_logger = logging.getLogger("app.retention")
+
+        async def _retention_worker_loop():
+            from scripts.cleanup_worker import run_retention_cleanup
+            while True:
+                try:
+                    await asyncio.to_thread(run_retention_cleanup)
+                except asyncio.CancelledError:
+                    break
+                except Exception as exc:
+                    retention_logger.warning(type(exc).__name__)
+
+                try:
+                    await asyncio.sleep(6 * 3600)
+                except asyncio.CancelledError:
+                    break
+
+        retention_task = asyncio.create_task(_retention_worker_loop())
+
     yield
+
+    if retention_task:
+        retention_task.cancel()
+        try:
+            await retention_task
+        except asyncio.CancelledError:
+            pass
+
     if piston_health_monitor.is_sandbox_enabled():
         piston_health_monitor.stop_background_task()
 
 
 app = FastAPI(
     title=settings.APP_NAME,
-    description="Identity, Session Management, Stripe Billing, and 11-Layer Reverse Engineering Pipeline API",
+    description="Identity, Session Management, Stripe Billing, and Backtrace Reverse Engineering Pipeline API",
     version="1.0.0",
     debug=False,  # Enforce False to guarantee zero internal stack trace leakage across all environments
     lifespan=lifespan,

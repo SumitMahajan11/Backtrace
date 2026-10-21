@@ -74,7 +74,6 @@ def nav_shell(
     """Render the persistent Archival Dossier navigation header shell."""
     if not current_user:
         sign_in_link = "" if active_route == "/login" else '<a href="/login" class="btn btn-sm btn-primary">Sign In</a>'
-        brand_pill = "" if active_route == "/login" else '<span class="brand-pill">Architecture Report Engine</span>'
         return f"""
     <header class="nav-shell">
         <a href="/login" class="brand" id="nav-brand-link">
@@ -83,7 +82,6 @@ def nav_shell(
                 <polyline points="12 6 12 12 16 14"></polyline>
             </svg>
             <span class="brand-title">Backtrace</span>
-            {brand_pill}
         </a>
         <div class="nav-right" style="display: flex; align-items: center; gap: 0.75rem;">
             <button id="theme-toggle" class="theme-toggle-btn" onclick="toggleTheme()" type="button" aria-label="Toggle dark/light mode" title="Toggle Light/Dark Theme">
@@ -139,7 +137,6 @@ def nav_shell(
                     <polyline points="12 6 12 12 16 14"></polyline>
                 </svg>
                 <span class="brand-title">Backtrace</span>
-                <span class="brand-pill">Architecture Report Engine</span>
             </a>
             {tier_tag}
         </div>
@@ -186,7 +183,9 @@ def page_shell(
     if active_route == "/login" or title == "Backtrace - Understand any GitHub repository":
         doc_title = "<title>Backtrace - Understand any GitHub repository</title>"
     else:
-        doc_title = f"<title>{sanitize_text(title)} // Backtrace Repository Archaeology</title>"
+        doc_title = f"<title>{sanitize_text(title)} // Backtrace</title>"
+
+    footer_text = "Backtrace &bull; Sign in with GitHub. Read-only." if active_route == "/login" else "Backtrace"
 
     return f"""<!DOCTYPE html>
 <html lang="en" data-theme="dark">
@@ -1093,7 +1092,7 @@ def page_shell(
             <a href="https://github.com/SumitMahajan11/Backtrace/issues" style="color: var(--text-tertiary); text-decoration: none;">Support</a>
         </div>
         <div>
-            Backtrace &bull; Sign in with GitHub. Read-only.
+            {footer_text}
         </div>
     </footer>
     <script>
@@ -1166,7 +1165,7 @@ def login_view(error: Optional[str] = None) -> str:
                 </a>
             </div>
             <div style="margin-top: 1.5rem; font-size: 0.75rem; color: var(--text-tertiary); line-height: 1.4;">
-                Repository code is stored with secrets redacted and retained for 30 days by default. <a href="/privacy" style="color: var(--text-secondary); text-decoration: underline;">Privacy Policy</a>
+                Repository files are stored with secrets scanned and redacted (best effort) and deleted after 30 days. Reports are kept until you ask us to delete them. <a href="/privacy" style="color: var(--text-secondary); text-decoration: underline;">Privacy Policy</a>
             </div>
         </div>
     </div>
@@ -1275,26 +1274,26 @@ def privacy_view(current_user: Optional[UserModel] = None) -> str:
                         When a repository is analyzed, Backtrace records repository metadata (GitHub URL, commit hash, clone status, and analysis timestamp) in the <code>repos</code> table.
                     </p>
                     <p style="margin-bottom: 0.75rem;">
-                        Cloned repository file trees and raw text file contents are stored in the <code>ingestion_results</code> table. Before any file content is stored, secrets are scanned and redacted on a best-effort basis.
+                        Repository file text and cloned file trees are stored in the <code>ingestion_results</code> table. Before any file content is stored, secrets are scanned and redacted on a best-effort basis.
                     </p>
                     <p style="margin-bottom: 0.75rem;">
-                        User profile records are stored in the <code>users</code> table: <code>id</code>, <code>github_id</code>, <code>github_username</code>, <code>email</code>, <code>avatar_url</code>, <code>created_at</code>, <code>is_admin</code>. GitHub OAuth access tokens are not stored.
+                        User profile records are stored in the <code>users</code> table: GitHub ID, username, email, avatar. GitHub OAuth access tokens are not stored.
                     </p>
                     <p style="margin-bottom: 0.75rem;">
-                        Analysis jobs and execution state are stored in the <code>analysis_jobs</code> table: <code>id</code>, <code>user_id</code>, <code>repo_name</code>, <code>github_url</code>, <code>commit_ref</code>, <code>resolved_sha</code>, <code>subpath</code>, <code>status</code>, <code>run_id</code>, <code>failed_stage</code>, <code>error_message</code>, <code>execution_time_seconds</code>, <code>markdown_output</code>, <code>graph_output_json</code>, <code>quiz_output_json</code>, <code>is_showcase</code>, <code>created_at</code>, <code>updated_at</code>.
+                        Analysis jobs and execution state are stored in the <code>analysis_jobs</code> table: reports and graphs.
                     </p>
                     <p style="margin-bottom: 0.75rem;">
-                        Interactive milestone attempts are stored in the <code>milestone_attempts</code> table: <code>id</code>, <code>user_id</code>, <code>job_id</code>, <code>milestone_tier</code>, <code>submitted_code</code>, <code>last_run_code</code>, <code>status</code>, <code>hint_level_revealed</code>, <code>implementation_revealed</code>, <code>last_run_stdout</code>, <code>last_run_stderr</code>, <code>last_run_exit_code</code>, <code>last_run_at</code>, <code>grading_method</code>, <code>grading_details_json</code>, <code>created_at</code>, <code>updated_at</code>.
+                        Interactive milestone attempts are stored in the <code>milestone_attempts</code> table: your submitted milestone code and run output.
                     </p>
                     <p>
-                        The synthesized architecture report, interactive dependency graphs, guided milestones, and quiz questions are stored in the <code>analysis_results</code> table. System logs record execution run IDs, stage names, and error types, but never raw file contents or authentication tokens.
+                        The synthesized architecture report, interactive dependency graphs, guided milestones, and quiz questions are stored in the <code>analysis_jobs</code> table. System logs record run IDs, stage names and error types.
                     </p>
                 </section>
 
                 <section>
                     <h2 style="font-size: 1.25rem; color: var(--text-primary); margin-bottom: 0.5rem; font-weight: 600;">How long</h2>
                     <p>
-                        Cloned repository data, ingested files, and analysis records are kept for a default retention period of 30 days. Showcase repos are kept until removed. An automated background cleanup worker periodically purges all expired records whose retention period has elapsed unless marked with a retention extension.
+                        Repository file text is deleted automatically after 30 days (showcase repos are kept). Reports, graphs, your submitted milestone code and run output are kept until you ask for deletion.
                     </p>
                 </section>
 
@@ -1308,6 +1307,7 @@ def privacy_view(current_user: Optional[UserModel] = None) -> str:
                         <li><strong>Groq</strong>: When cloud LLM narration is enabled, prompt payloads are sent to Groq's API.</li>
                         <li><strong>Google Gemini</strong>: Used for code vector embeddings when configured, with an offline deterministic n-gram vector fallback.</li>
                         <li><strong>Deterministic Offline Engine</strong>: When no external LLM is configured, analysis runs purely offline using structural AST heuristics.</li>
+                        <li>Error reports (no file contents) may be sent to Sentry.</li>
                     </ul>
                 </section>
 
@@ -1915,7 +1915,7 @@ def progress_view(
             initial_timer_text = "Running for 0:00"
 
     initial_badge_html = '<span class="badge badge-failed">ANALYSIS JOB FAILED</span>' if is_failed_initially else '<span class="badge" style="background: var(--brass-soft); color: var(--brass); border-color: var(--brass-border);">IN PROGRESS</span>'
-    initial_desc_text = safe_job_error if (is_failed_initially and safe_job_error) else ("Analysis job execution failed." if is_failed_initially else "Initializing 11-Layer Analysis Pipeline...")
+    initial_desc_text = safe_job_error if (is_failed_initially and safe_job_error) else ("Analysis job execution failed." if is_failed_initially else "Initializing Backtrace Analysis Pipeline...")
 
     # Determine honest stage_7 narration label
     job_src = None
@@ -2383,7 +2383,7 @@ def progress_view(
                     <span>&bull;</span>
                     <span>Job #{job_id}</span>
                     <span>&bull;</span>
-                    <span>ENGINE: <strong>11-Layer Reverse Intelligence</strong></span>
+                    <span>ENGINE: <strong>Backtrace Reverse Intelligence</strong></span>
                 </div>
             </div>
             <div id="overall-status">
@@ -2417,7 +2417,7 @@ def progress_view(
     <!-- Main Grid: Timeline Centerpiece with Live Stage Activity & Collapsible Technical Log -->
     <div style="display: grid; grid-template-columns: 1fr; gap: 2rem; align-items: start;">
         
-        <!-- 11-Layer Narrative Timeline Centerpiece -->
+        <!-- Backtrace Narrative Timeline Centerpiece -->
         <div class="stratum-card">
             <div class="card-header" style="margin-bottom: 1.5rem;">
                 <div>
@@ -3929,6 +3929,7 @@ def report_view(
                     </div>
                     """
 
+                source_tag_label = "READ-ONLY SOURCE" if r_file.get("has_real_source", True) else "source files expired"
                 read_file_panes_html += f"""
                 <div id="read-file-pane-{m_tier}-{f_idx}" class="read-file-pane" style="display: {pane_display};">
                     <div style="display: flex; justify-content: space-between; align-items: center; background: #12141a; padding: 0.4rem 0.85rem; border: 1px solid var(--hairline); border-bottom: none; border-top-left-radius: 4px; border-top-right-radius: 4px; font-family: 'IBM Plex Mono', monospace; font-size: 0.7rem; color: var(--text-tertiary);">
@@ -3936,7 +3937,7 @@ def report_view(
                             <span class="chip-dot teal"></span>
                             <span style="color: var(--text-secondary); font-weight: 500;">{f_path_safe}</span>
                         </div>
-                        <span class="tag" style="font-size: 0.625rem;">READ-ONLY SOURCE</span>
+                        <span class="tag" style="font-size: 0.625rem;">{source_tag_label}</span>
                     </div>
                     {redaction_notice_html}
                     <pre class="read-code-pre" style="background: #181a20; padding: 1rem 1.15rem; border-bottom-left-radius: 4px; border-bottom-right-radius: 4px; border: 1px solid var(--hairline); overflow-x: auto; margin: 0; max-height: 480px; font-family: 'IBM Plex Mono', monospace; font-size: 0.8rem; line-height: 1.5; color: #f8f8f2;"><code id="read-code-content-{m_tier}-{f_idx}">{escaped_f_content}</code></pre>
@@ -6830,7 +6831,7 @@ def settings_view(
             <div style="background: var(--panel-raised); border: 1px solid var(--hairline); border-radius: 4px; padding: 1.25rem;">
                 <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.35rem;">Enterprise Code Validation Suite</div>
                 <p style="color: var(--text-secondary); font-size: 0.85rem; line-height: 1.45; margin-bottom: 1rem;">
-                    Your account has unlimited access to repository analysis, priority processing, and interactive dependency graphs.
+                    Your account has unlimited access to repository analysis and interactive dependency graphs.
                 </p>
                 <a href="/api/billing/portal" class="btn btn-secondary" style="width: 100%; justify-content: center; padding: 0.75rem;">
                     Manage Subscription &amp; Invoices &rarr;
@@ -6883,7 +6884,7 @@ def settings_view(
                     </div>
                     <div style="display: flex; align-items: center; gap: 0.5rem;">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                        <span>Priority syntax parsing &amp; automatic tier grouping queue</span>
+                        <span>Syntax parsing &amp; automatic tier grouping</span>
                     </div>
                     <div style="display: flex; align-items: center; gap: 0.5rem;">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>

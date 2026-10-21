@@ -1,6 +1,6 @@
 """Layer 11: Pipeline Orchestration & Execution Engine.
 
-Orchestrates the 11-layer architecture into a unified execution pipeline with real-time
+Orchestrates the Backtrace architecture into a unified execution pipeline with real-time
 progress tracking, stage isolation, and error boundaries.
 """
 
@@ -44,7 +44,7 @@ logger = get_logger("orchestrator", layer="orchestration")
 
 
 class PipelineOrchestrator:
-    """Master orchestrator executing the 11-layer reverse engineering pipeline."""
+    """Master orchestrator executing the Backtrace reverse engineering pipeline."""
 
     def __init__(self):
         # Register all Layer 2 parsers

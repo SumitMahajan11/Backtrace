@@ -143,3 +143,40 @@ def test_dev_login_open_redirect_rejected_in_development(test_db, monkeypatch):
         assert resp_not_found.status_code == 404
 
     app.main.app.dependency_overrides.clear()
+
+
+def test_dev_login_returns_404_under_default_settings(tmp_path):
+    """Proves /auth/dev-login returns 404 under default settings (ENVIRONMENT defaulting to production)."""
+    import os
+    import subprocess
+    import sys
+
+    code = (
+        "from fastapi.testclient import TestClient\n"
+        "from app.core.config import get_settings\n"
+        "from app.main import app\n"
+        "settings = get_settings()\n"
+        "assert settings.ENVIRONMENT == 'production', f'Expected production, got {settings.ENVIRONMENT}'\n"
+        "with TestClient(app) as client:\n"
+        "    resp = client.get('/auth/dev-login?user_id=1')\n"
+        "    assert resp.status_code == 404\n"
+    )
+
+    env = dict(os.environ)
+    env.pop("ENVIRONMENT", None)
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    current_pythonpath = env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = f"{repo_root};{current_pythonpath}" if current_pythonpath else repo_root
+
+    # Ensure production validations succeed so app can boot
+    env.setdefault("GITHUB_CLIENT_ID", "mock_gh_client_id")
+    env.setdefault("GITHUB_CLIENT_SECRET", "mock_gh_client_secret")
+    env["GITHUB_REDIRECT_URI"] = "https://app.backtrace.dev/auth/github/callback"
+    env.setdefault("JWT_SECRET_KEY", "production_secret_key_at_least_32_chars_long_123456")
+    env.setdefault("STRIPE_SECRET_KEY", "sk_live_mock_prod_key_123456789012345")
+    env.setdefault("STRIPE_WEBHOOK_SECRET", "whsec_mock_prod_webhook_secret_1234567890")
+    env.setdefault("STRIPE_PRICE_ID_PRO", "price_mock_prod_price_id_1234567890")
+    env.setdefault("DEBUG", "False")
+
+    res = subprocess.run([sys.executable, "-c", code], cwd=str(tmp_path), env=env, capture_output=True, text=True)
+    assert res.returncode == 0, f"Subprocess failed with code {res.returncode}:\nstdout: {res.stdout}\nstderr: {res.stderr}"

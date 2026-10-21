@@ -33,14 +33,14 @@ class PipelineRunResponse(BaseModel):
     report_summary: Optional[Dict[str, Any]] = None
 
 
-@router.post("/pipeline/run", response_model=PipelineRunResponse, summary="Execute 11-Layer Reverse Engineering Pipeline")
+@router.post("/pipeline/run", response_model=PipelineRunResponse, summary="Execute Backtrace Reverse Engineering Pipeline")
 def execute_pipeline(
     payload: PipelineRunRequest,
     current_user: UserModel = Depends(get_current_user),
     session: Session = Depends(get_db),
 ):
     """
-    Triggers execution of the complete 11-layer reverse-engineering analysis pipeline.
+    Triggers execution of the complete Backtrace reverse-engineering analysis pipeline.
     
     Protected endpoint: Requires a valid, unexpired JWT session access token.
     Quota-gated endpoint:

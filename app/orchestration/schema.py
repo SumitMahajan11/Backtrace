@@ -8,7 +8,7 @@ from app.synthesis.schema import SynthesizedRepositoryReport
 
 
 class PipelineStage(str, Enum):
-    """Execution stages across the 11-layer architecture."""
+    """Execution stages across the Backtrace architecture."""
     INGESTION = "ingestion"              # Layer 1 & Layer 10
     PARSING = "parsing"                  # Layer 2 & Layer 3
     UNDERSTANDING = "understanding"      # Layer 4 (Segmentation) & Layer 5 (RAG)

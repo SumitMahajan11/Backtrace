@@ -2114,7 +2114,7 @@ def test_consistent_report_naming_across_lifecycle():
         status="running",
     )
     prog_html = progress_view(job_in_progress, current_user=user, billing_status=billing)
-    assert "<title>Architecture Report: repo-alpha (In Progress) // Backtrace Repository Archaeology</title>" in prog_html
+    assert "<title>Architecture Report: repo-alpha (In Progress) // Backtrace</title>" in prog_html
     assert "Architecture Report: <span style=\"font-style: italic; color: var(--brass);\">repo-alpha</span>" in prog_html
     assert "Analysis Job Report" not in prog_html
 
@@ -2159,7 +2159,7 @@ Calibration text.
         current_user=user,
         billing_status=billing,
     )
-    assert "<title>Architecture Report: repo-alpha // Backtrace Repository Archaeology</title>" in report_html
+    assert "<title>Architecture Report: repo-alpha // Backtrace</title>" in report_html
     assert "Architecture Report: <span style=\"font-style: italic; color: var(--brass);\">repo-alpha</span>" in report_html
     assert "Repository Architecture Report" not in report_html
     assert "Print Architecture Report" in report_html

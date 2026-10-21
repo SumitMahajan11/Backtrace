@@ -129,7 +129,7 @@ class AnalyticsService:
         duration_seconds: float,
         tier: str = "free",
     ) -> Dict[str, Any]:
-        """Track successful 11-layer pipeline completion."""
+        """Track successful Backtrace pipeline completion."""
         return self.capture(
             event_name="analysis_completed",
             user_id=user_id,
