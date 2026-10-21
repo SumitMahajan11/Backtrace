@@ -73,7 +73,9 @@ def nav_shell(
 ) -> str:
     """Render the persistent Archival Dossier navigation header shell."""
     if not current_user:
-        return """
+        sign_in_link = "" if active_route == "/login" else '<a href="/login" class="btn btn-sm btn-primary">Sign In</a>'
+        brand_pill = "" if active_route == "/login" else '<span class="brand-pill">Architecture Report Engine</span>'
+        return f"""
     <header class="nav-shell">
         <a href="/login" class="brand" id="nav-brand-link">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -81,14 +83,14 @@ def nav_shell(
                 <polyline points="12 6 12 12 16 14"></polyline>
             </svg>
             <span class="brand-title">Backtrace</span>
-            <span class="brand-pill">Architecture Report Engine</span>
+            {brand_pill}
         </a>
         <div class="nav-right" style="display: flex; align-items: center; gap: 0.75rem;">
             <button id="theme-toggle" class="theme-toggle-btn" onclick="toggleTheme()" type="button" aria-label="Toggle dark/light mode" title="Toggle Light/Dark Theme">
                 <span id="theme-toggle-icon">◐</span>
                 <span id="theme-toggle-label">Theme</span>
             </button>
-            <a href="/login" class="btn btn-sm btn-primary">Sign In</a>
+            {sign_in_link}
         </div>
     </header>
     """
@@ -181,12 +183,17 @@ def page_shell(
         billing_status=billing_status,
     )
 
+    if active_route == "/login" or title == "Backtrace - Understand any GitHub repository":
+        doc_title = "<title>Backtrace - Understand any GitHub repository</title>"
+    else:
+        doc_title = f"<title>{sanitize_text(title)} // Backtrace Repository Archaeology</title>"
+
     return f"""<!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{sanitize_text(title)} // Backtrace Repository Archaeology</title>
+    {doc_title}
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&display=swap" rel="stylesheet">
@@ -1078,7 +1085,16 @@ def page_shell(
         {content}
     </main>
     <footer class="footer">
-        Backtrace 11-Layer Reverse Code Intelligence &bull; Secured with GitHub OAuth &amp; Stripe
+        <div style="margin-bottom: 0.5rem; display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap;">
+            <a href="/privacy" style="color: var(--text-tertiary); text-decoration: none;">Privacy</a>
+            <span>&bull;</span>
+            <a href="/pricing" style="color: var(--text-tertiary); text-decoration: none;">Pricing and limits</a>
+            <span>&bull;</span>
+            <a href="https://github.com/SumitMahajan11/Backtrace/issues" style="color: var(--text-tertiary); text-decoration: none;">Support</a>
+        </div>
+        <div>
+            Backtrace &bull; Sign in with GitHub. Read-only.
+        </div>
     </footer>
     <script>
         function toggleTheme() {{
@@ -1128,8 +1144,9 @@ def login_view(error: Optional[str] = None) -> str:
                         <polyline points="2 12 12 17 22 12"></polyline>
                     </svg>
                 </div>
-                <h1 style="font-size: 1.85rem; font-weight: 500; margin-bottom: 0.5rem; letter-spacing: -0.02em;">Welcome to Backtrace</h1>
-                <p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.5;">Reverse-engineer codebase architecture into executable mental models.</p>
+                <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--brass); letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 0.5rem;">Backtrace</div>
+                <h1 style="font-size: 1.85rem; font-weight: 500; margin-bottom: 0.5rem; letter-spacing: -0.02em;">Understand any codebase without reading every file.</h1>
+                <p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.5;">Each report delivers an architectural markdown explanation, an interactive dependency graph, guided implementation milestones, and a codebase quiz.</p>
                 <div style="display: flex; align-items: center; justify-content: center; gap: 0.5rem; font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--text-tertiary); margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--hairline-soft);">
                     <span>AUTHENTICATION GATE</span>
                     <span>&bull;</span>
@@ -1143,13 +1160,15 @@ def login_view(error: Optional[str] = None) -> str:
                 </svg>
                 Sign in with GitHub
             </a>
-            <div style="margin-top: 1.5rem; font-size: 0.75rem; color: var(--text-tertiary); font-family: 'IBM Plex Mono', monospace;">
-                ZERO-PERSISTENCE CODE CLONE PROTOCOL
+            <div style="margin-top: 1rem;">
+                <a href="/showcase" style="font-size: 0.85rem; color: var(--brass); text-decoration: none; font-weight: 500;">
+                    View a sample report &rarr;
+                </a>
             </div>
         </div>
     </div>
     """
-    return page_shell("Sign In", content)
+    return page_shell("Backtrace - Understand any GitHub repository", content, active_route="/login")
 
 
 def showcase_view(
@@ -1159,8 +1178,11 @@ def showcase_view(
     """Render the public showcase directory view."""
     if not jobs:
         items_html = """
-        <div style="padding: 2.5rem 1rem; text-align: center; color: var(--text-tertiary); font-family: 'IBM Plex Mono', monospace; font-size: 0.85rem;">
-            No showcase repositories are currently published.
+        <div style="padding: 2.5rem 1rem; text-align: center; color: var(--text-tertiary); font-size: 0.95rem;">
+            <p style="margin-bottom: 1.25rem;">Sample reports are coming soon.</p>
+            <a href="/login" class="btn btn-sm btn-secondary" style="font-family: 'IBM Plex Mono', monospace; font-size: 0.8rem;">
+                &larr; Back to Login
+            </a>
         </div>
         """
     else:
