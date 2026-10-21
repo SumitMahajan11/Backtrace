@@ -153,12 +153,13 @@ def test_retention_pruning_removes_old_backups(temp_backup_env):
     """Verifies that backups older than retention_days are pruned while fresh backups are kept."""
     backup_dir = temp_backup_env["backup_dir"]
     
-    # Create fake old backup file modified 10 days ago
+    # Create fake old backup file modified 10 days ago (adjust if Sunday to avoid weekly retention preservation)
     old_file = backup_dir / "backtrace_backup_20260101_000000Z.sqlite.gz"
     old_file.write_bytes(b"old backup data")
-    old_time = time.time() - (10 * 86400)
-    if datetime.fromtimestamp(old_time, tz=timezone.utc).weekday() == 6:
-        old_time -= 86400
+    old_dt = datetime.now(timezone.utc) - timedelta(days=10)
+    if old_dt.weekday() == 6:
+        old_dt -= timedelta(days=1)
+    old_time = old_dt.timestamp()
     os.utime(old_file, (old_time, old_time))
 
     # Create fresh backup
