@@ -89,6 +89,9 @@ app.add_middleware(
 from app.security.headers import SecurityHeadersAndBodySizeMiddleware
 app.add_middleware(SecurityHeadersAndBodySizeMiddleware)
 
+from starlette.middleware.gzip import GZipMiddleware
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
 
 @app.exception_handler(Exception)
 async def global_unhandled_exception_handler(request: Request, exc: Exception):
