@@ -1165,6 +1165,9 @@ def login_view(error: Optional[str] = None) -> str:
                     View a sample report &rarr;
                 </a>
             </div>
+            <div style="margin-top: 1.5rem; font-size: 0.75rem; color: var(--text-tertiary); line-height: 1.4;">
+                Repository code is stored with secrets redacted and retained for 30 days by default. <a href="/privacy" style="color: var(--text-secondary); text-decoration: underline;">Privacy Policy</a>
+            </div>
         </div>
     </div>
     """
@@ -1223,6 +1226,141 @@ def showcase_view(
     </div>
     """
     return page_shell("Showcase Directory", content, current_user=current_user, active_route="/showcase")
+
+
+def privacy_view(current_user: Optional[UserModel] = None) -> str:
+    """Render the public Privacy Policy page adhering to Archival Dossier tokens."""
+    content = """
+    <div style="max-width: 760px; margin: 3rem auto 0 auto; padding: 0 1rem;">
+        <div class="stratum-card" style="padding: 2.5rem 2.25rem;">
+            <div style="margin-bottom: 2rem; border-bottom: 1px solid var(--hairline); padding-bottom: 1.25rem;">
+                <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--brass); text-transform: uppercase; letter-spacing: 0.05em;">
+                    Policy Dossier
+                </div>
+                <h1 style="font-size: 2rem; font-weight: 500; margin-top: 0.25rem; letter-spacing: -0.02em;">
+                    Privacy Policy
+                </h1>
+                <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--text-tertiary); margin-top: 0.5rem;">
+                    Last updated October 21, 2026
+                </div>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 2rem; font-size: 0.925rem; line-height: 1.6; color: var(--text-secondary);">
+                <section>
+                    <h2 style="font-size: 1.25rem; color: var(--text-primary); margin-bottom: 0.5rem; font-weight: 600;">What we store</h2>
+                    <p style="margin-bottom: 0.75rem;">
+                        When a repository is analyzed, Backtrace records repository metadata (GitHub URL, commit hash, clone status, and analysis timestamp) in the <code>repos</code> table.
+                    </p>
+                    <p style="margin-bottom: 0.75rem;">
+                        Cloned repository file trees and raw text file contents are stored in the <code>ingestion_results</code> table. Before any file content is stored, all code is scanned by our secret scanner and any detected credentials, API tokens, passwords, and secrets are automatically redacted in-place with <code>[REDACTED]</code>.
+                    </p>
+                    <p>
+                        The synthesized architecture report, interactive dependency graphs, guided milestones, and quiz questions are stored in the <code>analysis_results</code> table. System logs record execution run IDs, stage names, and error types, but never raw file contents or authentication tokens.
+                    </p>
+                </section>
+
+                <section>
+                    <h2 style="font-size: 1.25rem; color: var(--text-primary); margin-bottom: 0.5rem; font-weight: 600;">How long</h2>
+                    <p>
+                        Cloned repository data, ingested files, and analysis records are kept for a default retention period of 30 days. An automated background cleanup worker periodically purges all expired records whose retention period has elapsed unless marked with a retention extension.
+                    </p>
+                </section>
+
+                <section>
+                    <h2 style="font-size: 1.25rem; color: var(--text-primary); margin-bottom: 0.5rem; font-weight: 600;">Who processes your code</h2>
+                    <p style="margin-bottom: 0.75rem;">
+                        Depending on configuration, repository analysis and narration are processed by:
+                    </p>
+                    <ul style="margin-left: 1.25rem; margin-bottom: 0.75rem;">
+                        <li><strong>Local Ollama</strong>: Code analysis executes locally on-premises via a local Ollama daemon (127.0.0.1:11434).</li>
+                        <li><strong>Groq</strong>: When cloud LLM narration is enabled, prompt payloads are sent to Groq's API.</li>
+                        <li><strong>Google Gemini</strong>: Used for code vector embeddings when configured, with an offline deterministic n-gram vector fallback.</li>
+                        <li><strong>Deterministic Offline Engine</strong>: When no external LLM is configured, analysis runs purely offline using structural AST heuristics.</li>
+                    </ul>
+                </section>
+
+                <section>
+                    <h2 style="font-size: 1.25rem; color: var(--text-primary); margin-bottom: 0.5rem; font-weight: 600;">GitHub permissions</h2>
+                    <p>
+                        Backtrace requests strictly read-only GitHub OAuth scopes: <code>read:user user:email</code>. We only access your basic profile identifier and verified email address to manage your account. We do not request repository write access, code modification rights, or organization administration permissions.
+                    </p>
+                </section>
+
+                <section>
+                    <h2 style="font-size: 1.25rem; color: var(--text-primary); margin-bottom: 0.5rem; font-weight: 600;">Deleting your data</h2>
+                    <p>
+                        To delete your data, open an issue or contact support at <a href="https://github.com/SumitMahajan11/Backtrace/issues" target="_blank" rel="noopener noreferrer" style="color: var(--brass); text-decoration: underline;">our GitHub issues tracker</a>.
+                    </p>
+                </section>
+            </div>
+        </div>
+    </div>
+    """
+    return page_shell("Privacy Policy", content, current_user=current_user, active_route="/privacy")
+
+
+def pricing_view(current_user: Optional[UserModel] = None) -> str:
+    """Render the public Pricing and Limits page adhering to Archival Dossier tokens."""
+    cta_href = "/dashboard" if current_user else "/login"
+    content = f"""
+    <div style="max-width: 840px; margin: 3rem auto 0 auto; padding: 0 1rem;">
+        <div class="stratum-card" style="padding: 2.5rem 2.25rem;">
+            <div style="margin-bottom: 2rem; border-bottom: 1px solid var(--hairline); padding-bottom: 1.25rem; text-align: center;">
+                <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--brass); text-transform: uppercase; letter-spacing: 0.05em;">
+                    Plan Limits &amp; Subscriptions
+                </div>
+                <h1 style="font-size: 2rem; font-weight: 500; margin-top: 0.25rem; letter-spacing: -0.02em;">
+                    Pricing &amp; Limits
+                </h1>
+                <p style="color: var(--text-secondary); font-size: 0.95rem; margin-top: 0.5rem;">
+                    Clear, transparent plan limits for reverse-engineering repository architecture.
+                </p>
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.75rem; margin-bottom: 2rem;">
+                <!-- Free Plan -->
+                <div style="background: var(--panel-raised); border: 1px solid var(--hairline); border-radius: 4px; padding: 2rem 1.75rem; display: flex; flex-direction: column; justify-content: space-between;">
+                    <div>
+                        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--text-tertiary); text-transform: uppercase;">Tier</div>
+                        <h2 style="font-size: 1.5rem; font-weight: 600; margin: 0.25rem 0 1rem 0; color: var(--text-primary);">Free Plan</h2>
+                        <ul style="list-style: none; padding: 0; margin: 0 0 1.5rem 0; font-size: 0.9rem; line-height: 1.8; color: var(--text-secondary);">
+                            <li>&check; <strong>5 repository analyses</strong> per month</li>
+                            <li>&check; <strong>100 MB</strong> repository size cap</li>
+                            <li>&check; Full interactive dependency graph</li>
+                            <li>&check; Milestone code workspace &amp; quiz</li>
+                            <li>&check; Earn extra quota bonus via rewards</li>
+                        </ul>
+                    </div>
+                    <a href="{cta_href}" class="btn btn-secondary" style="width: 100%; justify-content: center; font-size: 0.9rem;">
+                        Get Started
+                    </a>
+                </div>
+
+                <!-- Pro Plan -->
+                <div style="background: var(--panel-raised); border: 1px solid var(--brass-border); border-radius: 4px; padding: 2rem 1.75rem; display: flex; flex-direction: column; justify-content: space-between; position: relative;">
+                    <div>
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--brass); text-transform: uppercase; font-weight: 600;">Monthly Subscription</div>
+                            <span class="badge" style="background: var(--brass-soft); color: var(--brass); font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; padding: 0.15rem 0.45rem; border: 1px solid var(--brass-border); border-radius: 3px;">PRO</span>
+                        </div>
+                        <h2 style="font-size: 1.5rem; font-weight: 600; margin: 0.25rem 0 1rem 0; color: var(--text-primary);">Pro Plan</h2>
+                        <ul style="list-style: none; padding: 0; margin: 0 0 1.5rem 0; font-size: 0.9rem; line-height: 1.8; color: var(--text-secondary);">
+                            <li>&check; <strong>Unlimited repository analyses</strong></li>
+                            <li>&check; Bypasses standard monthly quota</li>
+                            <li>&check; Priority processing queue</li>
+                            <li>&check; Billed monthly via secure Stripe checkout</li>
+                            <li>&check; Full access to all architectural tools</li>
+                        </ul>
+                    </div>
+                    <a href="{cta_href}" class="btn btn-primary" style="width: 100%; justify-content: center; font-size: 0.9rem;">
+                        Upgrade to Pro
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    """
+    return page_shell("Pricing and Limits", content, current_user=current_user, active_route="/pricing")
 
 
 def dashboard_view(

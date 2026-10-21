@@ -28,6 +28,8 @@ from app.ui.components import (
     dashboard_view,
     login_view,
     page_shell,
+    pricing_view,
+    privacy_view,
     progress_view,
     report_view,
     rewards_view,
@@ -954,3 +956,20 @@ def list_showcase(
         .all()
     )
     return HTMLResponse(content=showcase_view(jobs=showcase_jobs, current_user=user))
+
+
+@router.get("/privacy", response_class=HTMLResponse, summary="Public Privacy Policy")
+def show_privacy(
+    user: Optional[UserModel] = Depends(get_current_user_optional),
+):
+    """Render public Privacy Policy page."""
+    return HTMLResponse(content=privacy_view(current_user=user))
+
+
+@router.get("/pricing", response_class=HTMLResponse, summary="Public Pricing and Plan Limits")
+def show_pricing(
+    user: Optional[UserModel] = Depends(get_current_user_optional),
+):
+    """Render public Pricing and Plan Limits page."""
+    return HTMLResponse(content=pricing_view(current_user=user))
+

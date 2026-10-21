@@ -67,3 +67,30 @@ def test_showcase_empty_state_coming_soon(client):
     assert response.status_code == 200
     assert "coming soon" in response.text.lower()
     assert "/login" in response.text
+
+
+def test_privacy_page_public_and_sections(client):
+    """GET /privacy returns 200 without login and contains its section titles."""
+    response = client.get("/privacy")
+    assert response.status_code == 200
+    assert "Privacy Policy" in response.text
+    assert "Last updated" in response.text
+    assert "What we store" in response.text
+    assert "How long" in response.text
+    assert "Who processes your code" in response.text
+    assert "GitHub permissions" in response.text
+    assert "Deleting your data" in response.text
+    assert "To delete your data, open an issue or contact support" in response.text
+
+
+def test_pricing_page_public_and_sections(client):
+    """GET /pricing returns 200 without login and contains its section titles."""
+    response = client.get("/pricing")
+    assert response.status_code == 200
+    assert "Pricing" in response.text
+    assert "Free Plan" in response.text
+    assert "Pro Plan" in response.text
+    assert "5 repository analyses" in response.text
+    assert "100 MB" in response.text
+    assert "Unlimited repository analyses" in response.text
+
