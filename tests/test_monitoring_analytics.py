@@ -209,6 +209,19 @@ def test_sentry_before_send_redaction_payload_scrubbing():
     assert scrubbed_event["breadcrumbs"]["values"][0]["data"]["action"] == "submit_click"
 
 
+def test_sentry_init_disables_local_variables_and_default_pii():
+    """Verify init_sentry initializes sentry_sdk with include_local_variables=False and send_default_pii=False."""
+    with patch("sentry_sdk.init") as mock_init:
+        res = init_sentry(dsn="https://mock_key@sentry.io/123456", environment="production")
+        assert res is True
+        mock_init.assert_called_once()
+        _, kwargs = mock_init.call_args
+        assert kwargs.get("include_local_variables") is False
+        assert kwargs.get("send_default_pii") is False
+        assert kwargs.get("dsn") == "https://mock_key@sentry.io/123456"
+        assert kwargs.get("environment") == "production"
+
+
 # =========================================================================
 # 2. PostHog Product Analytics: 6 Mandatory Events & PII Absence Tests
 # =========================================================================

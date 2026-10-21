@@ -1271,22 +1271,19 @@ def privacy_view(current_user: Optional[UserModel] = None) -> str:
                 <section>
                     <h2 style="font-size: 1.25rem; color: var(--text-primary); margin-bottom: 0.5rem; font-weight: 600;">What we store</h2>
                     <p style="margin-bottom: 0.75rem;">
-                        When a repository is analyzed, Backtrace records repository metadata (GitHub URL, commit hash, clone status, and analysis timestamp) in the <code>repos</code> table.
+                        When a repository is analyzed, Backtrace records repository metadata: GitHub URL, commit hash, clone status, and analysis timestamp.
                     </p>
                     <p style="margin-bottom: 0.75rem;">
-                        Repository file text and cloned file trees are stored in the <code>ingestion_results</code> table. Before any file content is stored, secrets are scanned and redacted on a best-effort basis.
+                        Repository file text and cloned file trees are stored with secrets scanned and redacted on a best-effort basis before storage.
                     </p>
                     <p style="margin-bottom: 0.75rem;">
-                        User profile records are stored in the <code>users</code> table: GitHub ID, username, email, avatar. GitHub OAuth access tokens are not stored.
+                        User profile records are stored: GitHub ID, username, email, avatar. GitHub OAuth access tokens are not stored.
                     </p>
                     <p style="margin-bottom: 0.75rem;">
-                        Analysis jobs and execution state are stored in the <code>analysis_jobs</code> table: reports and graphs.
-                    </p>
-                    <p style="margin-bottom: 0.75rem;">
-                        Interactive milestone attempts are stored in the <code>milestone_attempts</code> table: your submitted milestone code and run output.
+                        Interactive milestone attempts are stored: your submitted milestone code and run output.
                     </p>
                     <p>
-                        The synthesized architecture report, interactive dependency graphs, guided milestones, and quiz questions are stored in the <code>analysis_jobs</code> table. System logs record run IDs, stage names and error types.
+                        Analysis jobs and execution state include the synthesized architecture report, interactive dependency graphs, guided milestones, and quiz questions. System logs record run IDs, stage names and error types.
                     </p>
                 </section>
 
