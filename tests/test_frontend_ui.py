@@ -3003,3 +3003,116 @@ def test_python_side_html_escaping_for_repo_file_and_symbols():
     assert escaped_payload in diff_ast_html
 
 
+def test_script_tag_breakout_prevention_in_report_and_embedded_json():
+    """
+    Threat Model: Verify that '</script><script>alert(1)</script>' injected as
+    a file path, function name, quiz text, and repo name cannot break out of HTML
+    <script> tags or emit unescaped closing script tags into the page.
+    Asserts that the count of '</script>' in the rendered report HTML exactly equals
+    the baseline count obtained with benign names.
+    """
+    from app.ui.components import report_view
+    from app.models.db import AnalysisJobModel
+
+    benign_job = AnalysisJobModel(
+        id="job_benign",
+        user_id=1,
+        repo_url="https://github.com/org/repo",
+        repo_name="repo",
+        status="completed",
+    )
+    benign_html = report_view(
+        job=benign_job,
+        raw_markdown="# Baseline Report\nClean content",
+        graph_data={
+            "nodes": [
+                {
+                    "id": "node_1",
+                    "path": "src/main.py",
+                    "label": "main.py",
+                    "exports": ["run_app"],
+                }
+            ],
+            "edges": [],
+            "milestones": [
+                {
+                    "tier": 1,
+                    "title": "Milestone 1",
+                    "architectural_role": "Core",
+                    "overview": "Overview",
+                    "domain_composition": "1 file",
+                    "included_files": ["src/main.py"],
+                    "exported_symbols": ["run_app"],
+                }
+            ],
+        },
+        quiz_data={
+            "questions": [
+                {
+                    "question": "What is Python?",
+                    "options": ["Programming Language", "Reptile"],
+                    "answer": "Programming Language",
+                    "explanation": "Python is a language.",
+                }
+            ]
+        },
+    )
+    baseline_script_count = benign_html.count("</script>")
+
+    payload = "</script><script>alert(1)</script>"
+
+    malicious_job = AnalysisJobModel(
+        id="job_malicious",
+        user_id=1,
+        repo_url=f"https://github.com/org/{payload}",
+        repo_name=payload,
+        status="completed",
+    )
+    malicious_html = report_view(
+        job=malicious_job,
+        raw_markdown=f"# Exploit Report\n{payload}",
+        graph_data={
+            "nodes": [
+                {
+                    "id": f"node_{payload}",
+                    "path": f"src/{payload}/main.py",
+                    "label": payload,
+                    "exports": [payload],
+                }
+            ],
+            "edges": [],
+            "milestones": [
+                {
+                    "tier": 1,
+                    "title": payload,
+                    "architectural_role": payload,
+                    "overview": payload,
+                    "domain_composition": payload,
+                    "included_files": [f"src/{payload}/main.py"],
+                    "exported_symbols": [payload],
+                }
+            ],
+        },
+        quiz_data={
+            "questions": [
+                {
+                    "question": payload,
+                    "options": [payload],
+                    "answer": payload,
+                    "explanation": payload,
+                }
+            ]
+        },
+    )
+
+    # 1. Total closing script tags must match baseline exactly (zero unescaped closing script tags injected)
+    assert malicious_html.count("</script>") == baseline_script_count
+
+    # 2. Raw alert payload must never appear inside an unescaped script tag
+    assert "<script>alert(1)</script>" not in malicious_html
+
+    # 3. JSON script blocks must encode < as \\u003c rather than raw <
+    assert "\\u003c/script\\u003e" in malicious_html or "&lt;/script&gt;" in malicious_html
+
+
+

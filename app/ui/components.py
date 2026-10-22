@@ -25,6 +25,20 @@ from app.ui.sanitizer import sanitize_text, render_safe_markdown, truncate_text_
 SANDBOX_DISABLED_BANNER_TEXT = "Code execution is turned off on this free demo. Running user code safely needs an isolated sandbox server, which this host can't provide. Everything else works, and structure checks still run. See the full run-and-grade flow in the video."
 
 
+def _safe_script_json_dumps(obj: Any) -> str:
+    """Serializes obj to a JSON string safe for embedding inside an HTML <script> block,
+    escaping '<', '>', '&', and Unicode line/paragraph separators U+2028 and U+2029.
+    """
+    return (
+        json.dumps(obj)
+        .replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+        .replace("&", "\\u0026")
+        .replace("\u2028", "\\u2028")
+        .replace("\u2029", "\\u2029")
+    )
+
+
 def get_narration_source(
     job: Any = None,
     raw_markdown: Optional[str] = None,
@@ -4884,10 +4898,11 @@ def report_view(
     """
 
     # Extra Interactive Scripts & Graph Logic
-    graph_nodes_json = json.dumps(nodes).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
-    graph_edges_json = json.dumps(edges).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
-    fill_files_map_json = json.dumps(all_fill_files_map).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
-    sandbox_banner_js_val = json.dumps(SANDBOX_DISABLED_BANNER_TEXT) if not sandbox_enabled else '""'
+    graph_nodes_json = _safe_script_json_dumps(nodes)
+    graph_edges_json = _safe_script_json_dumps(edges)
+    fill_files_map_json = _safe_script_json_dumps(all_fill_files_map)
+    sandbox_banner_js_val = _safe_script_json_dumps(SANDBOX_DISABLED_BANNER_TEXT) if not sandbox_enabled else '""'
+    demo_video_url_json = _safe_script_json_dumps(demo_video_url)
 
     if is_showcase:
         extra_scripts = f"""
@@ -5060,7 +5075,7 @@ def report_view(
         const GRAPH_NODES = {graph_nodes_json};
         const GRAPH_EDGES = {graph_edges_json};
         const ALL_FILL_FILES = {fill_files_map_json};
-        const DEMO_VIDEO_URL = {json.dumps(demo_video_url)};
+        const DEMO_VIDEO_URL = {demo_video_url_json};
         const SANDBOX_DISABLED_BANNER_TEXT = {sandbox_banner_js_val};
         window.fillFilesData = ALL_FILL_FILES;
         window.cmEditors = {{}};
