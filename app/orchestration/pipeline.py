@@ -262,6 +262,7 @@ class PipelineOrchestrator:
             elapsed = time.time() - start_time
             metrics_collector.record_pipeline_run(active_run_id, True, elapsed)
 
+            final_narration_src = getattr(synth_report, "narration_source", "template") if synth_report else "template"
             return PipelineResult(
                 success=True,
                 repo_name=repo_name,
@@ -274,6 +275,7 @@ class PipelineOrchestrator:
                 uncategorized_files=uncategorized_files,
                 run_id=active_run_id,
                 execution_time_seconds=elapsed,
+                narration_source=final_narration_src,
             )
 
         except Exception as e:

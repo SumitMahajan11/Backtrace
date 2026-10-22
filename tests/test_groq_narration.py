@@ -478,3 +478,15 @@ def test_progress_page_shows_neutral_label_for_running_job(mock_user):
     html = progress_view(running_job, mock_user)
     assert "Step-by-step narration" in html
     assert "LLM Step-by-Step Narration" not in html
+
+
+def test_narration_time_budget_env_var(monkeypatch):
+    """Default is 60; setting the env var NARRATION_TIME_BUDGET_SECONDS to 900 gives 900."""
+    monkeypatch.delenv("NARRATION_TIME_BUDGET_SECONDS", raising=False)
+    engine_default = NarrationEngine()
+    assert engine_default.time_budget == 60
+
+    monkeypatch.setenv("NARRATION_TIME_BUDGET_SECONDS", "900")
+    engine_custom = NarrationEngine()
+    assert engine_custom.time_budget == 900
+

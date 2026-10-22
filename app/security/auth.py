@@ -47,11 +47,12 @@ DEFAULT_ALLOWED_REDIRECT_HOSTS: Set[str] = {
     "127.0.0.1",
     "backtrace.dev",
     "app.backtrace.dev",
+    "backtrace-pbsk.onrender.com",
 }
 
 
 def get_allowed_redirect_hosts() -> Set[str]:
-    """Parses configured allowed redirect hosts from environment."""
+    """Parses configured allowed redirect hosts from environment and settings."""
     env_hosts = os.getenv("ALLOWED_REDIRECT_HOSTS", "")
     hosts = set(DEFAULT_ALLOWED_REDIRECT_HOSTS)
     if env_hosts:
@@ -59,6 +60,30 @@ def get_allowed_redirect_hosts() -> Set[str]:
             cleaned = h.strip().lower()
             if cleaned:
                 hosts.add(cleaned)
+
+    # Automatically trust hostname configured for GitHub OAuth redirect URI
+    for var in ("GITHUB_REDIRECT_URI", "GITHUB_FRONTEND_REDIRECT_URI"):
+        val = os.getenv(var)
+        if val:
+            try:
+                parsed = urlparse(val)
+                if parsed.hostname:
+                    hosts.add(parsed.hostname.lower())
+            except Exception:
+                pass
+
+    try:
+        from app.core.config import get_settings
+        settings = get_settings()
+        for attr in ("GITHUB_REDIRECT_URI", "GITHUB_FRONTEND_REDIRECT_URI"):
+            uri_val = getattr(settings, attr, None)
+            if uri_val and isinstance(uri_val, str):
+                parsed = urlparse(uri_val)
+                if parsed.hostname:
+                    hosts.add(parsed.hostname.lower())
+    except Exception:
+        pass
+
     return hosts
 
 
@@ -207,13 +232,17 @@ class OAuthStateStore:
         self._states: Dict[str, Tuple[float, Optional[str]]] = {}
         self._lock = threading.Lock()
 
-    def generate_state(self, redirect_url: Optional[str] = None) -> str:
-        """Generates a secure state token, associates optional redirect_url, and stores with expiry."""
+    def generate_state(
+        self,
+        redirect_url: Optional[str] = None,
+        callback_uri: Optional[str] = None,
+    ) -> str:
+        """Generates a secure state token, associates optional redirect_url and callback_uri, and stores with expiry."""
         state = generate_secure_random_token(32)
         expiry = time.time() + self.ttl_seconds
         with self._lock:
             self._cleanup_expired()
-            self._states[state] = (expiry, redirect_url)
+            self._states[state] = (expiry, redirect_url, callback_uri)
         return state
 
     def validate_and_consume_state(self, state: str) -> Tuple[bool, Optional[str]]:
@@ -221,24 +250,36 @@ class OAuthStateStore:
         Validates state token and immediately deletes it (single-use).
         Returns (is_valid, optional_redirect_url).
         """
+        is_valid, redirect_url, _ = self.validate_and_consume_state_with_callback(state)
+        return is_valid, redirect_url
+
+    def validate_and_consume_state_with_callback(
+        self, state: str
+    ) -> Tuple[bool, Optional[str], Optional[str]]:
+        """
+        Validates state token and immediately deletes it (single-use).
+        Returns (is_valid, optional_redirect_url, optional_callback_uri).
+        """
         if not state:
-            return False, None
+            return False, None, None
 
         now = time.time()
         with self._lock:
             self._cleanup_expired()
             record = self._states.pop(state, None)
             if not record:
-                return False, None
-            expiry, redirect_url = record
+                return False, None, None
+            expiry = record[0]
+            redirect_url = record[1] if len(record) > 1 else None
+            callback_uri = record[2] if len(record) > 2 else None
             if now > expiry:
-                return False, None
-            return True, redirect_url
+                return False, None, None
+            return True, redirect_url, callback_uri
 
     def _cleanup_expired(self) -> None:
         """Removes expired state entries."""
         now = time.time()
-        expired_keys = [k for k, (exp, _) in self._states.items() if now > exp]
+        expired_keys = [k for k, record in self._states.items() if now > record[0]]
         for k in expired_keys:
             self._states.pop(k, None)
 

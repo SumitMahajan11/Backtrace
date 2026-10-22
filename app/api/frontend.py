@@ -40,6 +40,9 @@ from app.ui.sanitizer import sanitize_text
 
 router = APIRouter(tags=["Frontend UI"])
 
+_RUNNING_JOB_THREADS: Dict[str, threading.Thread] = {}
+_RUNNING_JOB_LOCK = threading.Lock()
+
 
 @router.get("/", summary="Root Redirect")
 def root_redirect(
@@ -482,11 +485,17 @@ async def analysis_progress_events(
     target_commit_ref = getattr(job, "commit_ref", None)
     target_subpath = getattr(job, "subpath", None)
     active_user_id = int(user.id)
+    initial_exec_sec = float(getattr(job, "execution_time_seconds", 0.0) or 0.0)
+    initial_failed_stage = str(getattr(job, "failed_stage", None) or "pipeline")
+    initial_error_msg = str(getattr(job, "error_message", None) or "Analysis job previously failed.")
 
     async def event_generator() -> AsyncGenerator[str, None]:
         if job_status == "completed":
-            exec_sec = float(getattr(job, "execution_time_seconds", 0.0) or 0.0)
-            yield f"data: {json.dumps({'type': 'completed', 'job_id': job_id, 'percentage': 100, 'execution_time_seconds': exec_sec})}\n\n"
+            yield f"data: {json.dumps({'type': 'completed', 'job_id': job_id, 'percentage': 100, 'execution_time_seconds': initial_exec_sec})}\n\n"
+            return
+
+        if job_status == "failed":
+            yield f"data: {json.dumps({'type': 'failed', 'job_id': job_id, 'failed_stage': initial_failed_stage, 'message': initial_error_msg, 'execution_time_seconds': initial_exec_sec})}\n\n"
             return
 
         import time
@@ -621,6 +630,15 @@ async def analysis_progress_events(
                             quiz_data={"questions": [{"question": "Test question?", "options": ["A", "B"], "answer": "A"}]},
                             execution_time_seconds=exec_duration,
                         )
+                    loop.call_soon_threadsafe(
+                        event_queue.put_nowait,
+                        {
+                            "type": "completed",
+                            "job_id": job_id,
+                            "percentage": 100,
+                            "execution_time_seconds": exec_duration,
+                        },
+                    )
                     loop.call_soon_threadsafe(event_queue.put_nowait, None)
                     return
 
@@ -666,8 +684,10 @@ async def analysis_progress_events(
                     file_paths=file_paths,
                     file_contents=ingest_res.file_contents,
                     progress_callback=on_pipeline_event,
+                    heartbeat_callback=lambda: loop.call_soon_threadsafe(
+                        event_queue.put_nowait, {"type": "heartbeat"}
+                    ),
                 )
-
 
                 # 4. Format Real Report, Graph, and Quiz
                 md_report = ""
@@ -722,6 +742,28 @@ async def analysis_progress_events(
                         execution_time_seconds=exec_duration,
                         resolved_sha=resolved_head_sha,
                     )
+
+                if not pipeline_res.success:
+                    fail_err = pipeline_res.error or "Pipeline execution failed."
+                    from app.monitoring.posthog import analytics
+                    analytics.capture_analysis_failed(
+                        user_id=active_user_id,
+                        job_id=job_id,
+                        error_category="pipeline_error",
+                    )
+                    loop.call_soon_threadsafe(
+                        event_queue.put_nowait,
+                        {
+                            "type": "failed",
+                            "job_id": job_id,
+                            "failed_stage": failed_stage_val or current_stage_key,
+                            "message": fail_err,
+                            "execution_time_seconds": exec_duration,
+                        }
+                    )
+                    loop.call_soon_threadsafe(event_queue.put_nowait, None)
+                    return
+
                 completed_stages.add("stage_9")
                 loop.call_soon_threadsafe(
                     event_queue.put_nowait,
@@ -740,18 +782,20 @@ async def analysis_progress_events(
                     make_stage_complete_payload("stage_10"),
                 )
                 from app.monitoring.posthog import analytics
-                if pipeline_res.success:
-                    analytics.capture_analysis_completed(
-                        user_id=active_user_id,
-                        job_id=job_id,
-                        duration_seconds=exec_duration,
-                    )
-                else:
-                    analytics.capture_analysis_failed(
-                        user_id=active_user_id,
-                        job_id=job_id,
-                        error_category="pipeline_error",
-                    )
+                analytics.capture_analysis_completed(
+                    user_id=active_user_id,
+                    job_id=job_id,
+                    duration_seconds=exec_duration,
+                )
+                loop.call_soon_threadsafe(
+                    event_queue.put_nowait,
+                    {
+                        "type": "completed",
+                        "job_id": job_id,
+                        "percentage": 100,
+                        "execution_time_seconds": exec_duration,
+                    },
+                )
                 loop.call_soon_threadsafe(event_queue.put_nowait, None)
 
             except Exception as exc:
@@ -792,35 +836,110 @@ async def analysis_progress_events(
                     }
                 )
                 loop.call_soon_threadsafe(event_queue.put_nowait, None)
+            finally:
+                with _RUNNING_JOB_LOCK:
+                    if _RUNNING_JOB_THREADS.get(job_id) is threading.current_thread():
+                        _RUNNING_JOB_THREADS.pop(job_id, None)
 
-        # Launch background pipeline thread
-        t = threading.Thread(target=run_full_pipeline_sync, daemon=True)
-        t.start()
+        # Launch background pipeline thread (guaranteeing single worker per job)
+        with _RUNNING_JOB_LOCK:
+            existing_thread = _RUNNING_JOB_THREADS.get(job_id)
+            if existing_thread is None or not existing_thread.is_alive():
+                t = threading.Thread(target=run_full_pipeline_sync, daemon=True)
+                _RUNNING_JOB_THREADS[job_id] = t
+                t.start()
+            else:
+                t = existing_thread
 
         # Stream SSE events
         emitted_completed_stages = set()
+        last_event_type = None
+        last_ping_time = time.time()
         while True:
             if await request.is_disconnected():
                 break
             try:
-                item = await asyncio.wait_for(event_queue.get(), timeout=0.25)
+                item = await asyncio.wait_for(event_queue.get(), timeout=1.0)
                 if item is None:
                     break
-                if isinstance(item, dict) and item.get("type") == "stage_complete":
-                    s_key = item.get("stage")
-                    if s_key in emitted_completed_stages:
+                if isinstance(item, dict):
+                    msg_type = item.get("type")
+                    if msg_type == "heartbeat":
+                        yield ": ping\n\n"
                         continue
-                    emitted_completed_stages.add(s_key)
+                    if msg_type == "stage_complete":
+                        s_key = item.get("stage")
+                        if s_key in emitted_completed_stages:
+                            continue
+                        emitted_completed_stages.add(s_key)
+                    last_event_type = msg_type
                 yield f"data: {json.dumps(item)}\n\n"
             except asyncio.TimeoutError:
+                now = time.time()
+                if now - last_ping_time >= 5.0:
+                    last_ping_time = now
+                    yield ": ping\n\n"
                 if not t.is_alive() and event_queue.empty():
                     break
                 continue
 
-        final_duration = round(time.time() - start_time, 3)
-        yield f"data: {json.dumps({'type': 'completed', 'job_id': job_id, 'percentage': 100, 'execution_time_seconds': final_duration})}\n\n"
+        # Terminal event resolution fallback if not already emitted in stream
+        if last_event_type not in ("completed", "failed"):
+            from app.db.session import SessionLocal
+            with SessionLocal() as db_session:
+                final_job = AnalysisJobRepository.get_job_by_id(db_session, job_id)
+                final_status = str(final_job.status) if final_job else "unknown"
+                final_err = getattr(final_job, "error_message", None) if final_job else None
+                final_failed_stage = getattr(final_job, "failed_stage", None) if final_job else None
+                final_duration = float(getattr(final_job, "execution_time_seconds", 0.0) or round(time.time() - start_time, 3))
 
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+            if final_status == "completed":
+                yield f"data: {json.dumps({'type': 'completed', 'job_id': job_id, 'percentage': 100, 'execution_time_seconds': final_duration})}\n\n"
+            elif final_status == "failed":
+                yield f"data: {json.dumps({'type': 'failed', 'job_id': job_id, 'failed_stage': final_failed_stage or 'pipeline', 'message': final_err or 'Pipeline execution failed.', 'execution_time_seconds': final_duration})}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@router.get("/api/analyses/{job_id}/status", summary="Get Analysis Job Status (API)")
+def get_analysis_status_api(
+    job_id: str,
+    user: Optional[UserModel] = Depends(get_current_user_optional),
+    session: Session = Depends(get_db),
+):
+    """Returns JSON status of an analysis job for client polling fallback."""
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required to view analysis status",
+        )
+    job = AnalysisJobRepository.get_job_by_id(session, job_id)
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Analysis job not found",
+        )
+    if job.user_id != user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access forbidden: You do not own this analysis job",
+        )
+    return {
+        "job_id": job.id,
+        "status": job.status,
+        "failed_stage": job.failed_stage,
+        "error_message": job.error_message,
+        "execution_time_seconds": job.execution_time_seconds,
+        "narration_source": getattr(job, "narration_source", "template"),
+    }
 
 
 @router.get("/report/{job_id}", response_class=HTMLResponse, summary="Analysis Report View")

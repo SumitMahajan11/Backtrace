@@ -2,6 +2,8 @@
 
 from collections import Counter, defaultdict
 import json
+import logging
+import os
 import re
 from typing import Callable, Dict, List, Optional, Set, Tuple
 from app.sequence.schema import (
@@ -34,8 +36,19 @@ NarrationLLMCallable = Callable[[str, str], str]  # (system_prompt, user_prompt)
 class NarrationEngine:
     """Generates pedagogical step-by-step build sequence narratives from Stage C scored ordering results."""
 
-    def __init__(self, time_budget: float = 60.0):
-        self.time_budget = time_budget
+    def __init__(self, time_budget: Optional[float] = None):
+        if time_budget is not None:
+            self.time_budget = float(time_budget)
+        else:
+            env_budget = os.getenv("NARRATION_TIME_BUDGET_SECONDS")
+            if env_budget is not None and env_budget.strip():
+                try:
+                    val = float(env_budget)
+                    self.time_budget = int(val) if val.is_integer() else val
+                except ValueError:
+                    self.time_budget = 60
+            else:
+                self.time_budget = 60
         self._provider_failed: bool = False
         self._provider_calls: int = 0
         self._provider_successes: int = 0

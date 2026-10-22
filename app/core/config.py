@@ -50,6 +50,7 @@ class Settings(BaseSettings):
     GITHUB_CLIENT_ID: Optional[str] = None
     GITHUB_CLIENT_SECRET: Optional[str] = None
     GITHUB_REDIRECT_URI: str = "http://localhost:8000/auth/github/callback"
+    GITHUB_FRONTEND_REDIRECT_URI: Optional[str] = None
     GITHUB_TOKEN: Optional[str] = None
     GITHUB_PAT: Optional[str] = None
 
@@ -95,6 +96,13 @@ class Settings(BaseSettings):
     # Ingestion Limits
     MAX_REPO_MB: int = 200
 
+    # LLM & Narration Settings
+    LLM_PROVIDER: Optional[str] = None
+    OLLAMA_BASE_URL: str = "http://127.0.0.1:11434"
+    OLLAMA_MODEL: str = "llama3.2:3b"
+    OLLAMA_TIMEOUT: float = 120.0
+    NARRATION_TIME_BUDGET_SECONDS: float = 60.0
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
@@ -122,6 +130,16 @@ class Settings(BaseSettings):
             return [o.strip() for o in v.split(",") if o.strip()]
         return v
 
+    @model_validator(mode="before")
+    @classmethod
+    def populate_redirect_uri_fallback(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            r_uri = data.get("GITHUB_REDIRECT_URI")
+            fe_uri = data.get("GITHUB_FRONTEND_REDIRECT_URI")
+            if (not r_uri or r_uri == "http://localhost:8000/auth/github/callback") and fe_uri:
+                data["GITHUB_REDIRECT_URI"] = fe_uri
+        return data
+
     @model_validator(mode="after")
     def validate_production_configuration(self) -> "Settings":
         """Strict fail-fast validation when ENVIRONMENT=production."""
@@ -142,8 +160,12 @@ class Settings(BaseSettings):
             errors.append("GITHUB_CLIENT_ID is required in production and cannot be empty")
         if not self.GITHUB_CLIENT_SECRET or not self.GITHUB_CLIENT_SECRET.strip():
             errors.append("GITHUB_CLIENT_SECRET is required in production and cannot be empty")
-        if not self.GITHUB_REDIRECT_URI or "localhost" in self.GITHUB_REDIRECT_URI:
-            errors.append("GITHUB_REDIRECT_URI in production cannot point to localhost")
+        if (
+            not self.GITHUB_REDIRECT_URI
+            or "localhost" in self.GITHUB_REDIRECT_URI
+            or "127.0.0.1" in self.GITHUB_REDIRECT_URI
+        ):
+            errors.append("GITHUB_REDIRECT_URI in production cannot point to localhost or 127.0.0.1")
 
         # 2. JWT Configuration
         if len(self.JWT_SECRET_KEY.strip()) < 32:

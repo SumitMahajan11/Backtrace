@@ -42,4 +42,5 @@ class PipelineResult(BaseModel):
     failed_stage: Optional[str] = None
     error: Optional[str] = None
     execution_time_seconds: float = 0.0
+    narration_source: str = "template"
 

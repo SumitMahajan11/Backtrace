@@ -2274,12 +2274,27 @@ def progress_view(
                     if (statusDesc) statusDesc.textContent = "All 11 tier layers synthesized. Finalizing architecture report...";
                     
                     addLogEntry(`Analysis job synthesis completed successfully. Redirecting to architecture report...`, "complete");
+                    
+                    isJobTerminated = true;
+                    if (pollingInterval) {{
+                        clearInterval(pollingInterval);
+                        pollingInterval = null;
+                    }}
+                    if (timerInterval) {{
+                        clearInterval(timerInterval);
+                        timerInterval = null;
+                    }}
                     eventSource.close();
                     
                     setTimeout(() => {{
                         window.location.href = `/report/${{jobId}}`;
                     }}, 1200);
                 }} else if (data.type === "failed") {{
+                    isJobTerminated = true;
+                    if (pollingInterval) {{
+                        clearInterval(pollingInterval);
+                        pollingInterval = null;
+                    }}
                     if (timerInterval) {{
                         clearInterval(timerInterval);
                         timerInterval = null;
@@ -2310,8 +2325,54 @@ def progress_view(
             }}
         }};
 
+        let pollingInterval = null;
+        let isJobTerminated = (initialJobStatus === "completed" || initialJobStatus === "failed");
+
+        function pollJobStatus() {{
+            if (isJobTerminated) return;
+            fetch(`/api/analyses/${{jobId}}/status`)
+                .then(r => r.json())
+                .then(data => {{
+                    if (!data) return;
+                    if (data.status === "completed") {{
+                        isJobTerminated = true;
+                        if (pollingInterval) clearInterval(pollingInterval);
+                        if (timerInterval) clearInterval(timerInterval);
+                        if (progressBar) progressBar.style.width = "100%";
+                        if (pctLabel) pctLabel.textContent = "100%";
+                        if (stageCounter) stageCounter.textContent = "11";
+                        addLogEntry("Analysis completed (verified via background status check). Redirecting...", "complete");
+                        setTimeout(() => {{
+                            window.location.href = `/report/${{jobId}}`;
+                        }}, 800);
+                    }} else if (data.status === "failed") {{
+                        isJobTerminated = true;
+                        if (pollingInterval) clearInterval(pollingInterval);
+                        if (timerInterval) clearInterval(timerInterval);
+                        if (statusHeader) statusHeader.innerHTML = '<span class="badge badge-failed">ANALYSIS JOB FAILED</span>';
+                        const err = data.error_message || "Pipeline encountered fatal execution failure.";
+                        if (statusDesc) statusDesc.textContent = err;
+                        addLogEntry(`[ERROR] ${{err}}`, "error");
+                        const failureBanner = document.getElementById("pipeline-failure-banner");
+                        const failureMsg = document.getElementById("failure-error-message");
+                        if (failureBanner && failureMsg) {{
+                            failureMsg.textContent = err;
+                            failureMsg.title = err;
+                            failureBanner.style.display = "flex";
+                        }}
+                    }}
+                }})
+                .catch(() => {{}});
+        }}
+
         eventSource.onerror = function() {{
-            addLogEntry("SSE stream disconnected or complete. Polling status...", "info");
+            if (!isJobTerminated) {{
+                addLogEntry("SSE stream disconnected or stalled. Polling analysis status...", "info");
+                if (!pollingInterval) {{
+                    pollJobStatus();
+                    pollingInterval = setInterval(pollJobStatus, 2500);
+                }}
+            }}
         }};
     </script>
     """
