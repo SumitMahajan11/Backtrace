@@ -2568,10 +2568,10 @@ def test_starter_code_unavailable_fallback_notice(client, create_user, test_db):
     assert "Starter code isn&#39;t available for this file." in html or "Starter code isn't available for this file." in html
 
 
-def test_pipeline_clone_error_shows_html_escaped_invalid_url_error(client, test_db, create_user, monkeypatch):
+def test_pipeline_clone_error_stores_raw_invalid_url_error_in_db_and_sse(client, test_db, create_user, monkeypatch):
     """
-    Verifies that when ingestion raises InvalidURLError, the specific error message
-    is HTML-escaped and presented to the user instead of the generic clone error message.
+    Verifies that when ingestion raises InvalidURLError, the raw error message
+    is stored in the DB and sent via SSE instead of the generic clone error message.
     """
     import html
     from app.models.ingestion import InvalidURLError
