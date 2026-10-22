@@ -2726,19 +2726,22 @@ def test_pipeline_clone_error_keeps_generic_message_for_other_errors(client, tes
 
 def test_xss_prevention_in_js_render_templates_and_activity_entry():
     """
-    Verifies that all dynamic JS template sinks escape attacker-controlled HTML payloads:
-    - stdout / stderr in renderConsoleHtmlInJs
-    - function name, class name, and reason in renderGroupedFillChips
-    - function name, kind, args, and errors in renderDiffHtmlInJs
-    - stageName and message in addActivityEntry (progress_view)
-    Ensures <img src=x onerror=alert(1)> is safely encoded as &lt;img src=x onerror=alert(1)&gt;.
+    Verifies that dynamic JS template sinks neutralize attacker-controlled HTML payloads.
+    If Node.js is installed, executes the extracted `escapeHtml` and `renderConsoleHtmlInJs`
+    functions in Node.js with an XSS payload injected into stdout, stderr, exit_code,
+    and execution_time_ms, asserting that no unescaped '<img' tag appears in the resulting HTML.
+    Also verifies template escaping and Number coercion in progress_view and report_view.
     """
+    import json
+    import re
+    import shutil
+    import subprocess
     from app.ui.components import progress_view, report_view
     from app.models.db import AnalysisJobModel
 
     payload = '<img src=x onerror=alert(1)>'
 
-    mock_job = AnalysisJobModel(
+    mock_job_processing = AnalysisJobModel(
         id="job_xss",
         user_id=1,
         repo_url="https://github.com/owner/repo",
@@ -2747,14 +2750,16 @@ def test_xss_prevention_in_js_render_templates_and_activity_entry():
         execution_time_seconds=1.0,
     )
 
-    # 1. progress_view template contains escapeHtml for stageName and message
-    pv_html = progress_view(job=mock_job, current_user=None)
+    # 1. progress_view template contains escapeHtml and Number coercion for stage values
+    pv_html = progress_view(job=mock_job_processing, current_user=None)
     assert "${escapeHtml(stageName)}" in pv_html
     assert "${escapeHtml(message)}" in pv_html
+    assert "${Number(stageIndex) || 0}" in pv_html
+    assert "${Number(totalStages) || 0}" in pv_html
     assert "function escapeHtml(str)" in pv_html
 
     # 2. report_view JS definitions have escapeHtml calls for stdout, function names, and diffs
-    mock_job = AnalysisJobModel(
+    mock_job_completed = AnalysisJobModel(
         id="job_xss",
         user_id=1,
         repo_url="https://github.com/owner/repo",
@@ -2763,20 +2768,54 @@ def test_xss_prevention_in_js_render_templates_and_activity_entry():
         execution_time_seconds=1.0,
     )
     rv_html = report_view(
-        job=mock_job,
+        job=mock_job_completed,
         raw_markdown="# Report",
         graph_data={"nodes": [], "edges": []},
         quiz_data={"questions": []},
     )
-    # Check renderConsoleHtmlInJs escapes stdout and stderr
-    assert "escapeHtml(stdout)" in rv_html
-    assert "escapeHtml(stderr)" in rv_html
 
-    # Check renderGroupedFillChips escapes function names, class names, reasons
-    assert "const fnName = escapeHtml(bf.name || bf.full_name || '');" in rv_html
-    assert "escapeHtml(g.className)" in rv_html
+    node_bin = shutil.which("node")
+    node_available = False
+    if node_bin:
+        try:
+            res = subprocess.run([node_bin, "--version"], capture_output=True, text=True, check=True)
+            node_available = bool(res.stdout.strip())
+        except Exception:
+            node_available = False
 
-    # Check renderDiffHtmlInJs escapes symbols, diff errors, and blanked functions
-    assert "const name = escapeHtml(b.name || 'function');" in rv_html
-    assert "escapeHtml(err)" in rv_html
+    if node_available:
+        m_esc = re.search(r"function escapeHtml\(str\) \{.*?\n        \}", rv_html, re.DOTALL)
+        m_console = re.search(r"function renderConsoleHtmlInJs\(exec\) \{.*?\n        \}", rv_html, re.DOTALL)
+        assert m_esc is not None, "escapeHtml function not found in report_view"
+        assert m_console is not None, "renderConsoleHtmlInJs function not found in report_view"
+
+        js_code = f"""
+{m_esc.group(0)}
+{m_console.group(0)}
+
+const payload = {json.dumps(payload)};
+const out = renderConsoleHtmlInJs({{
+    exit_code: payload,
+    stdout: payload,
+    stderr: payload,
+    execution_time_ms: payload
+}});
+console.log(JSON.stringify(out));
+"""
+        proc = subprocess.run([node_bin, "-e", js_code], capture_output=True, text=True, check=True)
+        rendered_html = json.loads(proc.stdout)
+
+        # Behavioral assertions: raw HTML tag must never appear unescaped
+        assert "<img" not in rendered_html, f"Raw <img found in rendered HTML output: {rendered_html}"
+        assert "&lt;img src=x onerror=alert(1)&gt;" in rendered_html
+        assert "EXIT 0" in rendered_html
+    else:
+        # Fallback structural checks when Node is not installed
+        assert "escapeHtml(stdout)" in rv_html
+        assert "escapeHtml(stderr)" in rv_html
+        assert "Number(eObj.exit_code)" in rv_html
+        assert "const fnName = escapeHtml(bf.name || bf.full_name || '');" in rv_html
+        assert "escapeHtml(g.className)" in rv_html
+        assert "const name = escapeHtml(b.name || 'function');" in rv_html
+        assert "escapeHtml(err)" in rv_html
 

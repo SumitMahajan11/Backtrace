@@ -2117,7 +2117,7 @@ def progress_view(
 
         function addActivityEntry(stageIndex, totalStages, stageName, message, isComplete=false) {{
             if (!activityLogBox) return;
-            const existingId = `activity-stage-${{stageIndex}}`;
+            const existingId = `activity-stage-${{Number(stageIndex) || 0}}`;
             let item = document.getElementById(existingId);
             if (!item) {{
                 item = document.createElement("div");
@@ -2151,7 +2151,7 @@ def progress_view(
                     </div>
                     <div>
                         <div style="font-size: 0.875rem; font-weight: 600; color: var(--text-primary);">
-                            Stage ${{stageIndex}} of ${{totalStages}} — ${{escapeHtml(stageName)}}
+                            Stage ${{Number(stageIndex) || 0}} of ${{Number(totalStages) || 0}} — ${{escapeHtml(stageName)}}
                         </div>
                         <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.15rem;">
                             ${{escapeHtml(message)}}
@@ -5186,7 +5186,7 @@ def report_view(
                 return '<span style="font-size: 0.75rem; color: var(--text-tertiary); font-style: italic;">' + escapeHtml(reason || 'File contains no function bodies to blank.') + '</span>';
             }}
 
-            const totalCount = blankedFunctions.length;
+            const totalCount = Number(blankedFunctions.length) || 0;
             const shouldCollapse = totalCount > 15;
 
             const groupOrder = [];
@@ -5209,7 +5209,7 @@ def report_view(
             let html = '';
             groupOrder.forEach(function(key) {{
                 const g = groups[key];
-                const count = g.items.length;
+                const count = Number(g.items.length) || 0;
                 const groupTitle = g.isClass ? ('class ' + escapeHtml(g.className)) : 'Top-level Functions';
                 const groupCountLabel = g.isClass ? (count + (count === 1 ? ' method' : ' methods')) : (count + (count === 1 ? ' function' : ' functions'));
                 const icon = g.isClass ? '🏛️' : '📁';
@@ -5264,8 +5264,8 @@ def report_view(
             // Handle Fill the Blanks grading results specially
             if (gradingMethod === 'fill_the_blanks' || diff.blank_details || diff.blanked_evaluated !== undefined) {{
                 const blankDetails = diff.blank_details || [];
-                const blankedCount = diff.blanked_evaluated !== undefined ? diff.blanked_evaluated : blankDetails.length;
-                const implementedCount = diff.implemented_count !== undefined ? diff.implemented_count : blankDetails.filter(b => b.status === 'implemented').length;
+                const blankedCount = Number(diff.blanked_evaluated !== undefined ? diff.blanked_evaluated : blankDetails.length) || 0;
+                const implementedCount = Number(diff.implemented_count !== undefined ? diff.implemented_count : blankDetails.filter(b => b.status === 'implemented').length) || 0;
 
                 let implementedPills = '';
                 let stubPills = '';
@@ -5329,9 +5329,9 @@ def report_view(
                 extraPills += '<span style="display: inline-flex; align-items: center; gap: 0.3rem; background: var(--panel-raised); border: 1px solid var(--hairline); color: var(--text-secondary); padding: 0.2rem 0.5rem; border-radius: 3px; font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.75rem;">+ ' + name + ' <span style="opacity: 0.75; font-size: 0.6875rem;">(' + kind + ')</span></span> ';
             }});
 
-            const totalExpected = present.length + missing.length;
+            const totalExpected = Number(present.length + missing.length) || 0;
             const isAllMatched = (missing.length === 0 && totalExpected > 0);
-            const matchSummary = totalExpected > 0 ? (present.length + '/' + totalExpected + ' symbols matched' + (isAllMatched ? ' ✓' : '')) : (present.length + ' matched');
+            const matchSummary = totalExpected > 0 ? ((Number(present.length) || 0) + '/' + totalExpected + ' symbols matched' + (isAllMatched ? ' ✓' : '')) : ((Number(present.length) || 0) + ' matched');
 
             let sectionsHtml = '';
             if (presentPills) {{
@@ -5356,11 +5356,11 @@ def report_view(
         function renderConsoleHtmlInJs(exec) {{
             if (!exec) return '';
             const eObj = (exec.execution) ? exec.execution : exec;
-            const exitCode = (eObj.exit_code !== undefined && eObj.exit_code !== null) ? eObj.exit_code : 0;
+            const exitCode = (eObj.exit_code !== undefined && eObj.exit_code !== null) ? (Number(eObj.exit_code) || 0) : 0;
             const isSuccess = (exitCode === 0 && !eObj.timed_out && !eObj.memory_exceeded);
             const stdout = eObj.stdout || '';
             const stderr = eObj.stderr || '';
-            const execMs = (eObj.execution_time_ms !== undefined && eObj.execution_time_ms !== null) ? (eObj.execution_time_ms + 'ms') : '';
+            const execMs = (eObj.execution_time_ms !== undefined && eObj.execution_time_ms !== null && Number(eObj.execution_time_ms) > 0) ? ((Number(eObj.execution_time_ms) || 0) + 'ms') : '';
             const exitBadgeClass = isSuccess ? 'badge-teal' : 'badge-crimson';
             const exitBadgeText = 'EXIT ' + exitCode + (eObj.timed_out ? ' (TIMED OUT)' : (eObj.memory_exceeded ? ' (OOM)' : ''));
             const dotColor = isSuccess ? 'teal' : 'crimson';
