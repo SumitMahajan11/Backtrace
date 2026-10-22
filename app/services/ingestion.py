@@ -407,30 +407,44 @@ class IngestionService:
         for root, dirs, files in os.walk(base_dir, followlinks=False):
             rel_root = Path(root).relative_to(base_dir)
 
-            # Filter ignored directories and directory symlinks in-place during walk
-            dirs[:] = [
-                d for d in dirs
-                if not is_ignored_directory(d)
-                and not (Path(root) / d).is_symlink()
-                and not os.path.islink(Path(root) / d)
-            ]
+            # Filter ignored directories in-place during walk; also skip and
+            # report any directory (symlink or not) whose resolved path is outside the clone.
+            filtered_dirs = []
+            for d in dirs:
+                dir_path = Path(root) / d
+                if is_ignored_directory(d):
+                    continue
+                try:
+                    resolved_dir = dir_path.resolve()
+                except (OSError, RuntimeError):
+                    skipped_items.append(
+                        SkippedItem(
+                            path=str((rel_root / d).as_posix()),
+                            reason="skipped — unresolvable directory",
+                        )
+                    )
+                    continue
+                if not resolved_dir.is_relative_to(base_resolved):
+                    skipped_items.append(
+                        SkippedItem(
+                            path=str((rel_root / d).as_posix()),
+                            reason="skipped — directory resolves outside clone boundary",
+                        )
+                    )
+                    continue
+                filtered_dirs.append(d)
+            dirs[:] = filtered_dirs
 
             for file_name in files:
                 abs_path = Path(root) / file_name
                 rel_path = str((rel_root / file_name).as_posix())
 
-                # 1. Symlink detection and outside target guard
-                if abs_path.is_symlink() or os.path.islink(abs_path):
-                    skipped_items.append(
-                        SkippedItem(path=rel_path, reason="skipped — symlink")
-                    )
-                    continue
-
+                # 1. Resolve EVERY file path and skip if outside the clone boundary
                 try:
                     resolved_file = abs_path.resolve()
-                    if base_resolved not in resolved_file.parents and resolved_file != base_resolved:
+                    if not resolved_file.is_relative_to(base_resolved):
                         skipped_items.append(
-                            SkippedItem(path=rel_path, reason="skipped — symlink pointing outside clone directory")
+                            SkippedItem(path=rel_path, reason="skipped — file resolves outside clone boundary")
                         )
                         continue
                 except (OSError, RuntimeError):

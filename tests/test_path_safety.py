@@ -79,10 +79,11 @@ def test_sanitize_and_validate_subpath_rejections():
         assert len(str(exc_info.value)) > 0
 
 
-def test_process_file_tree_skips_symlink_pointing_outside(tmp_path):
+def test_process_file_tree_skips_symlinked_file_pointing_outside(tmp_path):
     """
-    Verifies that symlinks pointing outside the repository clone directory are skipped
-    and not included in file_contents.
+    Verifies that a symlinked FILE pointing outside the clone directory is
+    skipped and not included in file_contents.
+    Must FAIL (not skip) if symlinks cannot be created.
     """
     clone_dir = tmp_path / "clone"
     clone_dir.mkdir()
@@ -96,12 +97,9 @@ def test_process_file_tree_skips_symlink_pointing_outside(tmp_path):
     inside_file = clone_dir / "main.py"
     inside_file.write_text("print('hello')", encoding="utf-8")
 
-    # Symlink inside clone pointing outside
+    # Symlink inside clone pointing outside — MUST succeed, no skip
     symlink_file = clone_dir / "external_link.py"
-    try:
-        symlink_file.symlink_to(outside_file)
-    except OSError:
-        pytest.skip("Creating symlinks requires privileges or Developer Mode on this OS")
+    symlink_file.symlink_to(outside_file)
 
     service = IngestionService()
     file_tree, file_contents, skipped_items = service._process_file_tree(clone_dir)
@@ -113,7 +111,39 @@ def test_process_file_tree_skips_symlink_pointing_outside(tmp_path):
     # Symlink pointing outside is skipped
     assert "external_link.py" not in file_contents
     assert not any("SUPER_SECRET" in content for content in file_contents.values())
-    assert any("symlink" in s.reason for s in skipped_items)
+    assert any("outside" in s.reason for s in skipped_items)
+
+
+def test_process_file_tree_skips_symlinked_directory_pointing_outside(tmp_path):
+    """
+    Verifies that a symlinked DIRECTORY pointing outside the clone is skipped
+    and none of its contents appear in file_contents.
+    Must FAIL (not skip) if symlinks cannot be created.
+    """
+    clone_dir = tmp_path / "clone"
+    clone_dir.mkdir()
+
+    outside_dir = tmp_path / "outside_pkg"
+    outside_dir.mkdir()
+    (outside_dir / "leaked.py").write_text("TOP_SECRET_DATA = True", encoding="utf-8")
+
+    # Regular file inside clone
+    (clone_dir / "app.py").write_text("import os", encoding="utf-8")
+
+    # Symlinked directory inside clone pointing outside — MUST succeed, no skip
+    symlink_dir = clone_dir / "vendor"
+    symlink_dir.symlink_to(outside_dir, target_is_directory=True)
+
+    service = IngestionService()
+    file_tree, file_contents, skipped_items = service._process_file_tree(clone_dir)
+
+    # Regular file is read
+    assert "app.py" in file_contents
+
+    # Nothing from the symlinked directory appears
+    assert not any("leaked" in path for path in file_contents.keys())
+    assert not any("TOP_SECRET" in content for content in file_contents.values())
+    assert any("outside" in s.reason for s in skipped_items)
 
 
 def test_process_file_tree_subpath_outside_clone_raises(tmp_path):
