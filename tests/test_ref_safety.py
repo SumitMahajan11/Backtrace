@@ -108,9 +108,10 @@ def test_submit_analysis_ref_rejection_at_submit_time(client, test_db):
         app.dependency_overrides.pop(get_current_user_optional, None)
 
 
-def test_checkout_command_uses_detach_and_dashdash(tmp_path, monkeypatch):
+def test_checkout_command_tries_origin_ref_first(tmp_path, monkeypatch):
     """
-    Verifies that git checkout is built as ["checkout", "--detach", target_ref, "--"].
+    Verifies that checkout tries origin/<ref> first. When origin/<ref> succeeds,
+    it should be ["checkout", "--detach", "origin/feature/auth", "--"].
     """
     monkeypatch.setattr("app.services.ingestion.validate_github_url", lambda url: ("test", "repo"))
     monkeypatch.setattr("app.services.ingestion.validate_ssrf", lambda host: None)
@@ -125,7 +126,6 @@ def test_checkout_command_uses_detach_and_dashdash(tmp_path, monkeypatch):
 
     monkeypatch.setattr("app.services.ingestion.run_sandboxed_git_command", mock_run_sandboxed_git_command)
 
-    # Mock _process_file_tree to return empty
     service = IngestionService()
     monkeypatch.setattr(service, "_process_file_tree", lambda base_dir, subpath=None: ([], {}, []))
     monkeypatch.setattr(service, "_get_head_commit", lambda repo_dir: "c0ffee")
@@ -133,7 +133,75 @@ def test_checkout_command_uses_detach_and_dashdash(tmp_path, monkeypatch):
 
     service.ingest_repository("https://github.com/owner/repo", commit_ref="feature/auth")
 
-    # Verify checkout command
     checkout_cmds = [cmd for cmd in recorded_commands if len(cmd) > 0 and cmd[0] == "checkout"]
     assert len(checkout_cmds) >= 1
-    assert checkout_cmds[0] == ["checkout", "--detach", "feature/auth", "--"]
+    # origin/ref is tried first
+    assert checkout_cmds[0] == ["checkout", "--detach", "origin/feature/auth", "--"]
+
+
+def test_checkout_falls_back_to_bare_ref_when_origin_fails(tmp_path, monkeypatch):
+    """
+    When origin/<ref> fails (e.g. for a tag or commit SHA), checkout should
+    fall back to the bare ref.
+    """
+    monkeypatch.setattr("app.services.ingestion.validate_github_url", lambda url: ("test", "repo"))
+    monkeypatch.setattr("app.services.ingestion.validate_ssrf", lambda host: None)
+    monkeypatch.setattr("app.services.ingestion.check_repo_reachability", lambda url: None)
+
+    recorded_commands = []
+    def mock_run_sandboxed_git_command(cmd, cwd=None, timeout_seconds=None):
+        recorded_commands.append(list(cmd))
+        # Fail if cmd contains "origin/" prefix
+        if any("origin/" in str(c) for c in cmd):
+            raise RuntimeError("no such ref: origin/v1.0.0")
+        mock_res = MagicMock()
+        mock_res.stdout = "main"
+        return mock_res
+
+    monkeypatch.setattr("app.services.ingestion.run_sandboxed_git_command", mock_run_sandboxed_git_command)
+
+    service = IngestionService()
+    monkeypatch.setattr(service, "_process_file_tree", lambda base_dir, subpath=None: ([], {}, []))
+    monkeypatch.setattr(service, "_get_head_commit", lambda repo_dir: "c0ffee")
+    monkeypatch.setattr(service, "_get_default_branch", lambda repo_dir: "main")
+
+    service.ingest_repository("https://github.com/owner/repo", commit_ref="v1.0.0")
+
+    checkout_cmds = [cmd for cmd in recorded_commands if len(cmd) > 0 and cmd[0] == "checkout"]
+    assert len(checkout_cmds) == 2  # origin/v1.0.0 failed, then v1.0.0 succeeded
+    assert checkout_cmds[0] == ["checkout", "--detach", "origin/v1.0.0", "--"]
+    assert checkout_cmds[1] == ["checkout", "--detach", "v1.0.0", "--"]
+
+
+def test_checkout_raises_when_ref_not_found(tmp_path, monkeypatch):
+    """
+    When both origin/<ref> and bare <ref> fail, an InvalidURLError should be
+    raised. It must NOT silently fall back to HEAD.
+    """
+    from app.services.ingestion import InvalidURLError
+
+    monkeypatch.setattr("app.services.ingestion.validate_github_url", lambda url: ("test", "repo"))
+    monkeypatch.setattr("app.services.ingestion.validate_ssrf", lambda host: None)
+    monkeypatch.setattr("app.services.ingestion.check_repo_reachability", lambda url: None)
+
+    call_count = 0
+    def mock_run_sandboxed_git_command(cmd, cwd=None, timeout_seconds=None):
+        nonlocal call_count
+        call_count += 1
+        if cmd[0] == "clone":
+            mock_res = MagicMock()
+            mock_res.stdout = ""
+            return mock_res
+        if cmd[0] == "checkout":
+            raise RuntimeError(f"fatal: reference is not a tree: {cmd}")
+        mock_res = MagicMock()
+        mock_res.stdout = ""
+        return mock_res
+
+    monkeypatch.setattr("app.services.ingestion.run_sandboxed_git_command", mock_run_sandboxed_git_command)
+
+    service = IngestionService()
+
+    with pytest.raises(InvalidURLError, match="Could not check out ref"):
+        service.ingest_repository("https://github.com/owner/repo", commit_ref="nonexistent-branch-xyz")
+

@@ -290,21 +290,32 @@ class IngestionService:
 
             # 2b. Checkout specified ref or HEAD safely with --detach and trailing --
             target_ref = clean_ref if clean_ref else "HEAD"
-            try:
+            if target_ref != "HEAD":
+                # Try origin/<ref> first (works for remote-tracking branches in fresh clones),
+                # then bare <ref> (works for tags, commit SHAs, or local branches).
+                checked_out = False
+                for candidate in [f"origin/{target_ref}", target_ref]:
+                    try:
+                        run_sandboxed_git_command(
+                            ["checkout", "--detach", candidate, "--"],
+                            cwd=clone_dir,
+                            timeout_seconds=self.timeout_seconds,
+                        )
+                        checked_out = True
+                        break
+                    except Exception:
+                        continue
+                if not checked_out:
+                    raise InvalidURLError(
+                        f"Could not check out ref '{target_ref}'. "
+                        "Verify the branch name, tag, or commit SHA exists in the repository."
+                    )
+            else:
                 run_sandboxed_git_command(
-                    ["checkout", "--detach", target_ref, "--"],
+                    ["checkout", "--detach", "HEAD", "--"],
                     cwd=clone_dir,
                     timeout_seconds=self.timeout_seconds,
                 )
-            except Exception:
-                if target_ref != "HEAD":
-                    run_sandboxed_git_command(
-                        ["checkout", "--detach", "HEAD", "--"],
-                        cwd=clone_dir,
-                        timeout_seconds=self.timeout_seconds,
-                    )
-                else:
-                    raise
 
             # Ensure subpath stays strictly inside clone directory
             if clean_subpath:
