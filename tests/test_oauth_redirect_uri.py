@@ -142,6 +142,28 @@ def test_production_validation_rejects_localhost_and_127():
         )
 
 
+def test_production_validation_rejects_placeholder_hosts():
+    """Verifies production fails fast if redirect_uri points to placeholder hosts (yourdomain.com, example.com)."""
+    for placeholder in [
+        "https://yourdomain.com/auth/github/callback",
+        "https://example.com/callback",
+        "https://app.yourdomain.com/auth/callback",
+        "https://api.EXAMPLE.COM/callback",
+    ]:
+        with pytest.raises(ValueError, match="GITHUB_REDIRECT_URI in production cannot point to placeholder domain"):
+            Settings(
+                ENVIRONMENT="production",
+                JWT_SECRET_KEY="a" * 32,
+                GITHUB_CLIENT_ID="id",
+                GITHUB_CLIENT_SECRET="secret",
+                GITHUB_REDIRECT_URI=placeholder,
+                STRIPE_SECRET_KEY="sk_test_123",
+                STRIPE_WEBHOOK_SECRET="whsec_123",
+                STRIPE_PRICE_ID_PRO="price_123",
+                DEBUG=False,
+            )
+
+
 def test_production_accepts_render_callback_and_supports_frontend_redirect_alias():
     """Verifies production accepts Render callback and supports GITHUB_FRONTEND_REDIRECT_URI."""
     render_callback = "https://backtrace-pbsk.onrender.com/auth/github/callback"
