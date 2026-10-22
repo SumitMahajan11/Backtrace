@@ -62,6 +62,8 @@ class SubprocessLanguageParser(BaseLanguageParser):
                 input=payload,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=self.subprocess_timeout_seconds,
                 check=True,
                 shell=False,

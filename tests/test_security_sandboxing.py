@@ -172,3 +172,26 @@ def test_run_sandboxed_git_command_with_latin1_and_non_utf8_output(tmp_path):
     assert status_res.returncode == 0
 
 
+def test_sandbox_runner_subprocess_encoding_parameters(tmp_path):
+    """Confirms SandboxRunner clone and checkout pass utf-8 encoding with errors='replace'."""
+    from unittest.mock import MagicMock, patch
+    from app.security.sandbox_runner import SandboxRunner
+
+    runner = SandboxRunner()
+    mock_res = MagicMock()
+    mock_res.returncode = 0
+    mock_res.stdout = "ok"
+
+    with patch("subprocess.run", return_value=mock_res) as mock_run:
+        res_clone = runner.run_git_clone_sandboxed("https://github.com/test/repo.git", tmp_path)
+        assert res_clone.returncode == 0
+        assert mock_run.call_args.kwargs.get("encoding") == "utf-8"
+        assert mock_run.call_args.kwargs.get("errors") == "replace"
+        assert mock_run.call_args.kwargs.get("text") is True
+
+    with patch("subprocess.run", return_value=mock_res) as mock_run:
+        res_checkout = runner.run_post_clone_checkout(tmp_path)
+        assert res_checkout.returncode == 0
+        assert mock_run.call_args.kwargs.get("encoding") == "utf-8"
+        assert mock_run.call_args.kwargs.get("errors") == "replace"
+        assert mock_run.call_args.kwargs.get("text") is True
