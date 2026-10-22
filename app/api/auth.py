@@ -1,5 +1,4 @@
-"""Authentication API Router for GitHub OAuth, Session Tokens, and Logout."""
-
+import os
 from typing import Any, Dict, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse, RedirectResponse
@@ -15,6 +14,22 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 from app.core.config import get_settings
 
 _settings = get_settings()
+
+
+def _is_secure_cookie() -> bool:
+    """Returns True if ENVIRONMENT is production, requiring Secure cookies."""
+    try:
+        from app.core.config import get_settings
+        settings = get_settings()
+        if getattr(settings, "ENVIRONMENT", None) == "production":
+            return True
+        if getattr(settings, "ENVIRONMENT", None) in ("development", "test"):
+            if os.getenv("ENVIRONMENT", "").strip().lower() == "production":
+                return True
+            return False
+    except Exception:
+        pass
+    return os.getenv("ENVIRONMENT", "").strip().lower() == "production"
 
 
 class RefreshTokenRequest(BaseModel):
@@ -102,12 +117,13 @@ async def github_callback(
         response = JSONResponse(content=tokens, status_code=status.HTTP_200_OK)
 
     # Set httpOnly cookies for seamless browser session management
+    is_secure = _is_secure_cookie()
     response.set_cookie(
         key="access_token",
         value=tokens["access_token"],
         httponly=True,
         samesite="lax",
-        secure=False,  # Can be true in prod HTTPS
+        secure=is_secure,
         max_age=900,
         path="/",
     )
@@ -116,7 +132,7 @@ async def github_callback(
         value=tokens["refresh_token"],
         httponly=True,
         samesite="lax",
-        secure=False,
+        secure=is_secure,
         max_age=30 * 86400,
         path="/",
     )
@@ -157,12 +173,14 @@ def refresh_session_token(
             detail=f"Token refresh failed: {exc}",
         )
 
+    is_secure = _is_secure_cookie()
     response = JSONResponse(content=new_tokens, status_code=status.HTTP_200_OK)
     response.set_cookie(
         key="access_token",
         value=new_tokens["access_token"],
         httponly=True,
         samesite="lax",
+        secure=is_secure,
         max_age=900,
         path="/",
     )
@@ -171,6 +189,7 @@ def refresh_session_token(
         value=new_tokens["refresh_token"],
         httponly=True,
         samesite="lax",
+        secure=is_secure,
         max_age=30 * 86400,
         path="/",
     )
@@ -253,7 +272,7 @@ if _settings.ENVIRONMENT == "development":
             key="access_token",
             value=token,
             httponly=True,
-            secure=False,
+            secure=_is_secure_cookie(),
             samesite="lax",
             max_age=86400,
             path="/",
