@@ -1358,7 +1358,7 @@ def pricing_view(current_user: Optional[UserModel] = None) -> str:
                         <h2 style="font-size: 1.5rem; font-weight: 600; margin: 0.25rem 0 1rem 0; color: var(--text-primary);">Free Plan</h2>
                         <ul style="list-style: none; padding: 0; margin: 0 0 1.5rem 0; font-size: 0.9rem; line-height: 1.8; color: var(--text-secondary);">
                             <li>&check; <strong>5 repository analyses</strong> per month</li>
-                            <li>&check; <strong>{enforced_mb} MB</strong> repository size cap (expanded from 100 MB)</li>
+                            <li>&check; <strong>{enforced_mb} MB</strong> repository size cap</li>
                             <li>&check; <strong>{enforced_files} supported files</strong> cap</li>
                         </ul>
                     </div>

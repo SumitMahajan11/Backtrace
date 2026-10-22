@@ -85,13 +85,15 @@ def test_privacy_page_public_and_sections(client):
 
 def test_pricing_page_public_and_sections(client):
     """GET /pricing returns 200 without login and contains its section titles."""
+    from app.services.ingestion import get_max_repo_mb
+
     response = client.get("/pricing")
     assert response.status_code == 200
     assert "Pricing" in response.text
     assert "Free Plan" in response.text
     assert "Pro Plan" in response.text
     assert "5 repository analyses" in response.text
-    assert "100 MB" in response.text
+    assert f"{get_max_repo_mb()} MB" in response.text
     assert "Unlimited repository analyses" in response.text
 
 

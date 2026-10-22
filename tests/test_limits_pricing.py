@@ -18,8 +18,7 @@ def test_pricing_page_numbers_equal_enforced_limits():
     assert f"{enforced_files} supported files" in html, f"Expected '{enforced_files} supported files' in pricing HTML"
     assert "repository size cap" in html
     assert "supported files" in html
-    # Ensure backward compatibility with existing assertion
-    assert "100 MB" in html
+    assert f"{enforced_mb} MB" in html
 
 
 def test_pricing_page_via_client():
@@ -29,4 +28,4 @@ def test_pricing_page_via_client():
     assert response.status_code == 200
     assert "200 MB" in response.text
     assert "150 supported files" in response.text
-    assert "100 MB" in response.text
+    assert f"{get_max_repo_mb()} MB" in response.text
