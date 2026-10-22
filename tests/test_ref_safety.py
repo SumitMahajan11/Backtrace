@@ -287,4 +287,31 @@ def test_clone_command_is_never_called_for_hyphen_ref(monkeypatch):
     assert len(git_commands) == 0
 
 
+def test_reachability_is_never_called_for_hyphen_ref(monkeypatch):
+    """
+    Verifies check_repo_reachability is never called when commit_ref starts with '-' (e.g. '-f').
+    Guarantees no outbound network call occurs before the hyphen guard rejects the ref.
+    """
+    from app.services.ingestion import IngestionService, InvalidURLError
 
+    monkeypatch.setattr("app.services.ingestion.validate_github_url", lambda url: ("test", "repo"))
+    monkeypatch.setattr("app.services.ingestion.validate_ssrf", lambda host: None)
+
+    reachability_calls = []
+    monkeypatch.setattr("app.services.ingestion.check_repo_reachability", lambda url: reachability_calls.append(url))
+
+    service = IngestionService()
+
+    # 1. Normal path
+    reachability_calls.clear()
+    with pytest.raises(InvalidURLError):
+        service.ingest_repository("https://github.com/owner/repo", commit_ref="-f")
+    assert len(reachability_calls) == 0
+
+    # 2. Defense-in-depth path: validate_commit_ref bypassed
+    monkeypatch.setattr("app.services.ingestion.validate_commit_ref", lambda ref: ref)
+    reachability_calls.clear()
+    with pytest.raises(InvalidURLError) as exc:
+        service.ingest_repository("https://github.com/owner/repo", commit_ref="-f")
+    assert "references starting with '-' are not allowed" in str(exc.value)
+    assert len(reachability_calls) == 0

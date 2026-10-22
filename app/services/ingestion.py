@@ -270,7 +270,6 @@ class IngestionService:
         # Step 1: Input & Security Validation
         owner, repo_name = validate_github_url(github_url)
         validated_ip = validate_ssrf("github.com")
-        check_repo_reachability(github_url)
 
         try:
             clean_subpath = sanitize_and_validate_subpath(subpath)
@@ -287,6 +286,8 @@ class IngestionService:
             raise InvalidURLError(
                 f"Invalid ref '{target_ref}': references starting with '-' are not allowed."
             )
+
+        check_repo_reachability(github_url)
 
         start_time = time.time()
 
