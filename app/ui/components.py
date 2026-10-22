@@ -5253,7 +5253,8 @@ def report_view(
                 banner = '<div class="diff-banner failure" style="background: rgba(244, 63, 94, 0.12); border: 1px solid rgba(244, 63, 94, 0.35); color: var(--crimson); padding: 0.65rem 0.85rem; border-radius: 4px; font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.75rem; font-weight: 600; margin-bottom: 0.65rem; display: flex; justify-content: space-between; align-items: center; gap: 0.4rem; flex-wrap: wrap;"><div style="display: flex; align-items: center; gap: 0.4rem;"><span>⚠</span> VERIFICATION GAPS: Requirements not yet satisfied</div>' + tierTag + '</div>';
             }}
 
-            const diff = (result && result.diff) ? result.diff : (result || {{}});
+            const rawDiff = (result && result.verification) ? result.verification : (result || {{}});
+            const diff = (rawDiff && rawDiff.diff) ? rawDiff.diff : rawDiff;
             const err = errorMsg || diff.error_message || diff.error || diff.grading_error;
 
             let errHtml = '';

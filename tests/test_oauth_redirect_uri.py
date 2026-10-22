@@ -164,6 +164,54 @@ def test_production_validation_rejects_placeholder_hosts():
             )
 
 
+def test_production_accepts_non_placeholder_custom_domains():
+    """
+    Verifies that production accepts custom domains such as 'myexample.com' (preventing false-positive substring matches),
+    while rejecting 'api.yourdomain.com' and 'example.com', and verifying fallback support.
+    """
+    valid_uri = "https://myexample.com/cb"
+    s = Settings(
+        ENVIRONMENT="production",
+        JWT_SECRET_KEY="a" * 32,
+        GITHUB_CLIENT_ID="id",
+        GITHUB_CLIENT_SECRET="secret",
+        GITHUB_REDIRECT_URI=valid_uri,
+        STRIPE_SECRET_KEY="sk_test_123",
+        STRIPE_WEBHOOK_SECRET="whsec_123",
+        STRIPE_PRICE_ID_PRO="price_123",
+        DEBUG=False,
+    )
+    assert s.GITHUB_REDIRECT_URI == valid_uri
+
+    for rejected_uri in ["https://api.yourdomain.com/cb", "https://example.com/cb"]:
+        with pytest.raises(ValueError, match="GITHUB_REDIRECT_URI in production cannot point to placeholder domain"):
+            Settings(
+                ENVIRONMENT="production",
+                JWT_SECRET_KEY="a" * 32,
+                GITHUB_CLIENT_ID="id",
+                GITHUB_CLIENT_SECRET="secret",
+                GITHUB_REDIRECT_URI=rejected_uri,
+                STRIPE_SECRET_KEY="sk_test_123",
+                STRIPE_WEBHOOK_SECRET="whsec_123",
+                STRIPE_PRICE_ID_PRO="price_123",
+                DEBUG=False,
+            )
+
+    # Verify fallback from GITHUB_FRONTEND_REDIRECT_URI with valid custom domain
+    s_fallback = Settings(
+        ENVIRONMENT="production",
+        JWT_SECRET_KEY="a" * 32,
+        GITHUB_CLIENT_ID="id",
+        GITHUB_CLIENT_SECRET="secret",
+        GITHUB_FRONTEND_REDIRECT_URI="https://myexample.com/cb",
+        STRIPE_SECRET_KEY="sk_test_123",
+        STRIPE_WEBHOOK_SECRET="whsec_123",
+        STRIPE_PRICE_ID_PRO="price_123",
+        DEBUG=False,
+    )
+    assert s_fallback.GITHUB_REDIRECT_URI == "https://myexample.com/cb"
+
+
 def test_production_accepts_render_callback_and_supports_frontend_redirect_alias():
     """Verifies production accepts Render callback and supports GITHUB_FRONTEND_REDIRECT_URI."""
     render_callback = "https://backtrace-pbsk.onrender.com/auth/github/callback"

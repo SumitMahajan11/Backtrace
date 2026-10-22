@@ -6,6 +6,7 @@ In production mode, all required credentials must be explicitly provided without
 
 from functools import lru_cache
 from typing import Any, Literal, Optional
+from urllib.parse import urlsplit
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -160,14 +161,23 @@ class Settings(BaseSettings):
             errors.append("GITHUB_CLIENT_ID is required in production and cannot be empty")
         if not self.GITHUB_CLIENT_SECRET or not self.GITHUB_CLIENT_SECRET.strip():
             errors.append("GITHUB_CLIENT_SECRET is required in production and cannot be empty")
-        redirect_lower = (self.GITHUB_REDIRECT_URI or "").lower()
+        redirect_url = (self.GITHUB_REDIRECT_URI or "").strip()
+        parsed_redirect = urlsplit(redirect_url)
+        redirect_host = (parsed_redirect.hostname or "").lower()
         if (
-            not self.GITHUB_REDIRECT_URI
-            or "localhost" in redirect_lower
-            or "127.0.0.1" in redirect_lower
+            not redirect_url
+            or not redirect_host
+            or redirect_host == "localhost"
+            or redirect_host.endswith(".localhost")
+            or redirect_host == "127.0.0.1"
         ):
             errors.append("GITHUB_REDIRECT_URI in production cannot point to localhost or 127.0.0.1")
-        elif "yourdomain.com" in redirect_lower or "example.com" in redirect_lower:
+        elif (
+            redirect_host == "yourdomain.com"
+            or redirect_host.endswith(".yourdomain.com")
+            or redirect_host == "example.com"
+            or redirect_host.endswith(".example.com")
+        ):
             errors.append("GITHUB_REDIRECT_URI in production cannot point to placeholder domain (yourdomain.com, example.com)")
 
         # 2. JWT Configuration

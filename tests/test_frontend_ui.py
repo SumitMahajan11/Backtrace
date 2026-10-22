@@ -2817,29 +2817,25 @@ const chipsOutEmpty = renderGroupedFillChips([], payload);
 
 // 3. renderDiffHtmlInJs with name, class_name, reason, err, kind, args
 const diffOutFill = renderDiffHtmlInJs({{
-    verification: {{
-        blanked_evaluated: 1,
-        implemented_count: 0,
-        blank_details: [
-            {{ name: payload, class_name: payload, reason: payload, status: 'stub' }},
-            {{ name: payload, class_name: payload, reason: payload, status: 'implemented' }}
-        ]
-    }}
+    blanked_evaluated: 2,
+    implemented_count: 1,
+    blank_details: [
+        {{ name: payload, class_name: payload, reason: payload, status: 'stub' }},
+        {{ name: payload, class_name: payload, reason: payload, status: 'implemented' }}
+    ]
 }}, false, payload, 'fill_the_blanks');
 
 const diffOutAst = renderDiffHtmlInJs({{
-    verification: {{
-        diff: {{
-            present_symbols: [
-                {{ matched: {{ name: payload, kind: payload, args: [payload] }} }}
-            ],
-            missing_symbols: [
-                {{ expected: {{ name: payload, kind: payload }} }}
-            ],
-            extra_symbols: [
-                {{ matched: {{ name: payload, kind: payload }} }}
-            ]
-        }}
+    diff: {{
+        present_symbols: [
+            {{ matched: {{ name: payload, kind: payload, args: [payload] }} }}
+        ],
+        missing_symbols: [
+            {{ expected: {{ name: payload, kind: payload }} }}
+        ],
+        extra_symbols: [
+            {{ matched: {{ name: payload, kind: payload }} }}
+        ]
     }}
 }}, false, payload, 'structural_verifier');
 
@@ -2981,12 +2977,10 @@ def test_python_side_html_escaping_for_repo_file_and_symbols():
 
     diff_fill_html = _render_server_diff_html(
         {
-            "verification": {
-                "blank_details": [
-                    {"name": payload, "status": "stub", "reason": payload},
-                    {"name": payload, "status": "implemented", "reason": payload},
-                ]
-            }
+            "blank_details": [
+                {"name": payload, "status": "stub", "reason": payload},
+                {"name": payload, "status": "implemented", "reason": payload},
+            ]
         },
         is_verified=False,
         err_msg=payload,
@@ -2997,13 +2991,9 @@ def test_python_side_html_escaping_for_repo_file_and_symbols():
 
     diff_ast_html = _render_server_diff_html(
         {
-            "verification": {
-                "diff": {
-                    "present_symbols": [{"matched": {"name": payload, "kind": payload, "args": [payload]}}],
-                    "missing_symbols": [{"name": payload, "kind": payload}],
-                    "extra_symbols": [{"name": payload, "kind": payload}],
-                }
-            }
+            "present_symbols": [{"matched": {"name": payload, "kind": payload, "args": [payload]}}],
+            "missing_symbols": [{"name": payload, "kind": payload}],
+            "extra_symbols": [{"name": payload, "kind": payload}],
         },
         is_verified=False,
         err_msg=payload,
