@@ -282,6 +282,12 @@ class IngestionService:
         except ValueError as e:
             raise InvalidURLError(str(e))
 
+        target_ref = clean_ref if clean_ref else "HEAD"
+        if target_ref.startswith("-"):
+            raise InvalidURLError(
+                f"Invalid ref '{target_ref}': references starting with '-' are not allowed."
+            )
+
         start_time = time.time()
 
         # Step 2: Isolated Sandboxed Execution
@@ -294,11 +300,6 @@ class IngestionService:
             )
 
             # 2b. Checkout specified ref or HEAD safely with --detach and trailing --
-            target_ref = clean_ref if clean_ref else "HEAD"
-            if target_ref.startswith("-"):
-                raise InvalidURLError(
-                    f"Invalid ref '{target_ref}': references starting with '-' are not allowed."
-                )
             if target_ref != "HEAD":
                 # Try origin/<ref> first (works for remote-tracking branches in fresh clones),
                 # then bare <ref> (works for tags, commit SHAs, or local branches).

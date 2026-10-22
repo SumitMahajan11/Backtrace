@@ -238,7 +238,7 @@ def test_ingestion_rejects_hyphen_refs_in_validator_and_before_checkout(tmp_path
         assert "References starting with '-' are not allowed" in str(exc.value) or "Invalid branch or commit reference" in str(exc.value)
         assert len(checkout_commands) == 0
 
-    # 2. Defense-in-depth: if validate_commit_ref were bypassed, ingestion rejects before checkout
+    # 2. Defense-in-depth: if validate_commit_ref were bypassed, ingestion rejects before clone
     monkeypatch.setattr("app.services.ingestion.validate_commit_ref", lambda ref: ref)
     for flag in ["-f", "--force", "--quiet"]:
         checkout_commands.clear()
@@ -246,5 +246,45 @@ def test_ingestion_rejects_hyphen_refs_in_validator_and_before_checkout(tmp_path
             service.ingest_repository("https://github.com/owner/repo", commit_ref=flag)
         assert "references starting with '-' are not allowed" in str(exc.value)
         assert len(checkout_commands) == 0
+
+
+def test_clone_command_is_never_called_for_hyphen_ref(monkeypatch):
+    """
+    Verifies that git clone is never executed when commit_ref starts with '-' (e.g. '-f').
+    Tests both normal validation path and defense-in-depth path where validate_commit_ref is bypassed.
+    """
+    from app.services.ingestion import IngestionService, InvalidURLError
+
+    monkeypatch.setattr("app.services.ingestion.validate_github_url", lambda url: ("test", "repo"))
+    monkeypatch.setattr("app.services.ingestion.validate_ssrf", lambda host: None)
+    monkeypatch.setattr("app.services.ingestion.check_repo_reachability", lambda url: None)
+
+    git_commands = []
+    def mock_run_sandboxed_git_command(cmd, cwd=None, timeout_seconds=None):
+        git_commands.append(list(cmd))
+        mock_res = MagicMock()
+        mock_res.stdout = ""
+        return mock_res
+
+    monkeypatch.setattr("app.services.ingestion.run_sandboxed_git_command", mock_run_sandboxed_git_command)
+
+    service = IngestionService()
+
+    # 1. Normal path
+    git_commands.clear()
+    with pytest.raises(InvalidURLError):
+        service.ingest_repository("https://github.com/owner/repo", commit_ref="-f")
+    assert not any(cmd[0] == "clone" for cmd in git_commands)
+    assert len(git_commands) == 0
+
+    # 2. Defense-in-depth path: validate_commit_ref bypassed
+    monkeypatch.setattr("app.services.ingestion.validate_commit_ref", lambda ref: ref)
+    git_commands.clear()
+    with pytest.raises(InvalidURLError) as exc:
+        service.ingest_repository("https://github.com/owner/repo", commit_ref="-f")
+    assert "references starting with '-' are not allowed" in str(exc.value)
+    assert not any(cmd[0] == "clone" for cmd in git_commands)
+    assert len(git_commands) == 0
+
 
 
