@@ -69,6 +69,11 @@ def validate_commit_ref(ref: Optional[str]) -> Optional[str]:
     if not ref or not ref.strip():
         return None
     cleaned = ref.strip()
+    if cleaned.startswith("-"):
+        raise ValueError(
+            f"Invalid branch or commit reference '{cleaned}'. "
+            "References starting with '-' are not allowed."
+        )
     if not REF_PATTERN.match(cleaned):
         raise ValueError(
             f"Invalid branch or commit reference '{cleaned}'. "
@@ -290,6 +295,10 @@ class IngestionService:
 
             # 2b. Checkout specified ref or HEAD safely with --detach and trailing --
             target_ref = clean_ref if clean_ref else "HEAD"
+            if target_ref.startswith("-"):
+                raise InvalidURLError(
+                    f"Invalid ref '{target_ref}': references starting with '-' are not allowed."
+                )
             if target_ref != "HEAD":
                 # Try origin/<ref> first (works for remote-tracking branches in fresh clones),
                 # then bare <ref> (works for tags, commit SHAs, or local branches).

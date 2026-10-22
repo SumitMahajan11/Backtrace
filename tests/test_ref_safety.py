@@ -56,8 +56,8 @@ def test_validate_commit_ref_rejections():
     - 'main; rm -rf /' (shell injection)
     - 'a b' (spaces)
     """
-    bad_refs = ["--orphan", "-x", "main; rm -rf /", "a b", "; ls", "-b", "foo bar", ""]
-    for bad in ["--orphan", "-x", "main; rm -rf /", "a b"]:
+    bad_refs = ["--orphan", "-x", "-f", "--force", "--quiet", "main; rm -rf /", "a b", "; ls", "-b", "foo bar", ""]
+    for bad in ["--orphan", "-x", "-f", "--force", "--quiet", "main; rm -rf /", "a b"]:
         with pytest.raises(ValueError) as exc:
             validate_commit_ref(bad)
         assert "Invalid branch or commit reference" in str(exc.value)
@@ -87,7 +87,7 @@ def test_submit_analysis_ref_rejection_at_submit_time(client, test_db):
     app.dependency_overrides[get_current_user_optional] = lambda: user
 
     try:
-        bad_refs = ["--orphan", "-x", "main; rm -rf /", "a b"]
+        bad_refs = ["--orphan", "-x", "-f", "--force", "--quiet", "main; rm -rf /", "a b"]
         for bad in bad_refs:
             resp = client.post(
                 "/analyses/submit",
@@ -204,4 +204,47 @@ def test_checkout_raises_when_ref_not_found(tmp_path, monkeypatch):
 
     with pytest.raises(InvalidURLError, match="Could not check out ref"):
         service.ingest_repository("https://github.com/owner/repo", commit_ref="nonexistent-branch-xyz")
+
+
+def test_ingestion_rejects_hyphen_refs_in_validator_and_before_checkout(tmp_path, monkeypatch):
+    """
+    Verifies that ingest_repository rejects refs starting with '-' (e.g. '-f', '--force', '--quiet')
+    both in the validator and as a defense-in-depth gate before checkout, ensuring git checkout
+    is never executed with options disguised as branch names.
+    """
+    from app.services.ingestion import InvalidURLError
+
+    monkeypatch.setattr("app.services.ingestion.validate_github_url", lambda url: ("test", "repo"))
+    monkeypatch.setattr("app.services.ingestion.validate_ssrf", lambda host: None)
+    monkeypatch.setattr("app.services.ingestion.check_repo_reachability", lambda url: None)
+
+    checkout_commands = []
+    def mock_run_sandboxed_git_command(cmd, cwd=None, timeout_seconds=None):
+        if len(cmd) > 0 and cmd[0] == "checkout":
+            checkout_commands.append(list(cmd))
+        mock_res = MagicMock()
+        mock_res.stdout = ""
+        return mock_res
+
+    monkeypatch.setattr("app.services.ingestion.run_sandboxed_git_command", mock_run_sandboxed_git_command)
+
+    service = IngestionService()
+
+    # 1. Normal path: validate_commit_ref rejects '-f', '--force', '--quiet'
+    for flag in ["-f", "--force", "--quiet"]:
+        checkout_commands.clear()
+        with pytest.raises(InvalidURLError) as exc:
+            service.ingest_repository("https://github.com/owner/repo", commit_ref=flag)
+        assert "References starting with '-' are not allowed" in str(exc.value) or "Invalid branch or commit reference" in str(exc.value)
+        assert len(checkout_commands) == 0
+
+    # 2. Defense-in-depth: if validate_commit_ref were bypassed, ingestion rejects before checkout
+    monkeypatch.setattr("app.services.ingestion.validate_commit_ref", lambda ref: ref)
+    for flag in ["-f", "--force", "--quiet"]:
+        checkout_commands.clear()
+        with pytest.raises(InvalidURLError) as exc:
+            service.ingest_repository("https://github.com/owner/repo", commit_ref=flag)
+        assert "references starting with '-' are not allowed" in str(exc.value)
+        assert len(checkout_commands) == 0
+
 
