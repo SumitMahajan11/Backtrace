@@ -237,13 +237,26 @@ def submit_analysis(
         )
 
     clean_ref = commit_ref.strip() if commit_ref and commit_ref.strip() else None
-    clean_subpath = subpath.strip().replace("\\", "/").strip("/") if subpath and subpath.strip() else None
+
+    from app.utils.file_filter import sanitize_and_validate_subpath
+    billing_status = BillingService.get_user_billing_status(user, session)
+    past_jobs = AnalysisJobRepository.get_jobs_for_user(session, user.id)
+
+    try:
+        clean_subpath = sanitize_and_validate_subpath(subpath)
+    except ValueError as e:
+        return HTMLResponse(
+            content=dashboard_view(
+                current_user=user,
+                billing_status=billing_status,
+                past_jobs=past_jobs,
+                error=str(e),
+            ),
+            status_code=status.HTTP_200_OK,
+        )
 
     from app.services.ingestion import check_repo_size_preflight
     from app.models.ingestion import RepoTooLargeError, GitHubAPIError, InvalidURLError, SSRFError
-
-    billing_status = BillingService.get_user_billing_status(user, session)
-    past_jobs = AnalysisJobRepository.get_jobs_for_user(session, user.id)
 
     # 1. Preflight File Count Check
     try:

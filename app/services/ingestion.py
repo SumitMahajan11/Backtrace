@@ -274,6 +274,13 @@ class IngestionService:
                 else:
                     raise
 
+            # Ensure subpath stays strictly inside clone directory
+            if clean_subpath:
+                joined_sub = (clone_dir / clean_subpath).resolve()
+                base_res = clone_dir.resolve()
+                if base_res not in joined_sub.parents and joined_sub != base_res:
+                    raise InvalidURLError(f"Subpath '{clean_subpath}' resolves outside clone directory.")
+
             clone_duration = round(time.time() - start_time, 2)
 
             # Step 3: Extract Metadata & History Signals
@@ -345,23 +352,47 @@ class IngestionService:
         file_contents: Dict[str, str] = {}
         skipped_items: List[SkippedItem] = []
 
+        base_resolved = base_dir.resolve()
+        if subpath:
+            joined_path = (base_dir / subpath).resolve()
+            if base_resolved not in joined_path.parents and joined_path != base_resolved:
+                raise ValueError(f"Subpath '{subpath}' resolves outside clone directory.")
+
         valid_file_count = 0
         total_size_bytes = 0
 
         for root, dirs, files in os.walk(base_dir, followlinks=False):
             rel_root = Path(root).relative_to(base_dir)
 
-            # Filter ignored directories in-place during walk
-            dirs[:] = [d for d in dirs if not is_ignored_directory(d)]
+            # Filter ignored directories and directory symlinks in-place during walk
+            dirs[:] = [
+                d for d in dirs
+                if not is_ignored_directory(d)
+                and not (Path(root) / d).is_symlink()
+                and not os.path.islink(Path(root) / d)
+            ]
 
             for file_name in files:
                 abs_path = Path(root) / file_name
                 rel_path = str((rel_root / file_name).as_posix())
 
-                # 1. Symlink detection
+                # 1. Symlink detection and outside target guard
                 if abs_path.is_symlink() or os.path.islink(abs_path):
                     skipped_items.append(
                         SkippedItem(path=rel_path, reason="skipped — symlink")
+                    )
+                    continue
+
+                try:
+                    resolved_file = abs_path.resolve()
+                    if base_resolved not in resolved_file.parents and resolved_file != base_resolved:
+                        skipped_items.append(
+                            SkippedItem(path=rel_path, reason="skipped — symlink pointing outside clone directory")
+                        )
+                        continue
+                except (OSError, RuntimeError):
+                    skipped_items.append(
+                        SkippedItem(path=rel_path, reason="skipped — unresolvable file or broken symlink")
                     )
                     continue
 
