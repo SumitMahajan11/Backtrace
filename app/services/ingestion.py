@@ -2,6 +2,7 @@
 
 import configparser
 import os
+import re
 import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -55,6 +56,27 @@ def get_max_repo_mb() -> int:
         return 200
 
 
+REF_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/@-]{0,199}$")
+
+
+def validate_commit_ref(ref: Optional[str]) -> Optional[str]:
+    """
+    Validates branch or commit_ref against malicious git flags, shell injection, or illegal chars.
+    Must match ^[A-Za-z0-9][A-Za-z0-9._/@-]{0,199}$.
+    Returns stripped ref or None if empty.
+    Raises ValueError on invalid patterns.
+    """
+    if not ref or not ref.strip():
+        return None
+    cleaned = ref.strip()
+    if not REF_PATTERN.match(cleaned):
+        raise ValueError(
+            f"Invalid branch or commit reference '{cleaned}'. "
+            "Reference must start with an alphanumeric character and contain only alphanumeric, '.', '_', '/', '@', or '-' (max 200 chars)."
+        )
+    return cleaned
+
+
 def check_repo_size_preflight(
     github_url: str,
     commit_ref: Optional[str] = None,
@@ -85,7 +107,12 @@ def check_repo_size_preflight(
     except ValueError as e:
         raise InvalidURLError(str(e))
 
-    tree_sha = commit_ref.strip() if commit_ref and commit_ref.strip() else "HEAD"
+    try:
+        clean_ref = validate_commit_ref(commit_ref)
+    except ValueError as e:
+        raise InvalidURLError(str(e))
+
+    tree_sha = clean_ref if clean_ref else "HEAD"
 
     headers = {
         "User-Agent": "Backtrace-Preflight/1.0",
@@ -245,6 +272,11 @@ class IngestionService:
         except ValueError as e:
             raise InvalidURLError(str(e))
 
+        try:
+            clean_ref = validate_commit_ref(commit_ref)
+        except ValueError as e:
+            raise InvalidURLError(str(e))
+
         start_time = time.time()
 
         # Step 2: Isolated Sandboxed Execution
@@ -256,18 +288,18 @@ class IngestionService:
                 timeout_seconds=self.timeout_seconds,
             )
 
-            # 2b. Checkout specified ref or HEAD
-            target_ref = commit_ref.strip() if commit_ref and commit_ref.strip() else "HEAD"
+            # 2b. Checkout specified ref or HEAD safely with --detach and trailing --
+            target_ref = clean_ref if clean_ref else "HEAD"
             try:
                 run_sandboxed_git_command(
-                    ["checkout", target_ref],
+                    ["checkout", "--detach", target_ref, "--"],
                     cwd=clone_dir,
                     timeout_seconds=self.timeout_seconds,
                 )
             except Exception:
                 if target_ref != "HEAD":
                     run_sandboxed_git_command(
-                        ["checkout", "HEAD"],
+                        ["checkout", "--detach", "HEAD", "--"],
                         cwd=clone_dir,
                         timeout_seconds=self.timeout_seconds,
                     )

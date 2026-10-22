@@ -236,14 +236,26 @@ def submit_analysis(
             status_code=status.HTTP_302_FOUND,
         )
 
-    clean_ref = commit_ref.strip() if commit_ref and commit_ref.strip() else None
-
     from app.utils.file_filter import sanitize_and_validate_subpath
+    from app.services.ingestion import validate_commit_ref
     billing_status = BillingService.get_user_billing_status(user, session)
     past_jobs = AnalysisJobRepository.get_jobs_for_user(session, user.id)
 
     try:
         clean_subpath = sanitize_and_validate_subpath(subpath)
+    except ValueError as e:
+        return HTMLResponse(
+            content=dashboard_view(
+                current_user=user,
+                billing_status=billing_status,
+                past_jobs=past_jobs,
+                error=str(e),
+            ),
+            status_code=status.HTTP_200_OK,
+        )
+
+    try:
+        clean_ref = validate_commit_ref(commit_ref)
     except ValueError as e:
         return HTMLResponse(
             content=dashboard_view(
