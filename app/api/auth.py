@@ -1,3 +1,5 @@
+"""Authentication API Router for GitHub OAuth, Session Tokens, and Logout."""
+
 import os
 from typing import Any, Dict, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
