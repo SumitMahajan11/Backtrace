@@ -3213,8 +3213,29 @@ def report_view(
         """
 
     # Sequence Confidence Calculation for Overview KPI Bento Grid
+    conf_summary = graph_data.get("confidence_summary") if graph_data else None
     total_nodes_count = len(nodes)
-    if total_nodes_count > 0:
+    if conf_summary and isinstance(conf_summary, dict):
+        h_pct = conf_summary.get("high_pct", 0.0)
+        m_pct = conf_summary.get("medium_pct", 0.0)
+        l_pct = conf_summary.get("low_pct", 0.0)
+        h_disp = int(h_pct) if isinstance(h_pct, (int, float)) and h_pct == int(h_pct) else h_pct
+        m_disp = int(m_pct) if isinstance(m_pct, (int, float)) and m_pct == int(m_pct) else m_pct
+        l_disp = int(l_pct) if isinstance(l_pct, (int, float)) and l_pct == int(l_pct) else l_pct
+        if h_pct >= 50:
+            overall_conf_label = f"HIGH ({h_disp}%)"
+            overall_conf_val = "high"
+            overall_conf_color = "var(--teal)"
+        elif h_pct + m_pct >= 50:
+            overall_conf_label = f"MEDIUM ({m_disp}%)"
+            overall_conf_val = "medium"
+            overall_conf_color = "var(--amber)"
+        else:
+            overall_conf_label = f"Share of files with low confidence: {l_disp}%"
+            overall_conf_val = "low"
+            overall_conf_color = "var(--brass)"
+        conf_sub_text = f"{h_disp}% High &bull; {m_disp}% Med"
+    elif total_nodes_count > 0:
         h_nodes = sum(1 for n in nodes if str(n.get("confidence", "")).lower() == "high")
         m_nodes = sum(1 for n in nodes if str(n.get("confidence", "")).lower() == "medium")
         l_nodes = sum(1 for n in nodes if str(n.get("confidence", "")).lower() == "low")
@@ -3230,10 +3251,10 @@ def report_view(
             overall_conf_val = "medium"
             overall_conf_color = "var(--amber)"
         else:
-            overall_conf_label = f"LOW ({l_pct}%)"
+            overall_conf_label = f"Share of files with low confidence: {l_pct}%"
             overall_conf_val = "low"
             overall_conf_color = "var(--brass)"
-        conf_sub_text = f"{h_pct}% High &bull; {m_pct}% Med"
+        conf_sub_text = "estimated from graph nodes"
     elif milestones_data:
         all_confs = [m.get("confidence_badge", "") for m in milestones_data]
         h_count = sum(1 for c in all_confs if "HIGH" in c.upper())

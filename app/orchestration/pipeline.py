@@ -230,6 +230,10 @@ class PipelineOrchestrator:
             current_stage = PipelineStage.SYNTHESIS
             s5_start = time.time()
             emit(PipelineStage.SYNTHESIS, 90.0, "Synthesizing unified repository architecture and formatting outputs")
+            synth_metadata: Dict[str, Any] = {}
+            if c_res and hasattr(c_res, "repo_confidence_summary") and c_res.repo_confidence_summary:
+                synth_metadata["confidence_summary"] = c_res.repo_confidence_summary.model_dump()
+
             synth_report = self.synthesis_engine.synthesize(
                 repo_name=repo_name,
                 segmentation_result=seg_result,
@@ -237,6 +241,7 @@ class PipelineOrchestrator:
                 parsed_files=parsed_nodes,
                 rag_engine=rag_engine,
                 file_contents=file_contents,
+                metadata=synth_metadata,
             )
 
             md_out = self.md_formatter.format_report(synth_report)
@@ -255,6 +260,8 @@ class PipelineOrchestrator:
                     md_out += f"- `{pe.get('path', 'unknown')}` ({pe.get('language', 'unknown')}): {pe.get('error_message', '')}\n"
 
             graph_out = self.graph_formatter.format_json_dag(synth_report)
+            if "confidence_summary" in synth_metadata and "confidence_summary" not in graph_out:
+                graph_out["confidence_summary"] = synth_metadata["confidence_summary"]
             quiz_out = self.quiz_formatter.generate_quiz(synth_report)
             metrics_collector.record_layer_metric("layer_7_synthesis", (time.time() - s5_start) * 1000, run_id=active_run_id)
 

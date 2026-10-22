@@ -272,7 +272,10 @@ class NarrationEngine:
         tot_h = tier_high + iso_h
         tot_m = tier_med + iso_m
         tot_l = tier_low + iso_l
-        table_rows.append(f"| **Total Scored Files** | **{tot_h}** ({summary.high_pct}%) | **{tot_m}** ({summary.medium_pct}%) | **{tot_l}** ({summary.low_pct}%) | **{total_files}** (100%) | - |")
+        h_str = int(summary.high_pct) if summary.high_pct == int(summary.high_pct) else summary.high_pct
+        m_str = int(summary.medium_pct) if summary.medium_pct == int(summary.medium_pct) else summary.medium_pct
+        l_str = int(summary.low_pct) if summary.low_pct == int(summary.low_pct) else summary.low_pct
+        table_rows.append(f"| **Total Scored Files** | **{tot_h}** ({h_str}%) | **{tot_m}** ({m_str}%) | **{tot_l}** ({l_str}%) | **{total_files}** (100%) | - |")
 
         return header + "\n" + "\n".join(table_rows)
 
