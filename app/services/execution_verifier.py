@@ -91,7 +91,7 @@ class ExecutionVerifier:
             settings = get_settings()
             is_prod = settings.is_production
         except Exception:
-            env_val = os.getenv("ENVIRONMENT", os.getenv("ENV", "development")).lower().strip()
+            env_val = os.getenv("ENVIRONMENT", os.getenv("ENV", "production")).lower().strip()
             is_prod = env_val in ("prod", "production")
 
         if is_prod:

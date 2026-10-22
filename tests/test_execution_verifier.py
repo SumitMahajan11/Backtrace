@@ -586,3 +586,20 @@ def test_subprocess_execution_with_non_cp1252_byte():
     # 0x81 replaced with utf-8 replacement character \ufffd
     assert "\ufffd" in result["stdout"]
 
+
+def test_execution_verifier_settings_failure_fails_closed_to_production(monkeypatch):
+    """
+    Verifies that if get_settings() raises an exception and ENVIRONMENT is unset,
+    the except block defaults to 'production' (fail-closed), disallowing allow_local_fallback.
+    """
+    monkeypatch.delenv("ENVIRONMENT", raising=False)
+    monkeypatch.delenv("ENV", raising=False)
+    monkeypatch.delenv("ALLOW_LOCAL_FALLBACK", raising=False)
+
+    def mock_get_settings():
+        raise RuntimeError("Settings configuration load failure")
+
+    monkeypatch.setattr("app.core.config.get_settings", mock_get_settings)
+
+    verifier = ExecutionVerifier()
+    assert verifier.allow_local_fallback is False
