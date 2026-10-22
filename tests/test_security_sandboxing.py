@@ -136,3 +136,39 @@ def test_phase2_network_isolation_outbound_call_fails(tmp_path):
         env = os.environ.copy()
         env["GIT_TERMINAL_PROMPT"] = "0"
         assert env.get("GIT_TERMINAL_PROMPT") == "0"
+
+
+def test_run_sandboxed_git_command_with_latin1_and_non_utf8_output(tmp_path):
+    """
+    Verifies that run_sandboxed_git_command uses encoding='utf-8' with errors='replace',
+    ensuring a repository with a Latin-1 commit message and non-UTF-8 byte sequences
+    in git output does not raise UnicodeDecodeError.
+    """
+    from app.services.security import run_sandboxed_git_command
+
+    repo_dir = tmp_path / "latin1_repo"
+    repo_dir.mkdir()
+    subprocess.run(["git", "init", "-b", "main"], cwd=repo_dir, check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Tester"], cwd=repo_dir, check=True)
+    subprocess.run(["git", "config", "user.email", "tester@example.com"], cwd=repo_dir, check=True)
+
+    dummy_file = repo_dir / "file.txt"
+    dummy_file.write_text("content", encoding="utf-8")
+    subprocess.run(["git", "add", "."], cwd=repo_dir, check=True)
+
+    # Write Latin-1 and invalid UTF-8 bytes to commit message
+    msg_file = tmp_path / "commit_msg.txt"
+    msg_bytes = b"Commit with Latin-1: caf\xe9 and non-utf8: \x81\xfe\n"
+    msg_file.write_bytes(msg_bytes)
+
+    subprocess.run(["git", "commit", "-F", str(msg_file), "--cleanup=verbatim"], cwd=repo_dir, check=True, capture_output=True)
+
+    # run_sandboxed_git_command must decode cleanly without raising UnicodeDecodeError
+    result = run_sandboxed_git_command(["log", "-1", "--format=%B"], cwd=repo_dir)
+    assert result.returncode == 0
+    assert "Commit with Latin-1:" in result.stdout
+
+    status_res = run_sandboxed_git_command(["status"], cwd=repo_dir)
+    assert status_res.returncode == 0
+
+
