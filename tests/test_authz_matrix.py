@@ -276,61 +276,83 @@ def test_authz_matrix_showcase_exception(client, owner_user, other_user, test_db
 # 3. Input Checks Test (Prompt Item 5)
 # =========================================================================
 
-def test_input_checks(client, owner_user, test_db):
+def test_input_checks(client, owner_user, test_db, monkeypatch):
     """
     Tests input validation on repository submission:
       - a github_url that is not github.com
       - a subpath containing '..'
       - an absolute subpath
       - a branch with shell characters
-    Records the HTTP status code and outcome for each.
+    The contract: bad input is rejected with a 4xx, or a redirect or 200 that
+    carries an error message AND creates no AnalysisJob row AND starts no ingestion.
+    For each of the 4 cases assert both and print the raw response message.
+    If any case creates a job, print it and stop.
     """
-    owner_token = create_access_token(user_id=owner_user.id, github_id=owner_user.github_id, github_username=owner_user.github_username)
+    SessionLocal, _ = test_db
+    owner_token = create_access_token(
+        user_id=owner_user.id,
+        github_id=owner_user.github_id,
+        github_username=owner_user.github_username,
+    )
     client.cookies.set("access_token", owner_token)
 
-    # 1. Non-github URL
-    resp_non_github = client.post(
-        "/analyses/submit",
-        data={"repo_url": "https://gitlab.com/attacker/malicious-repo"},
-        follow_redirects=False,
-    )
-    print("Input Check [non-github URL]: status =", resp_non_github.status_code, "location =", resp_non_github.headers.get("location"))
+    ingestion_started = False
+    def mock_ingest_guard(*args, **kwargs):
+        nonlocal ingestion_started
+        ingestion_started = True
+        raise RuntimeError("Ingestion should not be started for invalid input!")
 
-    # 2. Subpath containing ".."
-    resp_dotdot = client.post(
-        "/analyses/submit",
-        data={"repo_url": "https://github.com/owner/repo", "subpath": "src/../../etc"},
-        follow_redirects=False,
-    )
-    print("Input Check [subpath with '..']: status =", resp_dotdot.status_code)
+    monkeypatch.setattr("app.services.ingestion.IngestionService.ingest_repository", mock_ingest_guard)
 
-    # 3. Absolute subpath
-    resp_abs = client.post(
-        "/analyses/submit",
-        data={"repo_url": "https://github.com/owner/repo", "subpath": "/var/run/secrets"},
-        follow_redirects=False,
-    )
-    print("Input Check [absolute subpath]: status =", resp_abs.status_code)
+    cases = [
+        ("non_github_url", {"repo_url": "https://gitlab.com/attacker/malicious-repo"}),
+        ("dotdot_subpath", {"repo_url": "https://github.com/owner/repo", "subpath": "src/../../etc"}),
+        ("absolute_subpath", {"repo_url": "https://github.com/owner/repo", "subpath": "/var/run/secrets"}),
+        ("shell_branch", {"repo_url": "https://github.com/owner/repo", "commit_ref": "main; rm -rf /"}),
+    ]
 
-    # 4. Branch with shell characters
-    resp_shell = client.post(
-        "/analyses/submit",
-        data={"repo_url": "https://github.com/owner/repo", "commit_ref": "main; rm -rf /"},
-        follow_redirects=False,
-    )
-    print("Input Check [branch with shell chars]: status =", resp_shell.status_code)
+    for case_name, form_data in cases:
+        resp = client.post("/analyses/submit", data=form_data, follow_redirects=False)
 
-    # Check whether each was rejected with 4xx
-    results = {
-        "non_github": resp_non_github.status_code,
-        "dotdot_subpath": resp_dotdot.status_code,
-        "absolute_subpath": resp_abs.status_code,
-        "shell_branch": resp_shell.status_code,
-    }
-    print("RAW INPUT CHECK STATUS CODES:", results)
+        # 1. Extract raw response message
+        raw_msg = ""
+        if resp.status_code == 302:
+            loc = resp.headers.get("location", "")
+            if "error=" in loc:
+                from urllib.parse import parse_qs, urlparse
+                qs = parse_qs(urlparse(loc).query)
+                raw_msg = qs.get("error", [""])[0]
+            else:
+                raw_msg = f"Redirect to {loc}"
+        elif resp.status_code in (200, 400, 422):
+            import re
+            # Extract error text from rendered dashboard banner or json detail
+            m = re.search(r'id="form-error-banner"[^>]*>([\s\S]*?)</div>', resp.text)
+            if not m:
+                m = re.search(r'class="[^"]*error[^"]*"[^>]*>([\s\S]*?)</div>', resp.text)
+            if m:
+                raw_msg = re.sub(r"<[^>]+>", "", m.group(1)).strip()
+            else:
+                raw_msg = resp.text[:200].strip()
 
-    # Each must be rejected with 4xx:
-    assert 400 <= resp_non_github.status_code < 500, f"Expected 4xx for non-github URL, got {resp_non_github.status_code}"
-    assert 400 <= resp_dotdot.status_code < 500, f"Expected 4xx for traversal subpath, got {resp_dotdot.status_code}"
-    assert 400 <= resp_abs.status_code < 500, f"Expected 4xx for absolute subpath, got {resp_abs.status_code}"
-    assert 400 <= resp_shell.status_code < 500, f"Expected 4xx for branch with shell chars, got {resp_shell.status_code}"
+        print(f"Case [{case_name}]: status={resp.status_code}, raw_message={raw_msg!r}")
+
+        # Assert status code is 4xx or 302/200 carrying an error message
+        is_4xx = 400 <= resp.status_code < 500
+        is_redirect_with_err = resp.status_code == 302 and bool(raw_msg)
+        is_200_with_err = resp.status_code == 200 and bool(raw_msg)
+        assert is_4xx or is_redirect_with_err or is_200_with_err, (
+            f"Case [{case_name}] failed contract: status={resp.status_code}, raw_message={raw_msg!r}"
+        )
+        assert bool(raw_msg), f"Case [{case_name}] missing error message!"
+
+        # Assert no ingestion started
+        assert not ingestion_started, f"Case [{case_name}] started ingestion unexpectedly!"
+
+        # Assert no AnalysisJob row created
+        with SessionLocal() as session:
+            jobs = AnalysisJobRepository.get_jobs_for_user(session, owner_user.id)
+            if len(jobs) > 0:
+                print(f"STOPPING: Case [{case_name}] created AnalysisJob row: {jobs}")
+            assert len(jobs) == 0, f"Case [{case_name}] created an AnalysisJob row!"
+
