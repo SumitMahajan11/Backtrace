@@ -92,22 +92,20 @@ def get_default_llm_provider() -> Optional[NarrationLLMCallable]:
     """
     provider_env = ""
     base_url = "http://127.0.0.1:11434"
-    configured_model = "llama3.2:3b"
     timeout = 120.0
-
     try:
         from app.core.config import get_settings
         settings = get_settings()
+        if hasattr(settings, "OLLAMA_TIMEOUT") and settings.OLLAMA_TIMEOUT is not None:
+            timeout = float(settings.OLLAMA_TIMEOUT)
         if settings.LLM_PROVIDER:
             provider_env = str(settings.LLM_PROVIDER).strip().lower()
         if hasattr(settings, "OLLAMA_BASE_URL") and settings.OLLAMA_BASE_URL:
             base_url = str(settings.OLLAMA_BASE_URL).strip()
         if hasattr(settings, "OLLAMA_MODEL") and settings.OLLAMA_MODEL:
             configured_model = str(settings.OLLAMA_MODEL).strip()
-        if hasattr(settings, "OLLAMA_TIMEOUT") and settings.OLLAMA_TIMEOUT:
-            timeout = float(settings.OLLAMA_TIMEOUT)
     except Exception:
-        pass
+        timeout = 120.0
 
     # Environment variable overrides
     env_override = os.getenv("LLM_PROVIDER", "").strip().lower()
