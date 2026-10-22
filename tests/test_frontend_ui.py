@@ -2778,7 +2778,7 @@ def test_xss_prevention_in_js_render_templates_and_activity_entry():
     node_available = False
     if node_bin:
         try:
-            res = subprocess.run([node_bin, "--version"], capture_output=True, text=True, check=True)
+            res = subprocess.run([node_bin, "--version"], capture_output=True, text=True, check=True, encoding="utf-8")
             node_available = bool(res.stdout.strip())
         except Exception:
             node_available = False
@@ -2786,29 +2786,80 @@ def test_xss_prevention_in_js_render_templates_and_activity_entry():
     if node_available:
         m_esc = re.search(r"function escapeHtml\(str\) \{.*?\n        \}", rv_html, re.DOTALL)
         m_console = re.search(r"function renderConsoleHtmlInJs\(exec\) \{.*?\n        \}", rv_html, re.DOTALL)
+        m_chips = re.search(r"function renderGroupedFillChips\(blankedFunctions, reason\) \{.*?\n        \}", rv_html, re.DOTALL)
+        m_diff = re.search(r"function renderDiffHtmlInJs\(result, isVerified, errorMsg, gradingMethod\) \{.*?\n        \}", rv_html, re.DOTALL)
         assert m_esc is not None, "escapeHtml function not found in report_view"
         assert m_console is not None, "renderConsoleHtmlInJs function not found in report_view"
+        assert m_chips is not None, "renderGroupedFillChips function not found in report_view"
+        assert m_diff is not None, "renderDiffHtmlInJs function not found in report_view"
 
         js_code = f"""
 {m_esc.group(0)}
 {m_console.group(0)}
+{m_chips.group(0)}
+{m_diff.group(0)}
 
 const payload = {json.dumps(payload)};
-const out = renderConsoleHtmlInJs({{
+
+// 1. renderConsoleHtmlInJs
+const consoleOut = renderConsoleHtmlInJs({{
     exit_code: payload,
     stdout: payload,
     stderr: payload,
     execution_time_ms: payload
 }});
-console.log(JSON.stringify(out));
+
+// 2. renderGroupedFillChips with name, class_name, reason
+const chipsOutItems = renderGroupedFillChips([
+    {{ name: payload, class_name: payload, full_name: payload, reason: payload }}
+], payload);
+const chipsOutEmpty = renderGroupedFillChips([], payload);
+
+// 3. renderDiffHtmlInJs with name, class_name, reason, err, kind, args
+const diffOutFill = renderDiffHtmlInJs({{
+    verification: {{
+        blanked_evaluated: 1,
+        implemented_count: 0,
+        blank_details: [
+            {{ name: payload, class_name: payload, reason: payload, status: 'stub' }},
+            {{ name: payload, class_name: payload, reason: payload, status: 'implemented' }}
+        ]
+    }}
+}}, false, payload, 'fill_the_blanks');
+
+const diffOutAst = renderDiffHtmlInJs({{
+    verification: {{
+        diff: {{
+            present_symbols: [
+                {{ matched: {{ name: payload, kind: payload, args: [payload] }} }}
+            ],
+            missing_symbols: [
+                {{ expected: {{ name: payload, kind: payload }} }}
+            ],
+            extra_symbols: [
+                {{ matched: {{ name: payload, kind: payload }} }}
+            ]
+        }}
+    }}
+}}, false, payload, 'structural_verifier');
+
+console.log(JSON.stringify({{
+    consoleOut,
+    chipsOutItems,
+    chipsOutEmpty,
+    diffOutFill,
+    diffOutAst
+}}));
 """
-        proc = subprocess.run([node_bin, "-e", js_code], capture_output=True, text=True, check=True)
-        rendered_html = json.loads(proc.stdout)
+        proc = subprocess.run([node_bin, "-e", js_code], capture_output=True, text=True, check=True, encoding="utf-8")
+        outputs = json.loads(proc.stdout)
 
         # Behavioral assertions: raw HTML tag must never appear unescaped
-        assert "<img" not in rendered_html, f"Raw <img found in rendered HTML output: {rendered_html}"
-        assert "&lt;img src=x onerror=alert(1)&gt;" in rendered_html
-        assert "EXIT 0" in rendered_html
+        for label, html_snippet in outputs.items():
+            assert "<img" not in html_snippet, f"Raw <img found in {label} output: {html_snippet}"
+            assert "&lt;img src=x onerror=alert(1)&gt;" in html_snippet, f"Escaped payload missing in {label}: {html_snippet}"
+
+        assert "EXIT 0" in outputs["consoleOut"]
     else:
         # Fallback structural checks when Node is not installed
         assert "escapeHtml(stdout)" in rv_html
