@@ -839,7 +839,12 @@ async def analysis_progress_events(
                     "stage_9": "Failed while persisting analysis artifacts to the database.",
                     "stage_10": "Failed while recording execution metrics and telemetry.",
                 }
-                clean_err = stage_messages.get(current_stage_key, f"An unexpected error occurred during analysis.")
+                from app.models.ingestion import InvalidURLError
+                import html
+                if isinstance(exc, InvalidURLError):
+                    clean_err = html.escape(str(exc))
+                else:
+                    clean_err = stage_messages.get(current_stage_key, f"An unexpected error occurred during analysis.")
                 from app.db.session import SessionLocal
                 with SessionLocal() as db_session:
                     AnalysisJobRepository.update_job_status(

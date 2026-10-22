@@ -2529,3 +2529,113 @@ def test_starter_code_unavailable_fallback_notice(client, create_user, test_db):
     assert "Starter code isn&#39;t available for this file." in html or "Starter code isn't available for this file." in html
 
 
+def test_pipeline_clone_error_shows_html_escaped_invalid_url_error(client, test_db, create_user, monkeypatch):
+    """
+    Verifies that when ingestion raises InvalidURLError, the specific error message
+    is HTML-escaped and presented to the user instead of the generic clone error message.
+    """
+    import html
+    from app.models.ingestion import InvalidURLError
+    from app.services.ingestion import IngestionService
+    from app.core.config import get_settings
+
+    SessionLocal, _ = test_db
+    user = create_user(github_id=987654, username="url_err_user")
+
+    with SessionLocal() as session:
+        job = AnalysisJobRepository.create_job(
+            session=session,
+            user_id=user.id,
+            repo_url="https://github.com/org/xss-ref-repo",
+            status="pending",
+        )
+        job_id = job.id
+
+    token = create_access_token(user_id=user.id, github_id=user.github_id, github_username=user.github_username)
+    client.cookies.set("access_token", token)
+
+    # Disable test fast-branch to execute real pipeline exception handling
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+    monkeypatch.setattr(get_settings(), "ENVIRONMENT", "production")
+    monkeypatch.setattr("app.db.session.SessionLocal", SessionLocal)
+
+    raw_error_message = "Could not check out ref '<script>alert(1)</script>'. Verify ref exists."
+    def mock_ingest(*args, **kwargs):
+        raise InvalidURLError(raw_error_message)
+
+    monkeypatch.setattr(IngestionService, "ingest_repository", mock_ingest)
+
+    resp = client.get(f"/api/analyses/{job_id}/events")
+    assert resp.status_code == 200
+
+    events = []
+    for line in resp.iter_lines():
+        if line and line.startswith("data: "):
+            events.append(json.loads(line[6:]))
+
+    failed_events = [e for e in events if e.get("type") == "failed"]
+    assert len(failed_events) == 1
+    failed_event = failed_events[0]
+    expected_escaped = html.escape(raw_error_message)
+    assert failed_event["message"] == expected_escaped
+    assert "<script>" not in failed_event["message"]
+
+    # Verify persisted job error message in DB is also escaped
+    with SessionLocal() as session:
+        updated_job = AnalysisJobRepository.get_job_by_id(session, job_id)
+        assert updated_job.status == "failed"
+        assert updated_job.error_message == expected_escaped
+
+
+def test_pipeline_clone_error_keeps_generic_message_for_other_errors(client, test_db, create_user, monkeypatch):
+    """
+    Verifies that when cloning encounters non-InvalidURLError exceptions (e.g. RuntimeError),
+    the generic clone failure message is retained.
+    """
+    from app.services.ingestion import IngestionService
+    from app.core.config import get_settings
+
+    SessionLocal, _ = test_db
+    user = create_user(github_id=987655, username="generic_err_user")
+
+    with SessionLocal() as session:
+        job = AnalysisJobRepository.create_job(
+            session=session,
+            user_id=user.id,
+            repo_url="https://github.com/org/generic-fail-repo",
+            status="pending",
+        )
+        job_id = job.id
+
+    token = create_access_token(user_id=user.id, github_id=user.github_id, github_username=user.github_username)
+    client.cookies.set("access_token", token)
+
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+    monkeypatch.setattr(get_settings(), "ENVIRONMENT", "production")
+    monkeypatch.setattr("app.db.session.SessionLocal", SessionLocal)
+
+    def mock_ingest(*args, **kwargs):
+        raise RuntimeError("Low-level git process died unexpectedly")
+
+    monkeypatch.setattr(IngestionService, "ingest_repository", mock_ingest)
+
+    resp = client.get(f"/api/analyses/{job_id}/events")
+    assert resp.status_code == 200
+
+    events = []
+    for line in resp.iter_lines():
+        if line and line.startswith("data: "):
+            events.append(json.loads(line[6:]))
+
+    failed_events = [e for e in events if e.get("type") == "failed"]
+    assert len(failed_events) == 1
+    failed_event = failed_events[0]
+    assert failed_event["message"] == "Failed while cloning repository into analysis sandbox."
+
+    with SessionLocal() as session:
+        updated_job = AnalysisJobRepository.get_job_by_id(session, job_id)
+        assert updated_job.status == "failed"
+        assert updated_job.error_message == "Failed while cloning repository into analysis sandbox."
+
+
+
