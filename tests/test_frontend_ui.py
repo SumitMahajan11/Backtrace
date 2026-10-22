@@ -2870,3 +2870,146 @@ console.log(JSON.stringify({{
         assert "const name = escapeHtml(b.name || 'function');" in rv_html
         assert "escapeHtml(err)" in rv_html
 
+
+def test_python_side_html_escaping_for_repo_file_and_symbols():
+    """
+    Verifies that Python-side template rendering sanitizes and escapes attacker payloads
+    when used as function names, file paths, and repository names.
+    Ensures that raw '<img' tags are never emitted into server-rendered HTML.
+    """
+    from app.ui.components import (
+        report_view,
+        progress_view,
+        dashboard_view,
+        _render_grouped_fill_chips,
+        _render_server_diff_html,
+    )
+    from app.models.db import AnalysisJobModel, UserModel
+
+    payload = '<img src=x onerror=alert(1)>'
+    escaped_payload = '&lt;img src=x onerror=alert(1)&gt;'
+
+    mock_user = UserModel(
+        id=1,
+        github_id='1001',
+        github_username='archaeologist',
+        email='dev@example.com',
+    )
+
+    # 1. Payload as repo_name in progress_view (processing & failed) and dashboard_view
+    job_processing = AnalysisJobModel(
+        id="job_proc",
+        user_id=1,
+        repo_url=f"https://github.com/org/{payload}",
+        repo_name=payload,
+        status="processing",
+    )
+    pv_proc_html = progress_view(job=job_processing, current_user=mock_user)
+    assert "<img" not in pv_proc_html
+    assert escaped_payload in pv_proc_html
+
+    job_failed = AnalysisJobModel(
+        id="job_fail",
+        user_id=1,
+        repo_url=f"https://github.com/org/{payload}",
+        repo_name=payload,
+        status="failed",
+        error_message=payload,
+    )
+    pv_fail_html = progress_view(job=job_failed, current_user=mock_user)
+    assert "<img" not in pv_fail_html
+    assert escaped_payload in pv_fail_html
+
+    dash_html = dashboard_view(
+        current_user=mock_user,
+        billing_status={},
+        past_jobs=[job_processing, job_failed],
+    )
+    assert "<img" not in dash_html
+    assert escaped_payload in dash_html
+
+    # 2. Payload as file path and repo name in report_view
+    job_completed = AnalysisJobModel(
+        id="job_done",
+        user_id=1,
+        repo_url=f"https://github.com/org/{payload}",
+        repo_name=payload,
+        status="completed",
+    )
+    rep_html = report_view(
+        job=job_completed,
+        raw_markdown="# Synthesis Report",
+        graph_data={
+            "nodes": [
+                {
+                    "id": "node_payload",
+                    "label": payload,
+                    "path": f"src/{payload}/main.py",
+                    "tier": 1,
+                    "exports": [payload],
+                }
+            ],
+            "edges": [],
+            "milestones": [
+                {
+                    "tier": 1,
+                    "title": payload,
+                    "architectural_role": payload,
+                    "overview": payload,
+                    "domain_composition": payload,
+                    "included_files": [f"src/{payload}/main.py"],
+                    "exported_symbols": [payload],
+                }
+            ],
+        },
+        quiz_data={"questions": []},
+    )
+    assert "<img" not in rep_html
+    assert escaped_payload in rep_html
+
+    # 3. Payload as function name, class_name, reason, err, kind, and args in server diff & chips
+    chips_html = _render_grouped_fill_chips(
+        [{"name": payload, "class_name": payload, "full_name": payload, "reason": payload}],
+        fallback_reason=payload,
+    )
+    assert "<img" not in chips_html
+    assert escaped_payload in chips_html
+
+    chips_empty_html = _render_grouped_fill_chips([], fallback_reason=payload)
+    assert "<img" not in chips_empty_html
+    assert escaped_payload in chips_empty_html
+
+    diff_fill_html = _render_server_diff_html(
+        {
+            "verification": {
+                "blank_details": [
+                    {"name": payload, "status": "stub", "reason": payload},
+                    {"name": payload, "status": "implemented", "reason": payload},
+                ]
+            }
+        },
+        is_verified=False,
+        err_msg=payload,
+        grading_method="fill_the_blanks",
+    )
+    assert "<img" not in diff_fill_html
+    assert escaped_payload in diff_fill_html
+
+    diff_ast_html = _render_server_diff_html(
+        {
+            "verification": {
+                "diff": {
+                    "present_symbols": [{"matched": {"name": payload, "kind": payload, "args": [payload]}}],
+                    "missing_symbols": [{"name": payload, "kind": payload}],
+                    "extra_symbols": [{"name": payload, "kind": payload}],
+                }
+            }
+        },
+        is_verified=False,
+        err_msg=payload,
+        grading_method="structural_verifier",
+    )
+    assert "<img" not in diff_ast_html
+    assert escaped_payload in diff_ast_html
+
+
