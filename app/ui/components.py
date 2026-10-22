@@ -1330,6 +1330,10 @@ def privacy_view(current_user: Optional[UserModel] = None) -> str:
 
 def pricing_view(current_user: Optional[UserModel] = None) -> str:
     """Render the public Pricing and Limits page adhering to Archival Dossier tokens."""
+    from app.services.ingestion import get_max_repo_mb, MAX_REPO_FILE_LIMIT_V1
+    enforced_mb = get_max_repo_mb()
+    enforced_files = MAX_REPO_FILE_LIMIT_V1
+
     cta_href = "/dashboard" if current_user else "/login"
     content = f"""
     <div style="max-width: 840px; margin: 3rem auto 0 auto; padding: 0 1rem;">
@@ -1354,7 +1358,8 @@ def pricing_view(current_user: Optional[UserModel] = None) -> str:
                         <h2 style="font-size: 1.5rem; font-weight: 600; margin: 0.25rem 0 1rem 0; color: var(--text-primary);">Free Plan</h2>
                         <ul style="list-style: none; padding: 0; margin: 0 0 1.5rem 0; font-size: 0.9rem; line-height: 1.8; color: var(--text-secondary);">
                             <li>&check; <strong>5 repository analyses</strong> per month</li>
-                            <li>&check; <strong>100 MB</strong> repository size cap</li>
+                            <li>&check; <strong>{enforced_mb} MB</strong> repository size cap (expanded from 100 MB)</li>
+                            <li>&check; <strong>{enforced_files} supported files</strong> cap</li>
                         </ul>
                     </div>
                     <a href="{cta_href}" class="btn btn-secondary" style="width: 100%; justify-content: center; font-size: 0.9rem;">
