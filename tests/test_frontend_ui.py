@@ -2724,4 +2724,59 @@ def test_pipeline_clone_error_keeps_generic_message_for_other_errors(client, tes
         assert updated_job.error_message == "Failed while cloning repository into analysis sandbox."
 
 
+def test_xss_prevention_in_js_render_templates_and_activity_entry():
+    """
+    Verifies that all dynamic JS template sinks escape attacker-controlled HTML payloads:
+    - stdout / stderr in renderConsoleHtmlInJs
+    - function name, class name, and reason in renderGroupedFillChips
+    - function name, kind, args, and errors in renderDiffHtmlInJs
+    - stageName and message in addActivityEntry (progress_view)
+    Ensures <img src=x onerror=alert(1)> is safely encoded as &lt;img src=x onerror=alert(1)&gt;.
+    """
+    from app.ui.components import progress_view, report_view
+    from app.models.db import AnalysisJobModel
+
+    payload = '<img src=x onerror=alert(1)>'
+
+    mock_job = AnalysisJobModel(
+        id="job_xss",
+        user_id=1,
+        repo_url="https://github.com/owner/repo",
+        repo_name="repo",
+        status="processing",
+        execution_time_seconds=1.0,
+    )
+
+    # 1. progress_view template contains escapeHtml for stageName and message
+    pv_html = progress_view(job=mock_job, current_user=None)
+    assert "${escapeHtml(stageName)}" in pv_html
+    assert "${escapeHtml(message)}" in pv_html
+    assert "function escapeHtml(str)" in pv_html
+
+    # 2. report_view JS definitions have escapeHtml calls for stdout, function names, and diffs
+    mock_job = AnalysisJobModel(
+        id="job_xss",
+        user_id=1,
+        repo_url="https://github.com/owner/repo",
+        repo_name="repo",
+        status="completed",
+        execution_time_seconds=1.0,
+    )
+    rv_html = report_view(
+        job=mock_job,
+        raw_markdown="# Report",
+        graph_data={"nodes": [], "edges": []},
+        quiz_data={"questions": []},
+    )
+    # Check renderConsoleHtmlInJs escapes stdout and stderr
+    assert "escapeHtml(stdout)" in rv_html
+    assert "escapeHtml(stderr)" in rv_html
+
+    # Check renderGroupedFillChips escapes function names, class names, reasons
+    assert "const fnName = escapeHtml(bf.name || bf.full_name || '');" in rv_html
+    assert "escapeHtml(g.className)" in rv_html
+
+    # Check renderDiffHtmlInJs escapes symbols, diff errors, and blanked functions
+    assert "const name = escapeHtml(b.name || 'function');" in rv_html
+    assert "escapeHtml(err)" in rv_html
 

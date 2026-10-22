@@ -2105,6 +2105,16 @@ def progress_view(
         const completedStages = new Set();
         const checkmarkSvg = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>';
 
+        function escapeHtml(str) {{
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }}
+
         function addActivityEntry(stageIndex, totalStages, stageName, message, isComplete=false) {{
             if (!activityLogBox) return;
             const existingId = `activity-stage-${{stageIndex}}`;
@@ -2141,10 +2151,10 @@ def progress_view(
                     </div>
                     <div>
                         <div style="font-size: 0.875rem; font-weight: 600; color: var(--text-primary);">
-                            Stage ${{stageIndex}} of ${{totalStages}} — ${{stageName}}
+                            Stage ${{stageIndex}} of ${{totalStages}} — ${{escapeHtml(stageName)}}
                         </div>
                         <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.15rem;">
-                            ${{message}}
+                            ${{escapeHtml(message)}}
                         </div>
                     </div>
                 </div>
