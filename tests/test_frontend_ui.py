@@ -2576,15 +2576,62 @@ def test_pipeline_clone_error_shows_html_escaped_invalid_url_error(client, test_
     failed_events = [e for e in events if e.get("type") == "failed"]
     assert len(failed_events) == 1
     failed_event = failed_events[0]
-    expected_escaped = html.escape(raw_error_message)
-    assert failed_event["message"] == expected_escaped
-    assert "<script>" not in failed_event["message"]
+    # Verify raw error message is sent in SSE
+    assert failed_event["message"] == raw_error_message
 
-    # Verify persisted job error message in DB is also escaped
+    # Verify persisted job error message in DB is also raw
     with SessionLocal() as session:
         updated_job = AnalysisJobRepository.get_job_by_id(session, job_id)
         assert updated_job.status == "failed"
-        assert updated_job.error_message == expected_escaped
+        assert updated_job.error_message == raw_error_message
+
+
+def test_failed_job_error_message_raw_in_db_and_escaped_on_dashboard_and_failed_view(client, create_user, test_db):
+    """
+    Verifies that a job with raw HTML in its error_message ('<b>x</b>') is stored raw in DB
+    and cleanly HTML-escaped at render time on both the dashboard and the failed view
+    without double-escaping (i.e. contains '&lt;b&gt;x&lt;/b&gt;', not '<b>x</b>' and not '&amp;lt;b&amp;gt;x&amp;amp;lt;/b&amp;gt;').
+    """
+    SessionLocal, _ = test_db
+    user = create_user(github_id=9909, username="raw_error_tester")
+    token = create_access_token(user_id=user.id, github_id=user.github_id, github_username=user.github_username)
+    client.cookies.set("access_token", token)
+
+    raw_err = "<b>x</b>"
+    with SessionLocal() as session:
+        job = AnalysisJobRepository.create_job(
+            session=session,
+            user_id=user.id,
+            repo_url="https://github.com/test/raw-err-repo",
+            status="failed",
+        )
+        AnalysisJobRepository.update_job_status(
+            session=session,
+            job_id=job.id,
+            status="failed",
+            error_message=raw_err,
+        )
+        job_id = job.id
+
+        # Verify DB stores the RAW error message
+        db_job = AnalysisJobRepository.get_job_by_id(session, job_id)
+        assert db_job.error_message == "<b>x</b>"
+
+    # 1. Dashboard view
+    resp_dash = client.get("/dashboard")
+    assert resp_dash.status_code == 200
+    dash_html = resp_dash.text
+    assert "&lt;b&gt;x&lt;/b&gt;" in dash_html
+    assert "<b>x</b>" not in dash_html
+    assert "&amp;lt;b&amp;gt;x&amp;amp;lt;/b&amp;gt;" not in dash_html
+
+    # 2. Failed job view (progress_view)
+    resp_prog = client.get(f"/progress/{job_id}")
+    assert resp_prog.status_code == 200
+    prog_html = resp_prog.text
+    assert "&lt;b&gt;x&lt;/b&gt;" in prog_html
+    assert "<b>x</b>" not in prog_html
+    assert "&amp;lt;b&amp;gt;x&amp;amp;lt;/b&amp;gt;" not in prog_html
 
 
 def test_pipeline_clone_error_keeps_generic_message_for_other_errors(client, test_db, create_user, monkeypatch):
