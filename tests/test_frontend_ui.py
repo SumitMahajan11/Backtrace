@@ -505,6 +505,45 @@ def test_progress_view_sse_log_safe_dom():
     assert "line.innerHTML = `<span" not in html_out
 
 
+def test_progress_view_sse_failed_handler_uses_textcontent_for_error_message():
+    """
+    Verifies that the progress view SSE error message handlers use .textContent rather than .innerHTML
+    when displaying error messages (such as '<b>x</b>') to prevent XSS execution in the DOM.
+    """
+    from app.ui.components import progress_view
+    from unittest.mock import MagicMock
+    mock_job = MagicMock()
+    mock_job.id = 456
+    mock_job.repo_url = "https://github.com/example/repo"
+    mock_job.status = "pending"
+    mock_job.error_message = None
+    mock_user = MagicMock()
+    mock_user.github_username = "testuser"
+    mock_user.avatar_url = ""
+
+    html_out = progress_view(job=mock_job, current_user=mock_user)
+
+    # Assert that failureMsg and statusDesc use .textContent for dynamic error message
+    assert "failureMsg.textContent = msg;" in html_out
+    assert "failureMsg.textContent = err;" in html_out
+    assert "failureMsg.innerHTML = msg;" not in html_out
+    assert "failureMsg.innerHTML = err;" not in html_out
+    assert "statusDesc.textContent = data.message" in html_out
+    assert "statusDesc.innerHTML = data.message" not in html_out
+
+    # Also verify that when initialized with '<b>x</b>', the initial failure DOM element uses HTML-escaped text
+    mock_failed_job = MagicMock()
+    mock_failed_job.id = 457
+    mock_failed_job.repo_url = "https://github.com/example/repo"
+    mock_failed_job.status = "failed"
+    mock_failed_job.error_message = "<b>x</b>"
+
+    failed_html = progress_view(job=mock_failed_job, current_user=mock_user)
+    assert "&lt;b&gt;x&lt;/b&gt;" in failed_html
+    assert "<b>x</b>" not in failed_html
+
+
+
 # =========================================================================
 # 8. Threat Model: IDOR (Insecure Direct Object Reference) Protection Test
 # =========================================================================
