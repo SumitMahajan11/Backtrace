@@ -218,6 +218,7 @@ class ExecutionVerifier:
                 "PATH": os.environ.get("PATH", ""),
                 "PYTHONPATH": str(tmp_path),
                 "PYTHONUNBUFFERED": "1",
+                "PYTHONIOENCODING": "utf-8",
                 "TEMP": tmpdir,
                 "TMP": tmpdir,
             }
@@ -231,6 +232,8 @@ class ExecutionVerifier:
                     input=stdin or "",
                     capture_output=True,
                     text=True,
+                    encoding="utf-8",
+                    errors="replace",
                     timeout=timeout_sec,
                     cwd=str(tmp_path),
                     env=env,
