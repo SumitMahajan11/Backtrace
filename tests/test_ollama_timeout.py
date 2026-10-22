@@ -61,3 +61,30 @@ def test_ollama_timeout_env_300_gives_300(monkeypatch):
         provider = get_default_llm_provider()
         assert provider is not None
         assert recorded_timeout == 300.0
+
+
+def test_ollama_model_empty_gives_default(monkeypatch):
+    """
+    Test: when OLLAMA_MODEL is empty (""), get_default_llm_provider falls back to llama3.2:3b.
+    """
+    monkeypatch.setenv("LLM_PROVIDER", "ollama")
+    monkeypatch.setenv("OLLAMA_MODEL", "")
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {
+        "models": [{"name": "other-model:latest"}, {"name": "llama3.2:3b"}]
+    }
+
+    recorded_model = None
+    def mock_create_ollama_provider(model=None, base_url=None, timeout=None):
+        nonlocal recorded_model
+        recorded_model = model
+        return lambda system, user: "mocked"
+
+    with patch("httpx.Client.get", return_value=mock_resp), \
+         patch("app.sequence.llm_client.create_ollama_provider", side_effect=mock_create_ollama_provider):
+        provider = get_default_llm_provider()
+        assert provider is not None
+        assert recorded_model == "llama3.2:3b"
+
