@@ -3166,6 +3166,98 @@ def test_script_tag_breakout_prevention_in_report_and_embedded_json():
     assert "\\u003c/script\\u003e" in malicious_html or "&lt;/script&gt;" in malicious_html
 
 
+def test_script_helper_and_script_blocks_prevent_raw_separators_and_delimiters():
+    """
+    Threat Model: Verify that dangerous JS/HTML delimiters and separators:
+    U+2028 (LINE SEPARATOR), U+2029 (PARAGRAPH SEPARATOR), '<!--', '-->', and '</script'
+    in repo name, file path, and quiz text:
+    1. Are safely escaped by _safe_script_json_dumps so they never appear raw in JSON strings.
+    2. None appear raw inside ANY <script> block in the rendered report_view HTML.
+    """
+    import json
+    import re
+    from app.ui.components import _safe_script_json_dumps, report_view
+    from app.models.db import AnalysisJobModel
+
+    # 1. Helper unit tests
+    test_obj = {
+        "repo": "repo<!--inject",
+        "close": "inject-->code",
+        "script": "alert(1)</script>",
+        "separators": "line\u2028sep\u2029para",
+    }
+    dumped = _safe_script_json_dumps(test_obj)
+    assert "\u2028" not in dumped
+    assert "\u2029" not in dumped
+    assert "<!--" not in dumped
+    assert "-->" not in dumped
+    assert "</script" not in dumped.lower()
+    # Ensure escaped sequences are valid JSON that parse back cleanly
+    parsed = json.loads(dumped)
+    assert parsed["repo"] == "repo<!--inject"
+    assert parsed["close"] == "inject-->code"
+    assert parsed["script"] == "alert(1)</script>"
+    assert parsed["separators"] == "line\u2028sep\u2029para"
+
+    # 2. Integration test in report_view
+    payload = "exploit<!--\u2028\u2029</script><script>alert(1)</script>-->"
+
+    job = AnalysisJobModel(
+        id="job_delims",
+        user_id=1,
+        repo_url=f"https://github.com/org/{payload}",
+        repo_name=payload,
+        status="completed",
+    )
+    rep_html = report_view(
+        job=job,
+        raw_markdown=f"# Delimiter Test\n{payload}",
+        graph_data={
+            "nodes": [
+                {
+                    "id": f"node_{payload}",
+                    "path": f"src/{payload}/main.py",
+                    "label": payload,
+                    "exports": [payload],
+                }
+            ],
+            "edges": [],
+            "milestones": [
+                {
+                    "tier": 1,
+                    "title": payload,
+                    "architectural_role": payload,
+                    "overview": payload,
+                    "domain_composition": payload,
+                    "included_files": [f"src/{payload}/main.py"],
+                    "exported_symbols": [payload],
+                }
+            ],
+        },
+        quiz_data={
+            "questions": [
+                {
+                    "question": f"Question with {payload}",
+                    "options": [f"Option {payload}"],
+                    "answer": f"Option {payload}",
+                    "explanation": f"Explanation with {payload}",
+                }
+            ]
+        },
+    )
+
+    # Extract all <script>...</script> blocks from rendered HTML
+    script_blocks = re.findall(r"<script\b[^>]*>(.*?)</script>", rep_html, re.DOTALL | re.IGNORECASE)
+    assert len(script_blocks) > 0, "Expected at least one <script> block in report_view HTML"
+
+    for idx, block in enumerate(script_blocks):
+        assert "\u2028" not in block, f"Raw U+2028 found in script block {idx}"
+        assert "\u2029" not in block, f"Raw U+2029 found in script block {idx}"
+        assert "<!--" not in block, f"Raw '<!--' found in script block {idx}"
+        assert "-->" not in block, f"Raw '-->' found in script block {idx}"
+        assert "</script" not in block.lower(), f"Raw '</script' found in script block {idx}"
+
+
 def test_path_truncation_and_xss_prevention_in_report_nodes_tabs_and_tooltips():
     """
     Threat Model: Verify that a 200-character file path containing an XSS payload
