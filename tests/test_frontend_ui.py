@@ -2793,7 +2793,7 @@ def test_xss_prevention_in_js_render_templates_and_activity_entry():
         assert m_chips is not None, "renderGroupedFillChips function not found in report_view"
         assert m_diff is not None, "renderDiffHtmlInJs function not found in report_view"
 
-        for p in ["<img src=x onerror=alert(1)>", '"><svg onload=alert(1)>']:
+        for p in ["<img src=x onerror=alert(1)>", '"><svg onload=alert(1)>', '" onmouseover="alert(1)']:
             js_code = f"""
 {m_esc.group(0)}
 {m_console.group(0)}
@@ -2854,8 +2854,20 @@ console.log(JSON.stringify({{
             # Behavioral assertions: raw HTML tags and attribute break-outs must never appear unescaped
             for label, html_snippet in outputs.items():
                 assert "<img" not in html_snippet, f"Raw <img found in {label} output: {html_snippet}"
-                assert "<svg" not in html_snippet, f"Raw <svg found in {label} output: {html_snippet}"
-                assert "\"><" not in html_snippet, f"Unescaped '><' found in {label} output: {html_snippet}"
+                assert "><svg" not in html_snippet, f"Raw '><svg' found in {label} output: {html_snippet}"
+                assert "<svg onload" not in html_snippet, f"Raw '<svg onload' found in {label} output: {html_snippet}"
+                assert '" onmouseover="' not in html_snippet, f"Raw '\" onmouseover=\"' found in {label} output: {html_snippet}"
+
+            if p == '"><svg onload=alert(1)>':
+                assert '&quot;&gt;&lt;svg onload=alert(1)&gt;' in outputs["chipsOutItems"]
+                assert 'title="' + '&quot;&gt;&lt;svg onload=alert(1)&gt;()' in outputs["chipsOutItems"]
+                assert '🧩 ' + '&quot;&gt;&lt;svg onload=alert(1)&gt;()' in outputs["chipsOutItems"]
+                assert '&quot;&gt;&lt;svg onload=alert(1)&gt;' in outputs["diffOutFill"]
+                assert '&quot;&gt;&lt;svg onload=alert(1)&gt;' in outputs["diffOutAst"]
+            elif p == '" onmouseover="alert(1)':
+                assert '&quot; onmouseover=&quot;alert(1)' in outputs["chipsOutItems"]
+                assert 'title="' + '&quot; onmouseover=&quot;alert(1)()"' in outputs["chipsOutItems"]
+                assert '🧩 &quot; onmouseover=&quot;alert(1)()' in outputs["chipsOutItems"]
 
         assert "EXIT 0" in outputs["consoleOut"]
     else:
@@ -2885,7 +2897,7 @@ def test_python_side_html_escaping_for_repo_file_and_symbols():
     from app.models.db import AnalysisJobModel, UserModel
     import html
 
-    for payload in ['<img src=x onerror=alert(1)>', '"><svg onload=alert(1)>']:
+    for payload in ['<img src=x onerror=alert(1)>', '"><svg onload=alert(1)>', '" onmouseover="alert(1)']:
         mock_user = UserModel(
             id=1,
             github_id='1001',
@@ -2905,7 +2917,9 @@ def test_python_side_html_escaping_for_repo_file_and_symbols():
         )
         pv_proc_html = progress_view(job=job_processing, current_user=mock_user)
         assert "<img" not in pv_proc_html
+        assert "><svg onload" not in pv_proc_html
         assert "<svg onload" not in pv_proc_html
+        assert '" onmouseover="' not in pv_proc_html
         assert escaped_payload in pv_proc_html
 
         job_failed = AnalysisJobModel(
@@ -2918,7 +2932,9 @@ def test_python_side_html_escaping_for_repo_file_and_symbols():
         )
         pv_fail_html = progress_view(job=job_failed, current_user=mock_user)
         assert "<img" not in pv_fail_html
+        assert "><svg onload" not in pv_fail_html
         assert "<svg onload" not in pv_fail_html
+        assert '" onmouseover="' not in pv_fail_html
         assert escaped_payload in pv_fail_html
 
         dash_html = dashboard_view(
@@ -2927,7 +2943,9 @@ def test_python_side_html_escaping_for_repo_file_and_symbols():
             past_jobs=[job_processing, job_failed],
         )
         assert "<img" not in dash_html
+        assert "><svg onload" not in dash_html
         assert "<svg onload" not in dash_html
+        assert '" onmouseover="' not in dash_html
         assert escaped_payload in dash_html
 
         # 2. Payload as file path and repo name in report_view
@@ -2967,7 +2985,9 @@ def test_python_side_html_escaping_for_repo_file_and_symbols():
             quiz_data={"questions": []},
         )
         assert "<img" not in rep_html
+        assert "><svg onload" not in rep_html
         assert "<svg onload" not in rep_html
+        assert '" onmouseover="' not in rep_html
         assert escaped_payload in rep_html
 
         # 3. Payload as function name, class_name, reason, err, kind, and args in server diff & chips
@@ -2976,13 +2996,17 @@ def test_python_side_html_escaping_for_repo_file_and_symbols():
             fallback_reason=payload,
         )
         assert "<img" not in chips_html
-        assert "<svg" not in chips_html
-        assert "\"><" not in chips_html
+        assert "><svg" not in chips_html
+        assert "<svg onload" not in chips_html
+        assert '" onmouseover="' not in chips_html
+        assert f'title="{escaped_payload}()"' in chips_html
+        assert f'🧩 {escaped_payload}' in chips_html
 
         chips_empty_html = _render_grouped_fill_chips([], fallback_reason=payload)
         assert "<img" not in chips_empty_html
-        assert "<svg" not in chips_empty_html
-        assert "\"><" not in chips_empty_html
+        assert "><svg" not in chips_empty_html
+        assert "<svg onload" not in chips_empty_html
+        assert '" onmouseover="' not in chips_empty_html
 
         diff_fill_html = _render_server_diff_html(
             {
@@ -2996,8 +3020,10 @@ def test_python_side_html_escaping_for_repo_file_and_symbols():
             grading_method="fill_the_blanks",
         )
         assert "<img" not in diff_fill_html
-        assert "<svg" not in diff_fill_html
-        assert "\"><" not in diff_fill_html
+        assert "><svg" not in diff_fill_html
+        assert "<svg onload" not in diff_fill_html
+        assert '" onmouseover="' not in diff_fill_html
+        assert escaped_payload in diff_fill_html
 
         diff_ast_html = _render_server_diff_html(
             {
@@ -3010,8 +3036,10 @@ def test_python_side_html_escaping_for_repo_file_and_symbols():
             grading_method="structural_verifier",
         )
         assert "<img" not in diff_ast_html
-        assert "<svg" not in diff_ast_html
-        assert "\"><" not in diff_ast_html
+        assert "><svg" not in diff_ast_html
+        assert "<svg onload" not in diff_ast_html
+        assert '" onmouseover="' not in diff_ast_html
+        assert escaped_payload in diff_ast_html
 
 
 def test_script_tag_breakout_prevention_in_report_and_embedded_json():
