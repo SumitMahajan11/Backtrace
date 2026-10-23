@@ -3258,6 +3258,57 @@ def test_script_helper_and_script_blocks_prevent_raw_separators_and_delimiters()
         assert "</script" not in block.lower(), f"Raw '</script' found in script block {idx}"
 
 
+def test_job_id_column_type_and_progress_page_script_integrity():
+    """
+    Threat Model: Verify that job id:
+    1. Is defined as an Integer primary key column on AnalysisJobModel in the schema.
+    2. Even when a non-standard or mock job object with an unescaped '</script><script>alert(1)</script>'
+       is provided, progress_view sanitizes it so it cannot break out of HTML <script> tags.
+    """
+    import re
+    from sqlalchemy import Integer
+    from app.models.db import AnalysisJobModel
+    from app.ui.components import progress_view
+
+    # 1. Column type proof: AnalysisJobModel.id is strictly Integer
+    col = AnalysisJobModel.__table__.columns["id"]
+    assert isinstance(col.type, Integer), f"Expected Integer column type, got {col.type}"
+    assert col.primary_key is True
+
+    # 2. Progress page script integrity test
+    benign_job = AnalysisJobModel(
+        id=123,
+        user_id=1,
+        repo_name="repo",
+        repo_url="https://github.com/org/repo",
+        status="processing",
+    )
+    benign_html = progress_view(job=benign_job, current_user=None)
+    baseline_script_count = benign_html.count("</script>")
+
+    class MockMaliciousJob:
+        id = "</script><script>alert(1)</script>"
+        status = "processing"
+        created_at = None
+        repo_name = "repo"
+        github_url = "https://github.com/org/repo"
+        run_id = "run1"
+        failed_stage = None
+        error_message = None
+
+    malicious_html = progress_view(job=MockMaliciousJob(), current_user=None)
+
+    # Closing script tag count must match baseline exactly
+    assert malicious_html.count("</script>") == baseline_script_count
+    assert "<script>alert(1)</script>" not in malicious_html
+
+    # No script block may contain closing script tags
+    scripts = re.findall(r"<script\b[^>]*>(.*?)</script>", malicious_html, re.DOTALL | re.IGNORECASE)
+    assert len(scripts) > 0
+    for block in scripts:
+        assert "</script" not in block.lower()
+
+
 def test_path_truncation_and_xss_prevention_in_report_nodes_tabs_and_tooltips():
     """
     Threat Model: Verify that a 200-character file path containing an XSS payload
