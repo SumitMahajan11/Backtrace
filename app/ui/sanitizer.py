@@ -4,6 +4,54 @@ import html
 import re
 from typing import Optional
 
+import bleach
+import markdown
+
+try:
+    from markupsafe import Markup
+except ImportError:
+    class Markup(str):
+        pass
+
+ALLOWED_USER_MARKDOWN_TAGS = [
+    "p", "br", "strong", "em", "code", "pre", "ul", "ol", "li", "a", "h3", "h4"
+]
+ALLOWED_USER_MARKDOWN_ATTRIBUTES = {
+    "a": ["href"]
+}
+ALLOWED_USER_MARKDOWN_PROTOCOLS = ["http", "https"]
+
+
+def render_user_markdown(text: Optional[str]) -> Markup:
+    """
+    Renders user-supplied markdown text safely to HTML.
+    Pipeline order:
+      1. raw text -> markdown to HTML
+      2. sanitize with an allowlist (strip disallowed tags, on* attributes, and javascript: URLs)
+      3. mark safe once
+    Never escapes before markdown. Never escapes after sanitizing.
+    """
+    if text is None:
+        return Markup("")
+    raw_str = str(text)
+    if not raw_str.strip():
+        return Markup("")
+
+    # 1. raw text -> markdown to HTML
+    html_out = markdown.markdown(raw_str)
+
+    # 2. sanitize with an allowlist
+    cleaned = bleach.clean(
+        html_out,
+        tags=ALLOWED_USER_MARKDOWN_TAGS,
+        attributes=ALLOWED_USER_MARKDOWN_ATTRIBUTES,
+        protocols=ALLOWED_USER_MARKDOWN_PROTOCOLS,
+        strip=True,
+    )
+
+    # 3. mark safe once
+    return Markup(cleaned)
+
 
 def sanitize_text(raw_text: Optional[str]) -> str:
     """

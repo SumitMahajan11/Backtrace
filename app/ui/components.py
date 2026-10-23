@@ -21,7 +21,7 @@ from app.services.piston_health import piston_health_monitor
 from app.services.scaffold_generator import ScaffoldGenerator
 from app.services.structural_verifier import StructuralVerifier
 from app.core.config import billing_enabled
-from app.ui.sanitizer import sanitize_text, render_safe_markdown, truncate_text_clean
+from app.ui.sanitizer import sanitize_text, render_safe_markdown, truncate_text_clean, render_user_markdown
 
 SANDBOX_DISABLED_BANNER_TEXT = "Code execution is turned off on this free demo. Running user code safely needs an isolated sandbox server, which this host can't provide. Everything else works, and structure checks still run. See the full run-and-grade flow in the video."
 
@@ -1080,6 +1080,24 @@ def page_shell(
             .hint-confirm-box, .reveal-confirm-box, .hint-panel, .reference-panel {{
                 padding: 0.75rem 0.85rem !important;
             }}
+        }}
+
+        .guess-instruction-banner p, .fill-instruction-banner p {{
+            display: inline;
+            margin: 0;
+        }}
+        .quiz-card p {{
+            margin: 0 0 0.5rem 0;
+        }}
+        .quiz-card label span p {{
+            display: inline;
+            margin: 0;
+        }}
+        .brief-objective-section p {{
+            margin: 0 0 0.4rem 0;
+        }}
+        .brief-objective-section p:last-child {{
+            margin-bottom: 0;
         }}
 
         @media (prefers-reduced-motion: reduce) {{
@@ -3759,9 +3777,12 @@ def report_view(
             except (ValueError, TypeError):
                 m_tier = 0
             m_num_str = f"{m_tier:02d}"
-            m_title = sanitize_text(m.get("title", ""))
-            m_role = sanitize_text(m.get("architectural_role", ""))
-            m_summary = sanitize_text(m.get("overview", ""))
+            m_title_raw = m.get("title", "")
+            m_title = sanitize_text(m_title_raw)
+            m_role_raw = m.get("architectural_role", "")
+            m_role = render_user_markdown(m_role_raw) if m_role_raw else ""
+            m_summary_raw = m.get("overview", "")
+            m_summary = render_user_markdown(m_summary_raw) if m_summary_raw else ""
             m_comp = sanitize_text(m.get("domain_composition", ""))
             m_files = m.get("included_files", [])
             m_exports = m.get("exported_symbols", [])
@@ -3949,8 +3970,8 @@ def report_view(
             # Pedagogical / Gotchas callouts
             notes_html = ""
             if m_pedagogical or m_gotchas:
-                p_items = "".join(f'<div style="margin-bottom: 0.25rem;">&bull; {sanitize_text(p)}</div>' for p in m_pedagogical)
-                g_items = "".join(f'<div style="margin-bottom: 0.25rem; color: var(--amber);">&bull; {sanitize_text(g)}</div>' for g in m_gotchas)
+                p_items = "".join(f'<div style="margin-bottom: 0.25rem;">&bull; {render_user_markdown(p)}</div>' for p in m_pedagogical)
+                g_items = "".join(f'<div style="margin-bottom: 0.25rem; color: var(--amber);">&bull; {render_user_markdown(g)}</div>' for g in m_gotchas)
                 notes_html = f"""
                 <div style="margin-top: 0.65rem; padding: 0.65rem 0.85rem; background: var(--panel-raised); border: 1px solid var(--hairline-soft); border-radius: 3px; font-size: 0.75rem; color: var(--text-secondary); line-height: 1.45;">
                     {f'<div style="margin-bottom: 0.35rem;"><span style="font-weight: 600; color: var(--text-primary);">Key Architectural Concept:</span> {p_items}</div>' if p_items else ''}
@@ -4150,7 +4171,7 @@ def report_view(
 
             # Guess It Mode: Multi-file picker & Task Instructions
             first_target_file = sanitize_text(m_files[0]) if m_files else f"milestone_{m_tier}.py"
-            role_context = sanitize_text(m_role) if m_role else (sanitize_text(m_title) if m_title else f"Milestone {m_tier}")
+            role_context = render_user_markdown(m_role_raw) if m_role_raw else (render_user_markdown(m_title_raw) if m_title_raw else f"Milestone {m_tier}")
 
             guess_file_tabs_html = ""
             for f_idx, g_file in enumerate(m_files):
@@ -4800,13 +4821,13 @@ def report_view(
         questions = quiz_data.get("questions", [])
         quiz_items_rendered = ""
         for i, q in enumerate(questions, 1):
-            q_text = sanitize_text(q.get("question", ""))
+            q_text = render_user_markdown(q.get("question", ""))
             tier_raw = q.get("tier")
             if tier_raw is None or str(tier_raw).strip() in ("", "—", "None", "-"):
                 q_tier = "0"
             else:
                 q_tier = sanitize_text(str(tier_raw))
-            q_exp = sanitize_text(q.get("explanation", ""))
+            q_exp = render_user_markdown(q.get("explanation", ""))
             options = q.get("options", [])
             try:
                 correct_idx = int(q.get("correct_index", 0))
@@ -4815,7 +4836,7 @@ def report_view(
 
             opts_html = ""
             for opt_idx, opt in enumerate(options):
-                opt_text = sanitize_text(opt)
+                opt_text = render_user_markdown(opt)
                 opts_html += f"""
                 <label style="display: flex; align-items: flex-start; gap: 0.6rem; padding: 0.6rem 0.85rem; background: var(--panel-raised); border: 1px solid var(--hairline-soft); border-radius: 4px; cursor: pointer; transition: all 120ms ease; margin-bottom: 0.4rem;">
                     <input type="radio" name="quiz_q_{i}" value="{opt_idx}" style="margin-top: 0.2rem; accent-color: var(--brass);" />
