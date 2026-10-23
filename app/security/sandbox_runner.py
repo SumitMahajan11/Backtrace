@@ -106,6 +106,8 @@ class SandboxRunner:
                 env=env,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=self.config.timeout_seconds,
             )
             if res.returncode != 0:
@@ -136,6 +138,8 @@ class SandboxRunner:
                 env=env,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=self.config.timeout_seconds,
             )
             if res.returncode != 0:

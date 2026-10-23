@@ -75,7 +75,7 @@ def test_subprocess_batch_resilience_produces_parse_errors():
     """Confirms non-zero exit / malformed JSON helper failures produce ParseError entries without crashing the batch."""
     parser = DummySubprocessParser()
 
-    def mock_run(cmd, input, capture_output, text, timeout, check, shell):
+    def mock_run(cmd, input, capture_output, text, timeout, check, shell, **kwargs):
         payload = input
         if "bad_crash.dummy" in payload:
             raise subprocess.CalledProcessError(1, cmd, stderr="Process crashed")
@@ -106,3 +106,17 @@ def test_subprocess_batch_resilience_produces_parse_errors():
     for err in result.parse_errors:
         assert err.language == "dummy"
         assert len(err.error_message) > 0
+
+
+def test_subprocess_encoding_parameters():
+    """Confirms SubprocessLanguageParser sets utf-8 encoding with errors='replace'."""
+    parser = DummySubprocessParser()
+    mock_proc = MagicMock()
+    mock_proc.stdout = '{"status": "ok"}'
+    with patch("subprocess.run", return_value=mock_proc) as mock_run_call:
+        res = parser.execute_subprocess("test.dummy", "code")
+        assert res == {"status": "ok"}
+        assert mock_run_call.call_args.kwargs.get("encoding") == "utf-8"
+        assert mock_run_call.call_args.kwargs.get("errors") == "replace"
+        assert mock_run_call.call_args.kwargs.get("text") is True
+

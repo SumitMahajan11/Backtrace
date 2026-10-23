@@ -13,8 +13,8 @@ from app.models.db import IngestionResultModel, RepoModel, utc_now
 logger = logging.getLogger(__name__)
 
 SOURCE_NOT_AVAILABLE_MESSAGE = (
-    "# The original source for this file isn't available for this job — "
-    "try re-running the analysis to view the real implementation."
+    "# source files expired — The original source for this file isn't available for this job "
+    "(source files expired). Try re-running the analysis to view the real implementation."
 )
 
 LEGACY_REFETCH_NOTICE = (

@@ -132,7 +132,7 @@ def test_login_page_renders_github_oauth_button(client):
     """
     resp = client.get("/login")
     assert resp.status_code == 200
-    assert "Welcome to Backtrace" in resp.text
+    assert "Understand any codebase without reading every file." in resp.text
     assert "Sign in with GitHub" in resp.text
     assert "/auth/github/login" in resp.text
 
@@ -503,6 +503,45 @@ def test_progress_view_sse_log_safe_dom():
     html_out = progress_view(job=mock_job, current_user=mock_user)
     assert "msgSpan.textContent = text;" in html_out
     assert "line.innerHTML = `<span" not in html_out
+
+
+def test_progress_view_sse_failed_handler_uses_textcontent_for_error_message():
+    """
+    Verifies that the progress view SSE error message handlers use .textContent rather than .innerHTML
+    when displaying error messages (such as '<b>x</b>') to prevent XSS execution in the DOM.
+    """
+    from app.ui.components import progress_view
+    from unittest.mock import MagicMock
+    mock_job = MagicMock()
+    mock_job.id = 456
+    mock_job.repo_url = "https://github.com/example/repo"
+    mock_job.status = "pending"
+    mock_job.error_message = None
+    mock_user = MagicMock()
+    mock_user.github_username = "testuser"
+    mock_user.avatar_url = ""
+
+    html_out = progress_view(job=mock_job, current_user=mock_user)
+
+    # Assert that failureMsg and statusDesc use .textContent for dynamic error message
+    assert "failureMsg.textContent = msg;" in html_out
+    assert "failureMsg.textContent = err;" in html_out
+    assert "failureMsg.innerHTML = msg;" not in html_out
+    assert "failureMsg.innerHTML = err;" not in html_out
+    assert "statusDesc.textContent = data.message" in html_out
+    assert "statusDesc.innerHTML = data.message" not in html_out
+
+    # Also verify that when initialized with '<b>x</b>', the initial failure DOM element uses HTML-escaped text
+    mock_failed_job = MagicMock()
+    mock_failed_job.id = 457
+    mock_failed_job.repo_url = "https://github.com/example/repo"
+    mock_failed_job.status = "failed"
+    mock_failed_job.error_message = "<b>x</b>"
+
+    failed_html = progress_view(job=mock_failed_job, current_user=mock_user)
+    assert "&lt;b&gt;x&lt;/b&gt;" in failed_html
+    assert "<b>x</b>" not in failed_html
+
 
 
 # =========================================================================
@@ -2114,7 +2153,7 @@ def test_consistent_report_naming_across_lifecycle():
         status="running",
     )
     prog_html = progress_view(job_in_progress, current_user=user, billing_status=billing)
-    assert "<title>Architecture Report: repo-alpha (In Progress) // Backtrace Repository Archaeology</title>" in prog_html
+    assert "<title>Architecture Report: repo-alpha (In Progress) // Backtrace</title>" in prog_html
     assert "Architecture Report: <span style=\"font-style: italic; color: var(--brass);\">repo-alpha</span>" in prog_html
     assert "Analysis Job Report" not in prog_html
 
@@ -2159,7 +2198,7 @@ Calibration text.
         current_user=user,
         billing_status=billing,
     )
-    assert "<title>Architecture Report: repo-alpha // Backtrace Repository Archaeology</title>" in report_html
+    assert "<title>Architecture Report: repo-alpha // Backtrace</title>" in report_html
     assert "Architecture Report: <span style=\"font-style: italic; color: var(--brass);\">repo-alpha</span>" in report_html
     assert "Repository Architecture Report" not in report_html
     assert "Print Architecture Report" in report_html
@@ -2527,5 +2566,921 @@ def test_starter_code_unavailable_fallback_notice(client, create_user, test_db):
     # Visible starter code notice is rendered
     assert 'id="starter-unavailable-notice-0"' in html
     assert "Starter code isn&#39;t available for this file." in html or "Starter code isn't available for this file." in html
+
+
+def test_pipeline_clone_error_stores_raw_invalid_url_error_in_db_and_sse(client, test_db, create_user, monkeypatch):
+    """
+    Verifies that when ingestion raises InvalidURLError, the raw error message
+    is stored in the DB and sent via SSE instead of the generic clone error message.
+    """
+    import html
+    from app.models.ingestion import InvalidURLError
+    from app.services.ingestion import IngestionService
+    from app.core.config import get_settings
+
+    SessionLocal, _ = test_db
+    user = create_user(github_id=987654, username="url_err_user")
+
+    with SessionLocal() as session:
+        job = AnalysisJobRepository.create_job(
+            session=session,
+            user_id=user.id,
+            repo_url="https://github.com/org/xss-ref-repo",
+            status="pending",
+        )
+        job_id = job.id
+
+    token = create_access_token(user_id=user.id, github_id=user.github_id, github_username=user.github_username)
+    client.cookies.set("access_token", token)
+
+    # Disable test fast-branch to execute real pipeline exception handling
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+    monkeypatch.setattr(get_settings(), "ENVIRONMENT", "production")
+    monkeypatch.setattr("app.db.session.SessionLocal", SessionLocal)
+
+    raw_error_message = "Could not check out ref '<script>alert(1)</script>'. Verify ref exists."
+    def mock_ingest(*args, **kwargs):
+        raise InvalidURLError(raw_error_message)
+
+    monkeypatch.setattr(IngestionService, "ingest_repository", mock_ingest)
+
+    resp = client.get(f"/api/analyses/{job_id}/events")
+    assert resp.status_code == 200
+
+    events = []
+    for line in resp.iter_lines():
+        if line and line.startswith("data: "):
+            events.append(json.loads(line[6:]))
+
+    failed_events = [e for e in events if e.get("type") == "failed"]
+    assert len(failed_events) == 1
+    failed_event = failed_events[0]
+    # Verify raw error message is sent in SSE
+    assert failed_event["message"] == raw_error_message
+
+    # Verify persisted job error message in DB is also raw
+    with SessionLocal() as session:
+        updated_job = AnalysisJobRepository.get_job_by_id(session, job_id)
+        assert updated_job.status == "failed"
+        assert updated_job.error_message == raw_error_message
+
+
+def test_failed_job_error_message_raw_in_db_and_escaped_on_dashboard_and_failed_view(client, create_user, test_db):
+    """
+    Verifies that a job with raw HTML in its error_message ('<b>x</b>') is stored raw in DB
+    and cleanly HTML-escaped at render time on both the dashboard and the failed view
+    without double-escaping (i.e. contains '&lt;b&gt;x&lt;/b&gt;', not '<b>x</b>' and not '&amp;lt;b&amp;gt;x&amp;amp;lt;/b&amp;gt;').
+    """
+    SessionLocal, _ = test_db
+    user = create_user(github_id=9909, username="raw_error_tester")
+    token = create_access_token(user_id=user.id, github_id=user.github_id, github_username=user.github_username)
+    client.cookies.set("access_token", token)
+
+    raw_err = "<b>x</b>"
+    with SessionLocal() as session:
+        job = AnalysisJobRepository.create_job(
+            session=session,
+            user_id=user.id,
+            repo_url="https://github.com/test/raw-err-repo",
+            status="failed",
+        )
+        AnalysisJobRepository.update_job_status(
+            session=session,
+            job_id=job.id,
+            status="failed",
+            error_message=raw_err,
+        )
+        job_id = job.id
+
+        # Verify DB stores the RAW error message
+        db_job = AnalysisJobRepository.get_job_by_id(session, job_id)
+        assert db_job.error_message == "<b>x</b>"
+
+    # 1. Dashboard view
+    resp_dash = client.get("/dashboard")
+    assert resp_dash.status_code == 200
+    dash_html = resp_dash.text
+    assert "&lt;b&gt;x&lt;/b&gt;" in dash_html
+    assert "<b>x</b>" not in dash_html
+    assert "&amp;lt;b&amp;gt;x&amp;amp;lt;/b&amp;gt;" not in dash_html
+
+    # 2. Failed job view (progress_view)
+    resp_prog = client.get(f"/progress/{job_id}")
+    assert resp_prog.status_code == 200
+    prog_html = resp_prog.text
+    assert "&lt;b&gt;x&lt;/b&gt;" in prog_html
+    assert "<b>x</b>" not in prog_html
+    assert "&amp;lt;b&amp;gt;x&amp;amp;lt;/b&amp;gt;" not in prog_html
+
+
+def test_pipeline_clone_error_keeps_generic_message_for_other_errors(client, test_db, create_user, monkeypatch):
+    """
+    Verifies that when cloning encounters non-InvalidURLError exceptions (e.g. RuntimeError),
+    the generic clone failure message is retained.
+    """
+    from app.services.ingestion import IngestionService
+    from app.core.config import get_settings
+
+    SessionLocal, _ = test_db
+    user = create_user(github_id=987655, username="generic_err_user")
+
+    with SessionLocal() as session:
+        job = AnalysisJobRepository.create_job(
+            session=session,
+            user_id=user.id,
+            repo_url="https://github.com/org/generic-fail-repo",
+            status="pending",
+        )
+        job_id = job.id
+
+    token = create_access_token(user_id=user.id, github_id=user.github_id, github_username=user.github_username)
+    client.cookies.set("access_token", token)
+
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+    monkeypatch.setattr(get_settings(), "ENVIRONMENT", "production")
+    monkeypatch.setattr("app.db.session.SessionLocal", SessionLocal)
+
+    def mock_ingest(*args, **kwargs):
+        raise RuntimeError("Low-level git process died unexpectedly")
+
+    monkeypatch.setattr(IngestionService, "ingest_repository", mock_ingest)
+
+    resp = client.get(f"/api/analyses/{job_id}/events")
+    assert resp.status_code == 200
+
+    events = []
+    for line in resp.iter_lines():
+        if line and line.startswith("data: "):
+            events.append(json.loads(line[6:]))
+
+    failed_events = [e for e in events if e.get("type") == "failed"]
+    assert len(failed_events) == 1
+    failed_event = failed_events[0]
+    assert failed_event["message"] == "Failed while cloning repository into analysis sandbox."
+
+    with SessionLocal() as session:
+        updated_job = AnalysisJobRepository.get_job_by_id(session, job_id)
+        assert updated_job.status == "failed"
+        assert updated_job.error_message == "Failed while cloning repository into analysis sandbox."
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        "<img src=x onerror=alert(1)>",
+        '"><svg onload=alert(1)>',
+        '" onmouseover="alert(1)',
+    ],
+)
+def test_xss_prevention_in_js_render_templates_and_activity_entry(payload):
+    """
+    Verifies that dynamic JS template sinks neutralize attacker-controlled HTML payloads.
+    If Node.js is installed, executes the extracted `escapeHtml` and `renderConsoleHtmlInJs`
+    functions in Node.js with an XSS payload injected into stdout, stderr, exit_code,
+    and execution_time_ms, asserting that no unescaped '<img' tag appears in the resulting HTML.
+    Also verifies template escaping and Number coercion in progress_view and report_view.
+    """
+    import json
+    import re
+    import shutil
+    import subprocess
+    from app.ui.components import progress_view, report_view
+    from app.models.db import AnalysisJobModel
+
+    mock_job_processing = AnalysisJobModel(
+        id="job_xss",
+        user_id=1,
+        repo_url="https://github.com/owner/repo",
+        repo_name="repo",
+        status="processing",
+        execution_time_seconds=1.0,
+    )
+
+    # 1. progress_view template contains escapeHtml and Number coercion for stage values
+    pv_html = progress_view(job=mock_job_processing, current_user=None)
+    assert "${escapeHtml(stageName)}" in pv_html
+    assert "${escapeHtml(message)}" in pv_html
+    assert "${Number(stageIndex) || 0}" in pv_html
+    assert "${Number(totalStages) || 0}" in pv_html
+    assert "function escapeHtml(str)" in pv_html
+
+    # 2. report_view JS definitions have escapeHtml calls for stdout, function names, and diffs
+    mock_job_completed = AnalysisJobModel(
+        id="job_xss",
+        user_id=1,
+        repo_url="https://github.com/owner/repo",
+        repo_name="repo",
+        status="completed",
+        execution_time_seconds=1.0,
+    )
+    rv_html = report_view(
+        job=mock_job_completed,
+        raw_markdown="# Report",
+        graph_data={"nodes": [], "edges": []},
+        quiz_data={"questions": []},
+    )
+
+    node_bin = shutil.which("node")
+    node_available = False
+    if node_bin:
+        try:
+            res = subprocess.run([node_bin, "--version"], capture_output=True, text=True, check=True, encoding="utf-8")
+            node_available = bool(res.stdout.strip())
+        except Exception:
+            node_available = False
+
+    if node_available:
+        m_esc = re.search(r"function escapeHtml\(str\) \{.*?\n        \}", rv_html, re.DOTALL)
+        m_console = re.search(r"function renderConsoleHtmlInJs\(exec\) \{.*?\n        \}", rv_html, re.DOTALL)
+        m_chips = re.search(r"function renderGroupedFillChips\(blankedFunctions, reason\) \{.*?\n        \}", rv_html, re.DOTALL)
+        m_diff = re.search(r"function renderDiffHtmlInJs\(result, isVerified, errorMsg, gradingMethod\) \{.*?\n        \}", rv_html, re.DOTALL)
+        assert m_esc is not None, "escapeHtml function not found in report_view"
+        assert m_console is not None, "renderConsoleHtmlInJs function not found in report_view"
+        assert m_chips is not None, "renderGroupedFillChips function not found in report_view"
+        assert m_diff is not None, "renderDiffHtmlInJs function not found in report_view"
+
+        js_code = f"""
+{m_esc.group(0)}
+{m_console.group(0)}
+{m_chips.group(0)}
+{m_diff.group(0)}
+
+const payload = {json.dumps(payload)};
+
+// 1. renderConsoleHtmlInJs
+const consoleOut = renderConsoleHtmlInJs({{
+    exit_code: payload,
+    stdout: payload,
+    stderr: payload,
+    execution_time_ms: payload
+}});
+
+// 2. renderGroupedFillChips with name, class_name, reason
+const chipsOutItems = renderGroupedFillChips([
+    {{ name: payload, class_name: payload, full_name: payload, reason: payload }}
+], payload);
+const chipsOutEmpty = renderGroupedFillChips([], payload);
+
+// 3. renderDiffHtmlInJs with name, class_name, reason, err, kind, args
+const diffOutFill = renderDiffHtmlInJs({{
+    blanked_evaluated: 2,
+    implemented_count: 1,
+    blank_details: [
+        {{ name: payload, class_name: payload, reason: payload, status: 'stub' }},
+        {{ name: payload, class_name: payload, reason: payload, status: 'implemented' }}
+    ]
+}}, false, payload, 'fill_the_blanks');
+
+const diffOutAst = renderDiffHtmlInJs({{
+    diff: {{
+        present_symbols: [
+            {{ matched: {{ name: payload, kind: payload, args: [payload] }} }}
+        ],
+        missing_symbols: [
+            {{ expected: {{ name: payload, kind: payload }} }}
+        ],
+        extra_symbols: [
+            {{ matched: {{ name: payload, kind: payload }} }}
+        ]
+    }}
+}}, false, payload, 'structural_verifier');
+
+console.log(JSON.stringify({{
+    consoleOut,
+    chipsOutItems,
+    chipsOutEmpty,
+    diffOutFill,
+    diffOutAst
+}}));
+"""
+        proc = subprocess.run([node_bin, "-e", js_code], capture_output=True, text=True, check=True, encoding="utf-8")
+        outputs = json.loads(proc.stdout)
+
+        # Behavioral assertions: raw HTML tags and attribute break-outs must never appear unescaped
+        for label, html_snippet in outputs.items():
+            assert "<img" not in html_snippet, f"Raw <img found in {label} output: {html_snippet}"
+            assert "><svg" not in html_snippet, f"Raw '><svg' found in {label} output: {html_snippet}"
+            assert "<svg onload" not in html_snippet, f"Raw '<svg onload' found in {label} output: {html_snippet}"
+            assert '" onmouseover="' not in html_snippet, f"Raw '\" onmouseover=\"' found in {label} output: {html_snippet}"
+
+        if payload == '"><svg onload=alert(1)>':
+            assert '&quot;&gt;&lt;svg onload=alert(1)&gt;' in outputs["chipsOutItems"]
+            assert 'title="' + '&quot;&gt;&lt;svg onload=alert(1)&gt;()' in outputs["chipsOutItems"]
+            assert '🧩 ' + '&quot;&gt;&lt;svg onload=alert(1)&gt;()' in outputs["chipsOutItems"]
+            assert '&quot;&gt;&lt;svg onload=alert(1)&gt;' in outputs["diffOutFill"]
+            assert '&quot;&gt;&lt;svg onload=alert(1)&gt;' in outputs["diffOutAst"]
+        elif payload == '" onmouseover="alert(1)':
+            assert '&quot; onmouseover=&quot;alert(1)' in outputs["chipsOutItems"]
+            assert 'title="' + '&quot; onmouseover=&quot;alert(1)()"' in outputs["chipsOutItems"]
+            assert '🧩 &quot; onmouseover=&quot;alert(1)()' in outputs["chipsOutItems"]
+
+        assert "EXIT 0" in outputs["consoleOut"]
+    else:
+        # Fallback structural checks when Node is not installed
+        assert "escapeHtml(stdout)" in rv_html
+        assert "escapeHtml(stderr)" in rv_html
+        assert "Number(eObj.exit_code)" in rv_html
+        assert "const fnName = escapeHtml(bf.name || bf.full_name || '');" in rv_html
+        assert "escapeHtml(g.className)" in rv_html
+        assert "const name = escapeHtml(b.name || 'function');" in rv_html
+        assert "escapeHtml(err)" in rv_html
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        "<img src=x onerror=alert(1)>",
+        '"><svg onload=alert(1)>',
+        '" onmouseover="alert(1)',
+    ],
+)
+def test_python_side_html_escaping_for_repo_file_and_symbols(payload):
+    """
+    Verifies that Python-side template rendering sanitizes and escapes attacker payloads
+    when used as function names, file paths, and repository names.
+    Ensures that raw '<img' tags are never emitted into server-rendered HTML.
+    """
+    from app.ui.components import (
+        report_view,
+        progress_view,
+        dashboard_view,
+        _render_grouped_fill_chips,
+        _render_server_diff_html,
+    )
+    from app.models.db import AnalysisJobModel, UserModel
+    import html
+
+    mock_user = UserModel(
+        id=1,
+        github_id='1001',
+        github_username='archaeologist',
+        email='dev@example.com',
+    )
+
+    escaped_payload = html.escape(payload, quote=True)
+
+    # 1. Payload as repo_name in progress_view (processing & failed) and dashboard_view
+    job_processing = AnalysisJobModel(
+        id="job_proc",
+        user_id=1,
+        repo_url=f"https://github.com/org/{payload}",
+        repo_name=payload,
+        status="processing",
+    )
+    pv_proc_html = progress_view(job=job_processing, current_user=mock_user)
+    assert "<img" not in pv_proc_html
+    assert "><svg onload" not in pv_proc_html
+    assert "<svg onload" not in pv_proc_html
+    assert '" onmouseover="' not in pv_proc_html
+    assert escaped_payload in pv_proc_html
+
+    job_failed = AnalysisJobModel(
+        id="job_fail",
+        user_id=1,
+        repo_url=f"https://github.com/org/{payload}",
+        repo_name=payload,
+        status="failed",
+        error_message=payload,
+    )
+    pv_fail_html = progress_view(job=job_failed, current_user=mock_user)
+    assert "<img" not in pv_fail_html
+    assert "><svg onload" not in pv_fail_html
+    assert "<svg onload" not in pv_fail_html
+    assert '" onmouseover="' not in pv_fail_html
+    assert escaped_payload in pv_fail_html
+
+    dash_html = dashboard_view(
+        current_user=mock_user,
+        billing_status={},
+        past_jobs=[job_processing, job_failed],
+    )
+    assert "<img" not in dash_html
+    assert "><svg onload" not in dash_html
+    assert "<svg onload" not in dash_html
+    assert '" onmouseover="' not in dash_html
+    assert escaped_payload in dash_html
+
+    # 2. Payload as file path and repo name in report_view
+    job_completed = AnalysisJobModel(
+        id="job_done",
+        user_id=1,
+        repo_url=f"https://github.com/org/{payload}",
+        repo_name=payload,
+        status="completed",
+    )
+    rep_html = report_view(
+        job=job_completed,
+        raw_markdown="# Synthesis Report",
+        graph_data={
+            "nodes": [
+                {
+                    "id": "node_payload",
+                    "label": payload,
+                    "path": f"src/{payload}/main.py",
+                    "tier": 1,
+                    "exports": [payload],
+                }
+            ],
+            "edges": [],
+            "milestones": [
+                {
+                    "tier": 1,
+                    "title": payload,
+                    "architectural_role": payload,
+                    "overview": payload,
+                    "domain_composition": payload,
+                    "included_files": [f"src/{payload}/main.py"],
+                    "exported_symbols": [payload],
+                }
+            ],
+        },
+        quiz_data={"questions": []},
+    )
+    assert "<img" not in rep_html
+    assert "><svg onload" not in rep_html
+    assert "<svg onload" not in rep_html
+    assert '" onmouseover="' not in rep_html
+    assert escaped_payload in rep_html
+
+    # 3. Payload as function name, class_name, reason, err, kind, and args in server diff & chips
+    chips_html = _render_grouped_fill_chips(
+        [{"name": payload, "class_name": payload, "full_name": payload, "reason": payload}],
+        fallback_reason=payload,
+    )
+    assert "<img" not in chips_html
+    assert "><svg" not in chips_html
+    assert "<svg onload" not in chips_html
+    assert '" onmouseover="' not in chips_html
+    assert f'title="{escaped_payload}()"' in chips_html
+    assert f'🧩 {escaped_payload}' in chips_html
+
+    chips_empty_html = _render_grouped_fill_chips([], fallback_reason=payload)
+    assert "<img" not in chips_empty_html
+    assert "><svg" not in chips_empty_html
+    assert "<svg onload" not in chips_empty_html
+    assert '" onmouseover="' not in chips_empty_html
+
+    diff_fill_html = _render_server_diff_html(
+        {
+            "blank_details": [
+                {"name": payload, "status": "stub", "reason": payload},
+                {"name": payload, "status": "implemented", "reason": payload},
+            ]
+        },
+        is_verified=False,
+        err_msg=payload,
+        grading_method="fill_the_blanks",
+    )
+    assert "<img" not in diff_fill_html
+    assert "><svg" not in diff_fill_html
+    assert "<svg onload" not in diff_fill_html
+    assert '" onmouseover="' not in diff_fill_html
+    assert escaped_payload in diff_fill_html
+
+    diff_ast_html = _render_server_diff_html(
+        {
+            "present_symbols": [{"matched": {"name": payload, "kind": payload, "args": [payload]}}],
+            "missing_symbols": [{"name": payload, "kind": payload}],
+            "extra_symbols": [{"name": payload, "kind": payload}],
+        },
+        is_verified=False,
+        err_msg=payload,
+        grading_method="structural_verifier",
+    )
+    assert "<img" not in diff_ast_html
+    assert "><svg" not in diff_ast_html
+    assert "<svg onload" not in diff_ast_html
+    assert '" onmouseover="' not in diff_ast_html
+    assert escaped_payload in diff_ast_html
+
+
+def test_script_tag_breakout_prevention_in_report_and_embedded_json():
+    """
+    Threat Model: Verify that '</script><script>alert(1)</script>' injected as
+    a file path, function name, quiz text, and repo name cannot break out of HTML
+    <script> tags or emit unescaped closing script tags into the page.
+    Asserts that the count of '</script>' in the rendered report HTML exactly equals
+    the baseline count obtained with benign names.
+    """
+    from app.ui.components import report_view
+    from app.models.db import AnalysisJobModel
+
+    benign_job = AnalysisJobModel(
+        id="job_benign",
+        user_id=1,
+        repo_url="https://github.com/org/repo",
+        repo_name="repo",
+        status="completed",
+    )
+    benign_html = report_view(
+        job=benign_job,
+        raw_markdown="# Baseline Report\nClean content",
+        graph_data={
+            "nodes": [
+                {
+                    "id": "node_1",
+                    "path": "src/main.py",
+                    "label": "main.py",
+                    "exports": ["run_app"],
+                }
+            ],
+            "edges": [],
+            "milestones": [
+                {
+                    "tier": 1,
+                    "title": "Milestone 1",
+                    "architectural_role": "Core",
+                    "overview": "Overview",
+                    "domain_composition": "1 file",
+                    "included_files": ["src/main.py"],
+                    "exported_symbols": ["run_app"],
+                }
+            ],
+        },
+        quiz_data={
+            "questions": [
+                {
+                    "question": "What is Python?",
+                    "options": ["Programming Language", "Reptile"],
+                    "answer": "Programming Language",
+                    "explanation": "Python is a language.",
+                }
+            ]
+        },
+    )
+    baseline_script_count = benign_html.count("</script>")
+
+    payload = "</script><script>alert(1)</script>"
+
+    malicious_job = AnalysisJobModel(
+        id="job_malicious",
+        user_id=1,
+        repo_url=f"https://github.com/org/{payload}",
+        repo_name=payload,
+        status="completed",
+    )
+    malicious_html = report_view(
+        job=malicious_job,
+        raw_markdown=f"# Exploit Report\n{payload}",
+        graph_data={
+            "nodes": [
+                {
+                    "id": f"node_{payload}",
+                    "path": f"src/{payload}/main.py",
+                    "label": payload,
+                    "exports": [payload],
+                }
+            ],
+            "edges": [],
+            "milestones": [
+                {
+                    "tier": 1,
+                    "title": payload,
+                    "architectural_role": payload,
+                    "overview": payload,
+                    "domain_composition": payload,
+                    "included_files": [f"src/{payload}/main.py"],
+                    "exported_symbols": [payload],
+                }
+            ],
+        },
+        quiz_data={
+            "questions": [
+                {
+                    "question": payload,
+                    "options": [payload],
+                    "answer": payload,
+                    "explanation": payload,
+                }
+            ]
+        },
+    )
+
+    # 1. Total closing script tags must match baseline exactly (zero unescaped closing script tags injected)
+    assert malicious_html.count("</script>") == baseline_script_count
+
+    # 2. Raw alert payload must never appear inside an unescaped script tag
+    assert "<script>alert(1)</script>" not in malicious_html
+
+    # 3. JSON script blocks must encode < as \\u003c rather than raw <
+    assert "\\u003c/script\\u003e" in malicious_html or "&lt;/script&gt;" in malicious_html
+
+
+def test_script_helper_and_script_blocks_prevent_raw_separators_and_delimiters():
+    """
+    Threat Model: Verify that dangerous JS/HTML delimiters and separators:
+    U+2028 (LINE SEPARATOR), U+2029 (PARAGRAPH SEPARATOR), '<!--', '-->', and '</script'
+    in repo name, file path, and quiz text:
+    1. Are safely escaped by _safe_script_json_dumps so they never appear raw in JSON strings.
+    2. None appear raw inside ANY <script> block in the rendered report_view HTML.
+    """
+    import json
+    import re
+    from app.ui.components import _safe_script_json_dumps, report_view
+    from app.models.db import AnalysisJobModel
+
+    # 1. Helper unit tests
+    test_obj = {
+        "repo": "repo<!--inject",
+        "close": "inject-->code",
+        "script": "alert(1)</script>",
+        "separators": "line\u2028sep\u2029para",
+    }
+    dumped = _safe_script_json_dumps(test_obj)
+    assert "\u2028" not in dumped
+    assert "\u2029" not in dumped
+    assert "<!--" not in dumped
+    assert "-->" not in dumped
+    assert "</script" not in dumped.lower()
+    # Ensure escaped sequences are valid JSON that parse back cleanly
+    parsed = json.loads(dumped)
+    assert parsed["repo"] == "repo<!--inject"
+    assert parsed["close"] == "inject-->code"
+    assert parsed["script"] == "alert(1)</script>"
+    assert parsed["separators"] == "line\u2028sep\u2029para"
+
+    # 2. Integration test in report_view
+    payload = "exploit<!--\u2028\u2029</script><script>alert(1)</script>-->"
+
+    job = AnalysisJobModel(
+        id="job_delims",
+        user_id=1,
+        repo_url=f"https://github.com/org/{payload}",
+        repo_name=payload,
+        status="completed",
+    )
+    rep_html = report_view(
+        job=job,
+        raw_markdown=f"# Delimiter Test\n{payload}",
+        graph_data={
+            "nodes": [
+                {
+                    "id": f"node_{payload}",
+                    "path": f"src/{payload}/main.py",
+                    "label": payload,
+                    "exports": [payload],
+                }
+            ],
+            "edges": [],
+            "milestones": [
+                {
+                    "tier": 1,
+                    "title": payload,
+                    "architectural_role": payload,
+                    "overview": payload,
+                    "domain_composition": payload,
+                    "included_files": [f"src/{payload}/main.py"],
+                    "exported_symbols": [payload],
+                }
+            ],
+        },
+        quiz_data={
+            "questions": [
+                {
+                    "question": f"Question with {payload}",
+                    "options": [f"Option {payload}"],
+                    "answer": f"Option {payload}",
+                    "explanation": f"Explanation with {payload}",
+                }
+            ]
+        },
+    )
+
+    # Extract all <script>...</script> blocks from rendered HTML
+    script_blocks = re.findall(r"<script\b[^>]*>(.*?)</script>", rep_html, re.DOTALL | re.IGNORECASE)
+    assert len(script_blocks) > 0, "Expected at least one <script> block in report_view HTML"
+
+    for idx, block in enumerate(script_blocks):
+        assert "\u2028" not in block, f"Raw U+2028 found in script block {idx}"
+        assert "\u2029" not in block, f"Raw U+2029 found in script block {idx}"
+        assert "<!--" not in block, f"Raw '<!--' found in script block {idx}"
+        assert "-->" not in block, f"Raw '-->' found in script block {idx}"
+        assert "</script" not in block.lower(), f"Raw '</script' found in script block {idx}"
+
+
+def test_job_id_column_type_and_progress_page_script_integrity():
+    """
+    Threat Model: Verify that job id:
+    1. Is defined as an Integer primary key column on AnalysisJobModel in the schema.
+    2. Even when a non-standard or mock job object with an unescaped '</script><script>alert(1)</script>'
+       is provided, progress_view sanitizes it so it cannot break out of HTML <script> tags.
+    """
+    import re
+    from sqlalchemy import Integer
+    from app.models.db import AnalysisJobModel
+    from app.ui.components import progress_view
+
+    # 1. Column type proof: AnalysisJobModel.id is strictly Integer
+    col = AnalysisJobModel.__table__.columns["id"]
+    assert isinstance(col.type, Integer), f"Expected Integer column type, got {col.type}"
+    assert col.primary_key is True
+
+    # 2. Progress page script integrity test
+    benign_job = AnalysisJobModel(
+        id=123,
+        user_id=1,
+        repo_name="repo",
+        repo_url="https://github.com/org/repo",
+        status="processing",
+    )
+    benign_html = progress_view(job=benign_job, current_user=None)
+    baseline_script_count = benign_html.count("</script>")
+
+    class MockMaliciousJob:
+        id = "</script><script>alert(1)</script>"
+        status = "processing"
+        created_at = None
+        repo_name = "repo"
+        github_url = "https://github.com/org/repo"
+        run_id = "run1"
+        failed_stage = None
+        error_message = None
+
+    malicious_html = progress_view(job=MockMaliciousJob(), current_user=None)
+
+    # Closing script tag count must match baseline exactly
+    assert malicious_html.count("</script>") == baseline_script_count
+    assert "<script>alert(1)</script>" not in malicious_html
+
+    # No script block may contain closing script tags
+    scripts = re.findall(r"<script\b[^>]*>(.*?)</script>", malicious_html, re.DOTALL | re.IGNORECASE)
+    assert len(scripts) > 0
+    for block in scripts:
+        assert "</script" not in block.lower()
+
+
+def test_path_truncation_and_xss_prevention_in_report_nodes_tabs_and_tooltips():
+    """
+    Threat Model: Verify that a 200-character file path containing an XSS payload
+    ('<img src=x onerror=alert(1)>') positioned at the head, middle, and tail
+    is safely sanitized and never emits raw '<img' tags in DAG nodes, tab buttons,
+    or tooltips, even when subjected to middle-truncation via _truncate_path_middle.
+    """
+    from app.ui.components import report_view
+    from app.models.db import AnalysisJobModel
+
+    payload = "<img src=x onerror=alert(1)>"
+    head_path = f"{payload}/{'a' * 180}.py"
+    mid_path = f"{'b' * 90}/{payload}/{'c' * 90}.py"
+    tail_path = f"{'d' * 180}/{payload}"
+
+    assert len(head_path) >= 200
+    assert len(mid_path) >= 200
+    assert len(tail_path) >= 200
+
+    job = AnalysisJobModel(
+        id="job_path_xss",
+        user_id=1,
+        repo_url="https://github.com/org/repo",
+        repo_name="repo",
+        status="completed",
+    )
+
+    test_paths = [head_path, mid_path, tail_path]
+    nodes = [
+        {
+            "id": f"node_{i}",
+            "label": f"label_{i}.py",
+            "path": p,
+            "tier": 1,
+            "exports": ["func"],
+        }
+        for i, p in enumerate(test_paths)
+    ]
+
+    raw_md = f"""# Synthesis Report
+## 3. Step-by-Step Architectural Milestones
+### Milestone 1: Core Tier (Tier 1)
+**[HIGH CONFIDENCE]** -- *Core*
+**Overview:** Core implementation
+**Included Files (3):**
+- `{head_path}`
+- `{mid_path}`
+- `{tail_path}`
+"""
+
+    html_out = report_view(
+        job=job,
+        raw_markdown=raw_md,
+        graph_data={"nodes": nodes, "edges": []},
+        quiz_data={"questions": []},
+    )
+
+    # 1. No raw '<img' anywhere in the output
+    assert "<img" not in html_out
+
+    # 2. Assert safe escaped representation exists in node SVG, title tooltip, and tab buttons
+    escaped_tag = "&lt;img src=x onerror=alert(1)&gt;"
+    assert escaped_tag in html_out
+
+    # 3. Check each path specifically in node attributes, tooltips, and tab buttons
+    for i, p in enumerate(test_paths):
+        # Node SVG and title
+        assert f'id="dag-node-node_{i}"' in html_out
+        # File tabs in milestone view
+        assert f'id="read-tab-btn-1-{i}"' in html_out
+        assert f'id="guess-tab-btn-1-{i}"' in html_out
+        assert f'id="fill-tab-btn-1-{i}"' in html_out
+
+
+@pytest.mark.parametrize("payload", [
+    "<img src=x onerror=alert(1)>",
+    '"><svg onload=alert(1)>',
+])
+def test_payload_xss_prevention_in_report_and_settings_views(payload):
+    """
+    Threat Model: Verify that dangerous XSS payloads ('<img src=x onerror=alert(1)>' and
+    '"><svg onload=alert(1)>') injected into:
+    1. LLM-derived raw_markdown (through report_view)
+    2. Codebase quiz questions, options, and explanation (through report_view)
+    3. User avatar_url and github_username (through report_view nav header)
+    4. User avatar_url and github_username (through settings_view)
+    are strictly escaped and never rendered as raw active HTML or unescaped tag breakouts.
+    """
+    import html
+    from app.models.db import AnalysisJobModel, UserModel
+    from app.ui.components import report_view, settings_view
+
+    escaped_payload = html.escape(payload, quote=True)
+
+    user = UserModel(
+        id=1,
+        github_id=998877,
+        github_username=payload,
+        email="payload@example.com",
+        avatar_url=payload,
+    )
+
+    job = AnalysisJobModel(
+        id="job_payload_test",
+        user_id=1,
+        repo_url="https://github.com/org/repo",
+        repo_name="repo",
+        status="completed",
+    )
+
+    quiz_data = {
+        "questions": [
+            {
+                "question": f"Question containing {payload}",
+                "options": [f"Option A {payload}", f"Option B {payload}"],
+                "answer": f"Option A {payload}",
+                "explanation": f"Explanation with {payload}",
+                "correct_index": 0,
+                "tier": 1,
+            }
+        ]
+    }
+
+    raw_markdown = f"# Architecture Synthesis\n\nSection detailing {payload}\n\n- Bullet item with {payload}"
+
+    # 1. Render through report_view
+    rep_html = report_view(
+        job=job,
+        raw_markdown=raw_markdown,
+        graph_data={"nodes": [], "edges": []},
+        quiz_data=quiz_data,
+        current_user=user,
+    )
+
+    # In report_view, verify payloads are sanitized and cannot inject raw tags or attribute breakout:
+    assert "<img src=x" not in rep_html
+    assert '"><svg' not in rep_html
+    assert "<svg onload" not in rep_html
+    assert "<svg onload=" not in rep_html
+
+    # Verify escaped representations are present in their respective sections:
+    # Markdown
+    assert escaped_payload in rep_html
+    # Quiz question
+    assert html.escape(f"Question containing {payload}", quote=True) in rep_html
+    # Quiz options
+    assert html.escape(f"Option A {payload}", quote=True) in rep_html
+    # Quiz explanation
+    assert html.escape(f"Explanation with {payload}", quote=True) in rep_html
+    # User avatar & username in nav
+    assert 'alt="Avatar"' in rep_html
+    assert f'src="{escaped_payload}"' in rep_html
+    assert f'@{escaped_payload}' in rep_html
+
+    # 2. Render through settings_view
+    set_html = settings_view(
+        current_user=user,
+        billing_status={"tier": "free", "monthly_usage": 0, "monthly_quota": 5},
+        pricing_details={"amount_formatted": "$19/mo", "interval": "month"},
+    )
+
+    # In settings_view, verify payloads are sanitized:
+    assert "<img src=x" not in set_html
+    assert '"><svg' not in set_html
+    assert "<svg onload" not in set_html
+    assert "<svg onload=" not in set_html
+
+    # Verify escaped representations exist in avatar markup and username:
+    assert f'src="{escaped_payload}"' in set_html
+    assert f'alt="@{escaped_payload}"' in set_html
+    assert f'@{escaped_payload}' in set_html
+
+
 
 

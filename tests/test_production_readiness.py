@@ -87,6 +87,7 @@ def test_production_config_passes_with_all_valid_credentials():
         STRIPE_SECRET_KEY="sk_" + "live_abcdef1234567890",
         STRIPE_WEBHOOK_SECRET="whsec_1234567890abcdef",
         STRIPE_PRICE_ID_PRO="price_pro_monthly_tier_123",
+        DATABASE_URL="postgresql://user:pass@ep-neon-123.us-east-2.aws.neon.tech/neondb?sslmode=require",
         SENTRY_DSN="https://key@sentry.io/123456",
         POSTHOG_API_KEY="phc_live_key_123456",
     )
@@ -95,6 +96,68 @@ def test_production_config_passes_with_all_valid_credentials():
     assert settings.DEBUG is False
     assert settings.GITHUB_CLIENT_ID == "gh_prod_client_12345678"
     assert settings.STRIPE_PRICE_ID_PRO == "price_pro_monthly_tier_123"
+    assert settings.DATABASE_URL.startswith("postgresql://")
+
+
+def test_production_config_rejects_sqlite_database_url():
+    """Validates that production mode strictly rejects SQLite or memory database URLs."""
+    # 1. Default SQLite URL (omitted DATABASE_URL)
+    with pytest.raises(ValidationError) as exc_info:
+        Settings(
+            ENVIRONMENT="production",
+            GITHUB_CLIENT_ID="gh_prod_client_123",
+            GITHUB_CLIENT_SECRET="gh_prod_secret_456",
+            GITHUB_REDIRECT_URI="https://app.backtrace.dev/auth/callback",
+            JWT_SECRET_KEY="a_very_secure_production_jwt_key_that_is_long_enough",
+            STRIPE_SECRET_KEY="sk_" + "live_1234567890abcdef",
+            STRIPE_WEBHOOK_SECRET="whsec_abcdef123456",
+            STRIPE_PRICE_ID_PRO="price_1234567890",
+        )
+    assert "DATABASE_URL cannot be SQLite" in str(exc_info.value)
+
+    # 2. Explicit SQLite file URL
+    with pytest.raises(ValidationError) as exc_info:
+        Settings(
+            ENVIRONMENT="production",
+            GITHUB_CLIENT_ID="gh_prod_client_123",
+            GITHUB_CLIENT_SECRET="gh_prod_secret_456",
+            GITHUB_REDIRECT_URI="https://app.backtrace.dev/auth/callback",
+            JWT_SECRET_KEY="a_very_secure_production_jwt_key_that_is_long_enough",
+            STRIPE_SECRET_KEY="sk_" + "live_1234567890abcdef",
+            STRIPE_WEBHOOK_SECRET="whsec_abcdef123456",
+            STRIPE_PRICE_ID_PRO="price_1234567890",
+            DATABASE_URL="sqlite:///./backtrace.db",
+        )
+    assert "DATABASE_URL cannot be SQLite" in str(exc_info.value)
+
+    # 3. Explicit SQLite in-memory URL
+    with pytest.raises(ValidationError) as exc_info:
+        Settings(
+            ENVIRONMENT="production",
+            GITHUB_CLIENT_ID="gh_prod_client_123",
+            GITHUB_CLIENT_SECRET="gh_prod_secret_456",
+            GITHUB_REDIRECT_URI="https://app.backtrace.dev/auth/callback",
+            JWT_SECRET_KEY="a_very_secure_production_jwt_key_that_is_long_enough",
+            STRIPE_SECRET_KEY="sk_" + "live_1234567890abcdef",
+            STRIPE_WEBHOOK_SECRET="whsec_abcdef123456",
+            STRIPE_PRICE_ID_PRO="price_1234567890",
+            DATABASE_URL="sqlite:///:memory:",
+        )
+    assert "DATABASE_URL cannot be SQLite" in str(exc_info.value)
+
+    # 4. Valid PostgreSQL Neon URL succeeds
+    prod = Settings(
+        ENVIRONMENT="production",
+        GITHUB_CLIENT_ID="gh_prod_client_123",
+        GITHUB_CLIENT_SECRET="gh_prod_secret_456",
+        GITHUB_REDIRECT_URI="https://app.backtrace.dev/auth/callback",
+        JWT_SECRET_KEY="a_very_secure_production_jwt_key_that_is_long_enough",
+        STRIPE_SECRET_KEY="sk_" + "live_1234567890abcdef",
+        STRIPE_WEBHOOK_SECRET="whsec_abcdef123456",
+        STRIPE_PRICE_ID_PRO="price_1234567890",
+        DATABASE_URL="postgresql://user:pass@ep-neon-123.us-east-2.aws.neon.tech/neondb?sslmode=require",
+    )
+    assert prod.DATABASE_URL.startswith("postgresql://")
 
 
 def test_stripe_webhook_rejects_invalid_cryptographic_signature():
@@ -116,3 +179,36 @@ def test_stripe_webhook_rejects_invalid_cryptographic_signature():
         )
     assert "Invalid Stripe webhook signature" in str(exc_info.value)
     assert exc_info.value.status_code == 400
+
+
+def test_postgres_engine_configures_pool_pre_ping_and_pool_recycle(tmp_path):
+    """
+    Validates that when DATABASE_URL points to PostgreSQL (such as Neon),
+    the SQLAlchemy engine is configured with pool_pre_ping=True to discard stale
+    connections after idle compute suspension, and pool_recycle=1800 (or DB_POOL_RECYCLE).
+    Runs in a subprocess to avoid mutating app.db.session in the test runner process.
+    """
+    import os
+    import subprocess
+    import sys
+
+    code = (
+        "from sqlalchemy.engine import Engine\n"
+        "import app.db.session as session_module\n"
+        "assert isinstance(session_module.engine, Engine)\n"
+        "assert getattr(session_module.engine.pool, '_pre_ping', False) is True\n"
+        "assert getattr(session_module.engine.pool, '_recycle', 0) == 1800\n"
+    )
+
+    env = dict(os.environ)
+    neon_url = "postgresql://user:pass@ep-neon-123.us-east-2.aws.neon.tech/neondb?sslmode=require"
+    env["DATABASE_URL"] = neon_url
+    env["ENVIRONMENT"] = "production"
+    env.pop("PYTEST_CURRENT_TEST", None)
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    current_pythonpath = env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = f"{repo_root}{os.pathsep}{current_pythonpath}" if current_pythonpath else repo_root
+
+    res = subprocess.run([sys.executable, "-c", code], cwd=str(tmp_path), env=env, capture_output=True, text=True)
+    assert res.returncode == 0, f"Subprocess failed with code {res.returncode}:\nstdout: {res.stdout}\nstderr: {res.stderr}"
+

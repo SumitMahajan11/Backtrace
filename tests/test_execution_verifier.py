@@ -565,3 +565,41 @@ except Exception as e:
     res = verifier.execute(net_code, language="python")
     assert "CONNECTED" not in res["stdout"]
     assert "BLOCKED:" in res["stderr"] or "Network is unreachable" in res["stderr"] or "Temporary failure" in res["stderr"]
+
+
+def test_subprocess_execution_with_non_cp1252_byte():
+    """
+    Verifies that local execution runner uses utf-8 with errors='replace' for its subprocess call,
+    allowing non-cp1252 bytes (such as 0x81 which causes UnicodeDecodeError under Windows cp1252)
+    to be captured cleanly in stdout/stderr without raising UnicodeDecodeError in _readerthread.
+    """
+    verifier = ExecutionVerifier()
+    # 0x81 is invalid/undefined in Windows cp1252
+    code = (
+        "import sys\n"
+        "sys.stdout.buffer.write(b'non-cp1252-byte:\\x81\\n')\n"
+        "sys.stdout.buffer.flush()\n"
+    )
+    result = verifier._execute_local(submitted_code=code, language="python")
+    assert result["exit_code"] == 0
+    assert "non-cp1252-byte:" in result["stdout"]
+    # 0x81 replaced with utf-8 replacement character \ufffd
+    assert "\ufffd" in result["stdout"]
+
+
+def test_execution_verifier_settings_failure_fails_closed_to_production(monkeypatch):
+    """
+    Verifies that if get_settings() raises an exception and ENVIRONMENT is unset,
+    the except block defaults to 'production' (fail-closed), disallowing allow_local_fallback.
+    """
+    monkeypatch.delenv("ENVIRONMENT", raising=False)
+    monkeypatch.delenv("ENV", raising=False)
+    monkeypatch.delenv("ALLOW_LOCAL_FALLBACK", raising=False)
+
+    def mock_get_settings():
+        raise RuntimeError("Settings configuration load failure")
+
+    monkeypatch.setattr("app.core.config.get_settings", mock_get_settings)
+
+    verifier = ExecutionVerifier()
+    assert verifier.allow_local_fallback is False

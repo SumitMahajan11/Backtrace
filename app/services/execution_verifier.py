@@ -91,7 +91,7 @@ class ExecutionVerifier:
             settings = get_settings()
             is_prod = settings.is_production
         except Exception:
-            env_val = os.getenv("ENVIRONMENT", os.getenv("ENV", "development")).lower().strip()
+            env_val = os.getenv("ENVIRONMENT", os.getenv("ENV", "production")).lower().strip()
             is_prod = env_val in ("prod", "production")
 
         if is_prod:
@@ -218,6 +218,7 @@ class ExecutionVerifier:
                 "PATH": os.environ.get("PATH", ""),
                 "PYTHONPATH": str(tmp_path),
                 "PYTHONUNBUFFERED": "1",
+                "PYTHONIOENCODING": "utf-8",
                 "TEMP": tmpdir,
                 "TMP": tmpdir,
             }
@@ -231,6 +232,8 @@ class ExecutionVerifier:
                     input=stdin or "",
                     capture_output=True,
                     text=True,
+                    encoding="utf-8",
+                    errors="replace",
                     timeout=timeout_sec,
                     cwd=str(tmp_path),
                     env=env,

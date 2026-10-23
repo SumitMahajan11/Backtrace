@@ -1,5 +1,6 @@
 """Authentication Service orchestrating GitHub OAuth and Session Tokens."""
 
+import os
 import urllib.parse
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional, Tuple
@@ -39,6 +40,39 @@ class AuthService:
     GITHUB_EMAILS_API_URL: str = "https://api.github.com/user/emails"
 
     @classmethod
+    def get_effective_redirect_uri(cls, explicit_uri: Optional[str] = None) -> str:
+        """
+        Determines the effective OAuth redirect URI using the following priority:
+        1. Explicitly provided redirect_uri argument
+        2. GITHUB_REDIRECT_URI environment variable
+        3. GITHUB_FRONTEND_REDIRECT_URI environment variable
+        4. Application Settings (GITHUB_REDIRECT_URI / GITHUB_FRONTEND_REDIRECT_URI)
+        5. Default fallback ('http://localhost:8000/auth/github/callback')
+        """
+        if explicit_uri and explicit_uri.strip():
+            return explicit_uri.strip()
+
+        env_uri = os.environ.get("GITHUB_REDIRECT_URI")
+        if env_uri and env_uri.strip():
+            return env_uri.strip()
+
+        env_fe_uri = os.environ.get("GITHUB_FRONTEND_REDIRECT_URI")
+        if env_fe_uri and env_fe_uri.strip():
+            return env_fe_uri.strip()
+
+        try:
+            from app.core.config import get_settings
+            settings = get_settings()
+            if settings.GITHUB_REDIRECT_URI and settings.GITHUB_REDIRECT_URI.strip():
+                return settings.GITHUB_REDIRECT_URI.strip()
+            if settings.GITHUB_FRONTEND_REDIRECT_URI and settings.GITHUB_FRONTEND_REDIRECT_URI.strip():
+                return settings.GITHUB_FRONTEND_REDIRECT_URI.strip()
+        except Exception:
+            pass
+
+        return "http://localhost:8000/auth/github/callback"
+
+    @classmethod
     def get_login_redirect_url(
         cls,
         redirect_target: Optional[str] = None,
@@ -49,17 +83,16 @@ class AuthService:
         Builds the GitHub OAuth authorization URL with a cryptographically secure,
         single-use CSRF state token.
         """
-        import os
         from app.core.config import get_settings
         settings = get_settings()
-        c_id = client_id or settings.GITHUB_CLIENT_ID or os.environ.get("GITHUB_CLIENT_ID", GITHUB_CLIENT_ID)
-        r_uri = redirect_uri or settings.GITHUB_REDIRECT_URI or os.environ.get("GITHUB_REDIRECT_URI", "http://localhost:8000/auth/github/callback")
+        c_id = client_id or os.environ.get("GITHUB_CLIENT_ID") or settings.GITHUB_CLIENT_ID or GITHUB_CLIENT_ID
+        r_uri = cls.get_effective_redirect_uri(redirect_uri)
 
         # Validate open redirect safety on desired destination
         if redirect_target and not is_safe_redirect_url(redirect_target):
             raise AuthServiceError("Invalid or untrusted redirect target URL", status_code=400)
 
-        state = oauth_state_store.generate_state(redirect_url=redirect_target)
+        state = oauth_state_store.generate_state(redirect_url=redirect_target, callback_uri=r_uri)
 
         params = {
             "client_id": c_id,
@@ -78,12 +111,11 @@ class AuthService:
         redirect_uri: Optional[str] = None,
     ) -> str:
         """Exchanges GitHub authorization code for GitHub OAuth access token."""
-        import os
         from app.core.config import get_settings
         settings = get_settings()
-        c_id = client_id or settings.GITHUB_CLIENT_ID or os.environ.get("GITHUB_CLIENT_ID", GITHUB_CLIENT_ID)
-        c_secret = client_secret or settings.GITHUB_CLIENT_SECRET or os.environ.get("GITHUB_CLIENT_SECRET", GITHUB_CLIENT_SECRET)
-        r_uri = redirect_uri or settings.GITHUB_REDIRECT_URI or os.environ.get("GITHUB_REDIRECT_URI", "http://localhost:8000/auth/github/callback")
+        c_id = client_id or os.environ.get("GITHUB_CLIENT_ID") or settings.GITHUB_CLIENT_ID or GITHUB_CLIENT_ID
+        c_secret = client_secret or os.environ.get("GITHUB_CLIENT_SECRET") or settings.GITHUB_CLIENT_SECRET or GITHUB_CLIENT_SECRET
+        r_uri = cls.get_effective_redirect_uri(redirect_uri)
 
         payload = {
             "client_id": c_id,
@@ -201,11 +233,12 @@ class AuthService:
         code: str,
         state: str,
         session: Session,
+        redirect_uri: Optional[str] = None,
     ) -> Tuple[Dict[str, Any], Optional[str]]:
         """
         Processes OAuth callback:
         1. Validates and single-use consumes CSRF state.
-        2. Exchanges code for GitHub access token.
+        2. Exchanges code for GitHub access token using matching callback URI.
         3. Fetches user profile.
         4. Upserts User row.
         5. Issues token pair.
@@ -214,14 +247,17 @@ class AuthService:
         if not state:
             raise AuthServiceError("Missing OAuth state parameter", status_code=400)
 
-        is_valid_state, redirect_target = oauth_state_store.validate_and_consume_state(state)
+        is_valid_state, redirect_target, stored_callback_uri = (
+            oauth_state_store.validate_and_consume_state_with_callback(state)
+        )
         if not is_valid_state:
             raise AuthServiceError("Invalid, expired, or replayed OAuth state parameter", status_code=400)
 
         if not code:
             raise AuthServiceError("Missing OAuth code parameter", status_code=400)
 
-        github_access_token = await cls.exchange_github_code_async(code)
+        effective_callback = redirect_uri or stored_callback_uri or cls.get_effective_redirect_uri()
+        github_access_token = await cls.exchange_github_code_async(code, redirect_uri=effective_callback)
         profile = await cls.fetch_github_user_profile_async(github_access_token)
 
         existing_user = UserRepository.get_user_by_github_id(session, profile["github_id"])

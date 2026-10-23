@@ -4,10 +4,16 @@ import json
 from datetime import datetime, timedelta
 from typing import Optional, Tuple
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, exists, not_, select
 from sqlalchemy.orm import Session
 
-from app.models.db import AnalysisResultModel, IngestionResultModel, RepoModel, utc_now
+from app.models.db import (
+    AnalysisJobModel,
+    AnalysisResultModel,
+    IngestionResultModel,
+    RepoModel,
+    utc_now,
+)
 from app.models.ingestion import FileNode, IngestionResult, RepoMetadata, SkippedItem
 from app.orchestration.schema import PipelineResult
 
@@ -206,7 +212,7 @@ class StorageRepository:
     @staticmethod
     def cleanup_expired_records(session: Session) -> int:
         """
-        Deletes expired records (expires_at <= utc_now()) UNLESS keep_longer is True.
+        Deletes expired records (expires_at <= utc_now()) UNLESS keep_longer is True or is a showcase repo.
         Enforces 30-day auto-delete worker policy while respecting user retention opt-in flag.
         Returns count of deleted repos.
         """
@@ -216,6 +222,12 @@ class StorageRepository:
             .where(
                 RepoModel.expires_at <= now,
                 RepoModel.keep_longer.is_(False),
+                not_(
+                    exists().where(
+                        AnalysisJobModel.is_showcase.is_(True),
+                        AnalysisJobModel.github_url == RepoModel.github_url,
+                    )
+                ),
             )
         )
         expired_repos = session.scalars(stmt).all()

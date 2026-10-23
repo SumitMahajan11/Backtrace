@@ -196,6 +196,7 @@ def init_sentry(
         traces_sample_rate=traces_sample_rate,
         before_send=scrub_sentry_event,
         send_default_pii=False,  # Explicitly disable automatic PII collection
+        include_local_variables=False,  # Explicitly disable local variables capture to prevent data leaks
         integrations=[
             StarletteIntegration(transaction_style="endpoint"),
             FastApiIntegration(transaction_style="endpoint"),

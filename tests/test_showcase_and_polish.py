@@ -558,3 +558,19 @@ def test_export_showcase_redacted_exact_match():
     assert count_secret_matches('api_key = "[REDACTED]"') == 0
     assert count_secret_matches('api_key = "abcdefgh[REDACTED]"') >= 1
 
+
+# -------------------------------------------------------------------------
+# Test: GET /report/{job_id} with Accept-Encoding: gzip returns content-encoding: gzip
+# -------------------------------------------------------------------------
+def test_report_gzip_compression(test_db, client):
+    SessionLocal, _ = test_db
+    with SessionLocal() as session:
+        owner = create_user_helper(session, 1010, "gzip_test_user", "gzip@test.net")
+        job = create_job_helper(session, owner.id, "gzip-repo", is_showcase=True, run_id="run_gzip")
+        job_id = job.id
+
+    resp = client.get(f"/report/{job_id}", headers={"Accept-Encoding": "gzip"})
+    assert resp.status_code == 200
+    assert resp.headers.get("content-encoding") == "gzip"
+
+

@@ -396,3 +396,20 @@ def test_heartbeat_prevents_premature_lock_expiration(db_session):
     assert is_new_check is False
     assert repo_check.id == repo.id
 
+
+def test_get_remote_head_commit_encoding_parameters():
+    """Confirms get_remote_head_commit executes git ls-remote with utf-8 encoding and errors='replace'."""
+    from unittest.mock import MagicMock, patch
+    from app.services.cached_ingestion import get_remote_head_commit
+
+    mock_res = MagicMock()
+    mock_res.returncode = 0
+    mock_res.stdout = "a1b2c3d4e5f6\tHEAD\n"
+
+    with patch("subprocess.run", return_value=mock_res) as mock_run:
+        commit = get_remote_head_commit("https://github.com/test/repo.git")
+        assert commit == "a1b2c3d4e5f6"
+        assert mock_run.call_args.kwargs.get("encoding") == "utf-8"
+        assert mock_run.call_args.kwargs.get("errors") == "replace"
+        assert mock_run.call_args.kwargs.get("text") is True
+

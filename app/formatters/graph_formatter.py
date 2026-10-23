@@ -81,7 +81,7 @@ class GraphExportFormatter:
                     "type": "tier_dependency",
                 })
 
-        return {
+        res = {
             "repo_name": report.repo_name,
             "total_nodes": len(nodes),
             "total_files": report.architecture_overview.total_files,
@@ -93,6 +93,9 @@ class GraphExportFormatter:
             "milestone_edges": milestone_edges,
             "narration_source": getattr(report, "narration_source", "template"),
         }
+        if getattr(report, "metadata", None) and "confidence_summary" in report.metadata:
+            res["confidence_summary"] = report.metadata["confidence_summary"]
+        return res
 
     def format_mermaid(self, report: SynthesizedRepositoryReport) -> str:
         """Generates a clean Mermaid sequence/flowchart representation."""

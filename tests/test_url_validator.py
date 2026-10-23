@@ -55,3 +55,35 @@ def test_ssrf_validation():
     # Private IP resolving domains / loopback test
     with pytest.raises(SSRFError):
         validate_ssrf("localhost")
+
+
+def test_check_repo_reachability_sanitizes_request_error(monkeypatch):
+    """
+    Verifies that network/request errors in check_repo_reachability do not expose
+    internal exception details (such as proxy IPs, socket errors, errno) to callers.
+    """
+    import httpx
+    from app.utils.url_validator import check_repo_reachability
+
+    class MockClient:
+        def __init__(self, *args, **kwargs):
+            pass
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            pass
+        def head(self, *args, **kwargs):
+            raise httpx.ConnectError("Connection refused to internal proxy 10.0.0.1:8080: [Errno 111]")
+
+    monkeypatch.setattr(httpx, "Client", MockClient)
+
+    with pytest.raises(InvalidURLError) as exc_info:
+        check_repo_reachability("https://github.com/owner/repo")
+
+    msg = str(exc_info.value)
+    assert "10.0.0.1" not in msg
+    assert "Connection refused" not in msg
+    assert "[Errno 111]" not in msg
+    assert "ConnectError" not in msg
+    assert msg == "Failed to reach repository URL. Verify the repository is publicly accessible."
+

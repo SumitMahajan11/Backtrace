@@ -25,6 +25,20 @@ from app.ui.sanitizer import sanitize_text, render_safe_markdown, truncate_text_
 SANDBOX_DISABLED_BANNER_TEXT = "Code execution is turned off on this free demo. Running user code safely needs an isolated sandbox server, which this host can't provide. Everything else works, and structure checks still run. See the full run-and-grade flow in the video."
 
 
+def _safe_script_json_dumps(obj: Any) -> str:
+    """Serializes obj to a JSON string safe for embedding inside an HTML <script> block,
+    escaping '<', '>', '&', and Unicode line/paragraph separators U+2028 and U+2029.
+    """
+    return (
+        json.dumps(obj)
+        .replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+        .replace("&", "\\u0026")
+        .replace("\u2028", "\\u2028")
+        .replace("\u2029", "\\u2029")
+    )
+
+
 def get_narration_source(
     job: Any = None,
     raw_markdown: Optional[str] = None,
@@ -73,7 +87,8 @@ def nav_shell(
 ) -> str:
     """Render the persistent Archival Dossier navigation header shell."""
     if not current_user:
-        return """
+        sign_in_link = "" if active_route == "/login" else '<a href="/login" class="btn btn-sm btn-primary">Sign In</a>'
+        return f"""
     <header class="nav-shell">
         <a href="/login" class="brand" id="nav-brand-link">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -81,14 +96,13 @@ def nav_shell(
                 <polyline points="12 6 12 12 16 14"></polyline>
             </svg>
             <span class="brand-title">Backtrace</span>
-            <span class="brand-pill">Architecture Report Engine</span>
         </a>
         <div class="nav-right" style="display: flex; align-items: center; gap: 0.75rem;">
             <button id="theme-toggle" class="theme-toggle-btn" onclick="toggleTheme()" type="button" aria-label="Toggle dark/light mode" title="Toggle Light/Dark Theme">
                 <span id="theme-toggle-icon">◐</span>
                 <span id="theme-toggle-label">Theme</span>
             </button>
-            <a href="/login" class="btn btn-sm btn-primary">Sign In</a>
+            {sign_in_link}
         </div>
     </header>
     """
@@ -137,7 +151,6 @@ def nav_shell(
                     <polyline points="12 6 12 12 16 14"></polyline>
                 </svg>
                 <span class="brand-title">Backtrace</span>
-                <span class="brand-pill">Architecture Report Engine</span>
             </a>
             {tier_tag}
         </div>
@@ -181,12 +194,19 @@ def page_shell(
         billing_status=billing_status,
     )
 
+    if active_route == "/login" or title == "Backtrace - Understand any GitHub repository":
+        doc_title = "<title>Backtrace - Understand any GitHub repository</title>"
+    else:
+        doc_title = f"<title>{sanitize_text(title)} // Backtrace</title>"
+
+    footer_text = "Backtrace &bull; Sign in with GitHub. Read-only." if active_route == "/login" else "Backtrace"
+
     return f"""<!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{sanitize_text(title)} // Backtrace Repository Archaeology</title>
+    {doc_title}
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&display=swap" rel="stylesheet">
@@ -1078,7 +1098,16 @@ def page_shell(
         {content}
     </main>
     <footer class="footer">
-        Backtrace 11-Layer Reverse Code Intelligence &bull; Secured with GitHub OAuth &amp; Stripe
+        <div style="margin-bottom: 0.5rem; display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap;">
+            <a href="/privacy" style="color: var(--text-tertiary); text-decoration: none;">Privacy</a>
+            <span>&bull;</span>
+            <a href="/pricing" style="color: var(--text-tertiary); text-decoration: none;">Pricing and limits</a>
+            <span>&bull;</span>
+            <a href="https://github.com/SumitMahajan11/Backtrace/issues" style="color: var(--text-tertiary); text-decoration: none;">Support</a>
+        </div>
+        <div>
+            {footer_text}
+        </div>
     </footer>
     <script>
         function toggleTheme() {{
@@ -1128,8 +1157,9 @@ def login_view(error: Optional[str] = None) -> str:
                         <polyline points="2 12 12 17 22 12"></polyline>
                     </svg>
                 </div>
-                <h1 style="font-size: 1.85rem; font-weight: 500; margin-bottom: 0.5rem; letter-spacing: -0.02em;">Welcome to Backtrace</h1>
-                <p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.5;">Reverse-engineer codebase architecture into executable mental models.</p>
+                <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--brass); letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 0.5rem;">Backtrace</div>
+                <h1 style="font-size: 1.85rem; font-weight: 500; margin-bottom: 0.5rem; letter-spacing: -0.02em;">Understand any codebase without reading every file.</h1>
+                <p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.5;">Each report delivers an architectural markdown explanation, an interactive dependency graph, guided implementation milestones, and a codebase quiz.</p>
                 <div style="display: flex; align-items: center; justify-content: center; gap: 0.5rem; font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--text-tertiary); margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--hairline-soft);">
                     <span>AUTHENTICATION GATE</span>
                     <span>&bull;</span>
@@ -1143,13 +1173,29 @@ def login_view(error: Optional[str] = None) -> str:
                 </svg>
                 Sign in with GitHub
             </a>
-            <div style="margin-top: 1.5rem; font-size: 0.75rem; color: var(--text-tertiary); font-family: 'IBM Plex Mono', monospace;">
-                ZERO-PERSISTENCE CODE CLONE PROTOCOL
+            <div style="margin-top: 1rem;">
+                <a href="/showcase" style="font-size: 0.85rem; color: var(--brass); text-decoration: none; font-weight: 500;">
+                    View a sample report &rarr;
+                </a>
+            </div>
+            <div style="margin-top: 1.5rem; font-size: 0.75rem; color: var(--text-tertiary); line-height: 1.4;">
+                Repository files are stored with secrets scanned and redacted (best effort) and deleted after 30 days. Reports are kept until you ask us to delete them. <a href="/privacy" style="color: var(--text-secondary); text-decoration: underline;">Privacy Policy</a>
             </div>
         </div>
     </div>
     """
-    return page_shell("Sign In", content)
+    extra_head = """
+    <meta name="description" content="Understand any codebase without reading every file.">
+    <meta property="og:title" content="Backtrace - Understand any GitHub repository">
+    <meta property="og:description" content="Understand any codebase without reading every file.">
+    <meta property="og:type" content="website">
+    """
+    return page_shell(
+        "Backtrace - Understand any GitHub repository",
+        content,
+        active_route="/login",
+        extra_head=extra_head,
+    )
 
 
 def showcase_view(
@@ -1159,8 +1205,11 @@ def showcase_view(
     """Render the public showcase directory view."""
     if not jobs:
         items_html = """
-        <div style="padding: 2.5rem 1rem; text-align: center; color: var(--text-tertiary); font-family: 'IBM Plex Mono', monospace; font-size: 0.85rem;">
-            No showcase repositories are currently published.
+        <div style="padding: 2.5rem 1rem; text-align: center; color: var(--text-tertiary); font-size: 0.95rem;">
+            <p style="margin-bottom: 1.25rem;">Sample reports are coming soon.</p>
+            <a href="/login" class="btn btn-sm btn-secondary" style="font-family: 'IBM Plex Mono', monospace; font-size: 0.8rem;">
+                &larr; Back to Login
+            </a>
         </div>
         """
     else:
@@ -1200,7 +1249,160 @@ def showcase_view(
         </div>
     </div>
     """
-    return page_shell("Showcase Directory", content, current_user=current_user, active_route="/showcase")
+    extra_head = """
+    <meta name="description" content="Understand any codebase without reading every file.">
+    <meta property="og:title" content="Backtrace - Featured Repository Architectures">
+    <meta property="og:description" content="Understand any codebase without reading every file.">
+    <meta property="og:type" content="website">
+    """
+    return page_shell(
+        "Showcase Directory",
+        content,
+        current_user=current_user,
+        active_route="/showcase",
+        extra_head=extra_head,
+    )
+
+
+def privacy_view(current_user: Optional[UserModel] = None) -> str:
+    """Render the public Privacy Policy page adhering to Archival Dossier tokens."""
+    content = """
+    <div style="max-width: 760px; margin: 3rem auto 0 auto; padding: 0 1rem;">
+        <div class="stratum-card" style="padding: 2.5rem 2.25rem;">
+            <div style="margin-bottom: 2rem; border-bottom: 1px solid var(--hairline); padding-bottom: 1.25rem;">
+                <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--brass); text-transform: uppercase; letter-spacing: 0.05em;">
+                    Policy Dossier
+                </div>
+                <h1 style="font-size: 2rem; font-weight: 500; margin-top: 0.25rem; letter-spacing: -0.02em;">
+                    Privacy Policy
+                </h1>
+                <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--text-tertiary); margin-top: 0.5rem;">
+                    Last updated October 21, 2026
+                </div>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 2rem; font-size: 0.925rem; line-height: 1.6; color: var(--text-secondary);">
+                <section>
+                    <h2 style="font-size: 1.25rem; color: var(--text-primary); margin-bottom: 0.5rem; font-weight: 600;">What we store</h2>
+                    <p style="margin-bottom: 0.75rem;">
+                        When a repository is analyzed, Backtrace records repository metadata: GitHub URL, commit hash, clone status, and analysis timestamp.
+                    </p>
+                    <p style="margin-bottom: 0.75rem;">
+                        Repository file text and cloned file trees are stored with secrets scanned and redacted on a best-effort basis before storage.
+                    </p>
+                    <p style="margin-bottom: 0.75rem;">
+                        User profile records are stored: GitHub ID, username, email, avatar. GitHub OAuth access tokens are not stored.
+                    </p>
+                    <p style="margin-bottom: 0.75rem;">
+                        Interactive milestone attempts are stored: your submitted milestone code and run output.
+                    </p>
+                    <p>
+                        Analysis jobs and execution state include the synthesized architecture report, interactive dependency graphs, guided milestones, and quiz questions. System logs record run IDs, stage names and error types.
+                    </p>
+                </section>
+
+                <section>
+                    <h2 style="font-size: 1.25rem; color: var(--text-primary); margin-bottom: 0.5rem; font-weight: 600;">How long</h2>
+                    <p>
+                        Repository file text is deleted automatically after 30 days (showcase repos are kept). Reports, graphs, your submitted milestone code and run output are kept until you ask for deletion.
+                    </p>
+                </section>
+
+                <section>
+                    <h2 style="font-size: 1.25rem; color: var(--text-primary); margin-bottom: 0.5rem; font-weight: 600;">Who processes your code</h2>
+                    <p style="margin-bottom: 0.75rem;">
+                        Depending on configuration, repository analysis and narration are processed by:
+                    </p>
+                    <ul style="margin-left: 1.25rem; margin-bottom: 0.75rem;">
+                        <li><strong>Local Ollama</strong>: Code analysis executes locally on-premises via a local Ollama daemon (127.0.0.1:11434).</li>
+                        <li><strong>Groq</strong>: When cloud LLM narration is enabled, prompt payloads are sent to Groq's API.</li>
+                        <li><strong>Google Gemini</strong>: Used for code vector embeddings when configured, with an offline deterministic n-gram vector fallback.</li>
+                        <li><strong>Deterministic Offline Engine</strong>: When no external LLM is configured, analysis runs purely offline using structural AST heuristics.</li>
+                        <li>Error reports (no file contents) may be sent to Sentry.</li>
+                    </ul>
+                </section>
+
+                <section>
+                    <h2 style="font-size: 1.25rem; color: var(--text-primary); margin-bottom: 0.5rem; font-weight: 600;">GitHub permissions</h2>
+                    <p>
+                        Backtrace requests strictly read-only GitHub OAuth scopes: <code>read:user user:email</code>. We only access your basic profile identifier and verified email address to manage your account. We do not request repository write access, code modification rights, or organization administration permissions.
+                    </p>
+                </section>
+
+                <section>
+                    <h2 style="font-size: 1.25rem; color: var(--text-primary); margin-bottom: 0.5rem; font-weight: 600;">Deleting your data</h2>
+                    <p>
+                        To delete your data, open an issue or contact support at <a href="https://github.com/SumitMahajan11/Backtrace/issues" target="_blank" rel="noopener noreferrer" style="color: var(--brass); text-decoration: underline;">our GitHub issues tracker</a>.
+                    </p>
+                </section>
+            </div>
+        </div>
+    </div>
+    """
+    return page_shell("Privacy Policy", content, current_user=current_user, active_route="/privacy")
+
+
+def pricing_view(current_user: Optional[UserModel] = None) -> str:
+    """Render the public Pricing and Limits page adhering to Archival Dossier tokens."""
+    from app.services.ingestion import get_max_repo_mb, MAX_REPO_FILE_LIMIT_V1
+    enforced_mb = get_max_repo_mb()
+    enforced_files = MAX_REPO_FILE_LIMIT_V1
+
+    cta_href = "/dashboard" if current_user else "/login"
+    content = f"""
+    <div style="max-width: 840px; margin: 3rem auto 0 auto; padding: 0 1rem;">
+        <div class="stratum-card" style="padding: 2.5rem 2.25rem;">
+            <div style="margin-bottom: 2rem; border-bottom: 1px solid var(--hairline); padding-bottom: 1.25rem; text-align: center;">
+                <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--brass); text-transform: uppercase; letter-spacing: 0.05em;">
+                    Plan Limits &amp; Subscriptions
+                </div>
+                <h1 style="font-size: 2rem; font-weight: 500; margin-top: 0.25rem; letter-spacing: -0.02em;">
+                    Pricing &amp; Limits
+                </h1>
+                <p style="color: var(--text-secondary); font-size: 0.95rem; margin-top: 0.5rem;">
+                    Clear, transparent plan limits for reverse-engineering repository architecture.
+                </p>
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.75rem; margin-bottom: 2rem;">
+                <!-- Free Plan -->
+                <div style="background: var(--panel-raised); border: 1px solid var(--hairline); border-radius: 4px; padding: 2rem 1.75rem; display: flex; flex-direction: column; justify-content: space-between;">
+                    <div>
+                        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--text-tertiary); text-transform: uppercase;">Tier</div>
+                        <h2 style="font-size: 1.5rem; font-weight: 600; margin: 0.25rem 0 1rem 0; color: var(--text-primary);">Free Plan</h2>
+                        <ul style="list-style: none; padding: 0; margin: 0 0 1.5rem 0; font-size: 0.9rem; line-height: 1.8; color: var(--text-secondary);">
+                            <li>&check; <strong>5 repository analyses</strong> per month</li>
+                            <li>&check; <strong>{enforced_mb} MB</strong> repository size cap</li>
+                            <li>&check; <strong>{enforced_files} supported files</strong> cap</li>
+                        </ul>
+                    </div>
+                    <a href="{cta_href}" class="btn btn-secondary" style="width: 100%; justify-content: center; font-size: 0.9rem;">
+                        Get Started
+                    </a>
+                </div>
+
+                <!-- Pro Plan -->
+                <div style="background: var(--panel-raised); border: 1px solid var(--brass-border); border-radius: 4px; padding: 2rem 1.75rem; display: flex; flex-direction: column; justify-content: space-between; position: relative;">
+                    <div>
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--brass); text-transform: uppercase; font-weight: 600;">Monthly Subscription</div>
+                            <span class="badge" style="background: var(--panel); color: var(--text-secondary); font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; padding: 0.15rem 0.45rem; border: 1px solid var(--hairline); border-radius: 3px;">Coming soon</span>
+                        </div>
+                        <h2 style="font-size: 1.5rem; font-weight: 600; margin: 0.25rem 0 1rem 0; color: var(--text-primary);">Pro Plan</h2>
+                        <ul style="list-style: none; padding: 0; margin: 0 0 1.5rem 0; font-size: 0.9rem; line-height: 1.8; color: var(--text-secondary);">
+                            <li>&check; <strong>Unlimited repository analyses</strong></li>
+                            <li>&check; Bypasses standard monthly quota</li>
+                        </ul>
+                    </div>
+                    <button class="btn btn-secondary" disabled style="width: 100%; justify-content: center; font-size: 0.9rem; opacity: 0.6; cursor: not-allowed;">
+                        Coming soon
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    """
+    return page_shell("Pricing and Limits", content, current_user=current_user, active_route="/pricing")
 
 
 def dashboard_view(
@@ -1729,7 +1931,7 @@ def progress_view(
             initial_timer_text = "Running for 0:00"
 
     initial_badge_html = '<span class="badge badge-failed">ANALYSIS JOB FAILED</span>' if is_failed_initially else '<span class="badge" style="background: var(--brass-soft); color: var(--brass); border-color: var(--brass-border);">IN PROGRESS</span>'
-    initial_desc_text = safe_job_error if (is_failed_initially and safe_job_error) else ("Analysis job execution failed." if is_failed_initially else "Initializing 11-Layer Analysis Pipeline...")
+    initial_desc_text = safe_job_error if (is_failed_initially and safe_job_error) else ("Analysis job execution failed." if is_failed_initially else "Initializing Backtrace Analysis Pipeline...")
 
     # Determine honest stage_7 narration label
     job_src = None
@@ -1917,9 +2119,19 @@ def progress_view(
         const completedStages = new Set();
         const checkmarkSvg = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>';
 
+        function escapeHtml(str) {{
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }}
+
         function addActivityEntry(stageIndex, totalStages, stageName, message, isComplete=false) {{
             if (!activityLogBox) return;
-            const existingId = `activity-stage-${{stageIndex}}`;
+            const existingId = `activity-stage-${{Number(stageIndex) || 0}}`;
             let item = document.getElementById(existingId);
             if (!item) {{
                 item = document.createElement("div");
@@ -1953,10 +2165,10 @@ def progress_view(
                     </div>
                     <div>
                         <div style="font-size: 0.875rem; font-weight: 600; color: var(--text-primary);">
-                            Stage ${{stageIndex}} of ${{totalStages}} — ${{stageName}}
+                            Stage ${{Number(stageIndex) || 0}} of ${{Number(totalStages) || 0}} — ${{escapeHtml(stageName)}}
                         </div>
                         <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.15rem;">
-                            ${{message}}
+                            ${{escapeHtml(message)}}
                         </div>
                     </div>
                 </div>
@@ -2091,12 +2303,27 @@ def progress_view(
                     if (statusDesc) statusDesc.textContent = "All 11 tier layers synthesized. Finalizing architecture report...";
                     
                     addLogEntry(`Analysis job synthesis completed successfully. Redirecting to architecture report...`, "complete");
+                    
+                    isJobTerminated = true;
+                    if (pollingInterval) {{
+                        clearInterval(pollingInterval);
+                        pollingInterval = null;
+                    }}
+                    if (timerInterval) {{
+                        clearInterval(timerInterval);
+                        timerInterval = null;
+                    }}
                     eventSource.close();
                     
                     setTimeout(() => {{
                         window.location.href = `/report/${{jobId}}`;
                     }}, 1200);
                 }} else if (data.type === "failed") {{
+                    isJobTerminated = true;
+                    if (pollingInterval) {{
+                        clearInterval(pollingInterval);
+                        pollingInterval = null;
+                    }}
                     if (timerInterval) {{
                         clearInterval(timerInterval);
                         timerInterval = null;
@@ -2127,8 +2354,54 @@ def progress_view(
             }}
         }};
 
+        let pollingInterval = null;
+        let isJobTerminated = (initialJobStatus === "completed" || initialJobStatus === "failed");
+
+        function pollJobStatus() {{
+            if (isJobTerminated) return;
+            fetch(`/api/analyses/${{jobId}}/status`)
+                .then(r => r.json())
+                .then(data => {{
+                    if (!data) return;
+                    if (data.status === "completed") {{
+                        isJobTerminated = true;
+                        if (pollingInterval) clearInterval(pollingInterval);
+                        if (timerInterval) clearInterval(timerInterval);
+                        if (progressBar) progressBar.style.width = "100%";
+                        if (pctLabel) pctLabel.textContent = "100%";
+                        if (stageCounter) stageCounter.textContent = "11";
+                        addLogEntry("Analysis completed (verified via background status check). Redirecting...", "complete");
+                        setTimeout(() => {{
+                            window.location.href = `/report/${{jobId}}`;
+                        }}, 800);
+                    }} else if (data.status === "failed") {{
+                        isJobTerminated = true;
+                        if (pollingInterval) clearInterval(pollingInterval);
+                        if (timerInterval) clearInterval(timerInterval);
+                        if (statusHeader) statusHeader.innerHTML = '<span class="badge badge-failed">ANALYSIS JOB FAILED</span>';
+                        const err = data.error_message || "Pipeline encountered fatal execution failure.";
+                        if (statusDesc) statusDesc.textContent = err;
+                        addLogEntry(`[ERROR] ${{err}}`, "error");
+                        const failureBanner = document.getElementById("pipeline-failure-banner");
+                        const failureMsg = document.getElementById("failure-error-message");
+                        if (failureBanner && failureMsg) {{
+                            failureMsg.textContent = err;
+                            failureMsg.title = err;
+                            failureBanner.style.display = "flex";
+                        }}
+                    }}
+                }})
+                .catch(() => {{}});
+        }}
+
         eventSource.onerror = function() {{
-            addLogEntry("SSE stream disconnected or complete. Polling status...", "info");
+            if (!isJobTerminated) {{
+                addLogEntry("SSE stream disconnected or stalled. Polling analysis status...", "info");
+                if (!pollingInterval) {{
+                    pollJobStatus();
+                    pollingInterval = setInterval(pollJobStatus, 2500);
+                }}
+            }}
         }};
     </script>
     """
@@ -2197,7 +2470,7 @@ def progress_view(
                     <span>&bull;</span>
                     <span>Job #{job_id}</span>
                     <span>&bull;</span>
-                    <span>ENGINE: <strong>11-Layer Reverse Intelligence</strong></span>
+                    <span>ENGINE: <strong>Backtrace Reverse Intelligence</strong></span>
                 </div>
             </div>
             <div id="overall-status">
@@ -2231,7 +2504,7 @@ def progress_view(
     <!-- Main Grid: Timeline Centerpiece with Live Stage Activity & Collapsible Technical Log -->
     <div style="display: grid; grid-template-columns: 1fr; gap: 2rem; align-items: start;">
         
-        <!-- 11-Layer Narrative Timeline Centerpiece -->
+        <!-- Backtrace Narrative Timeline Centerpiece -->
         <div class="stratum-card">
             <div class="card-header" style="margin-bottom: 1.5rem;">
                 <div>
@@ -2969,8 +3242,29 @@ def report_view(
         """
 
     # Sequence Confidence Calculation for Overview KPI Bento Grid
+    conf_summary = graph_data.get("confidence_summary") if graph_data else None
     total_nodes_count = len(nodes)
-    if total_nodes_count > 0:
+    if conf_summary and isinstance(conf_summary, dict):
+        h_pct = conf_summary.get("high_pct", 0.0)
+        m_pct = conf_summary.get("medium_pct", 0.0)
+        l_pct = conf_summary.get("low_pct", 0.0)
+        h_disp = int(h_pct) if isinstance(h_pct, (int, float)) and h_pct == int(h_pct) else h_pct
+        m_disp = int(m_pct) if isinstance(m_pct, (int, float)) and m_pct == int(m_pct) else m_pct
+        l_disp = int(l_pct) if isinstance(l_pct, (int, float)) and l_pct == int(l_pct) else l_pct
+        if h_pct >= 50:
+            overall_conf_label = f"HIGH ({h_disp}%)"
+            overall_conf_val = "high"
+            overall_conf_color = "var(--teal)"
+        elif h_pct + m_pct >= 50:
+            overall_conf_label = f"MEDIUM ({m_disp}%)"
+            overall_conf_val = "medium"
+            overall_conf_color = "var(--amber)"
+        else:
+            overall_conf_label = f"Share of files with low confidence: {l_disp}%"
+            overall_conf_val = "low"
+            overall_conf_color = "var(--brass)"
+        conf_sub_text = f"{h_disp}% High &bull; {m_disp}% Med"
+    elif total_nodes_count > 0:
         h_nodes = sum(1 for n in nodes if str(n.get("confidence", "")).lower() == "high")
         m_nodes = sum(1 for n in nodes if str(n.get("confidence", "")).lower() == "medium")
         l_nodes = sum(1 for n in nodes if str(n.get("confidence", "")).lower() == "low")
@@ -2986,10 +3280,10 @@ def report_view(
             overall_conf_val = "medium"
             overall_conf_color = "var(--amber)"
         else:
-            overall_conf_label = f"LOW ({l_pct}%)"
+            overall_conf_label = f"Share of files with low confidence: {l_pct}%"
             overall_conf_val = "low"
             overall_conf_color = "var(--brass)"
-        conf_sub_text = f"{h_pct}% High &bull; {m_pct}% Med"
+        conf_sub_text = "estimated from graph nodes"
     elif milestones_data:
         all_confs = [m.get("confidence_badge", "") for m in milestones_data]
         h_count = sum(1 for c in all_confs if "HIGH" in c.upper())
@@ -3743,6 +4037,7 @@ def report_view(
                     </div>
                     """
 
+                source_tag_label = "READ-ONLY SOURCE" if r_file.get("has_real_source", True) else "source files expired"
                 read_file_panes_html += f"""
                 <div id="read-file-pane-{m_tier}-{f_idx}" class="read-file-pane" style="display: {pane_display};">
                     <div style="display: flex; justify-content: space-between; align-items: center; background: #12141a; padding: 0.4rem 0.85rem; border: 1px solid var(--hairline); border-bottom: none; border-top-left-radius: 4px; border-top-right-radius: 4px; font-family: 'IBM Plex Mono', monospace; font-size: 0.7rem; color: var(--text-tertiary);">
@@ -3750,7 +4045,7 @@ def report_view(
                             <span class="chip-dot teal"></span>
                             <span style="color: var(--text-secondary); font-weight: 500;">{f_path_safe}</span>
                         </div>
-                        <span class="tag" style="font-size: 0.625rem;">READ-ONLY SOURCE</span>
+                        <span class="tag" style="font-size: 0.625rem;">{source_tag_label}</span>
                     </div>
                     {redaction_notice_html}
                     <pre class="read-code-pre" style="background: #181a20; padding: 1rem 1.15rem; border-bottom-left-radius: 4px; border-bottom-right-radius: 4px; border: 1px solid var(--hairline); overflow-x: auto; margin: 0; max-height: 480px; font-family: 'IBM Plex Mono', monospace; font-size: 0.8rem; line-height: 1.5; color: #f8f8f2;"><code id="read-code-content-{m_tier}-{f_idx}">{escaped_f_content}</code></pre>
@@ -4603,10 +4898,11 @@ def report_view(
     """
 
     # Extra Interactive Scripts & Graph Logic
-    graph_nodes_json = json.dumps(nodes).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
-    graph_edges_json = json.dumps(edges).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
-    fill_files_map_json = json.dumps(all_fill_files_map).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
-    sandbox_banner_js_val = json.dumps(SANDBOX_DISABLED_BANNER_TEXT) if not sandbox_enabled else '""'
+    graph_nodes_json = _safe_script_json_dumps(nodes)
+    graph_edges_json = _safe_script_json_dumps(edges)
+    fill_files_map_json = _safe_script_json_dumps(all_fill_files_map)
+    sandbox_banner_js_val = _safe_script_json_dumps(SANDBOX_DISABLED_BANNER_TEXT) if not sandbox_enabled else '""'
+    demo_video_url_json = _safe_script_json_dumps(demo_video_url)
 
     if is_showcase:
         extra_scripts = f"""
@@ -4779,7 +5075,7 @@ def report_view(
         const GRAPH_NODES = {graph_nodes_json};
         const GRAPH_EDGES = {graph_edges_json};
         const ALL_FILL_FILES = {fill_files_map_json};
-        const DEMO_VIDEO_URL = {json.dumps(demo_video_url)};
+        const DEMO_VIDEO_URL = {demo_video_url_json};
         const SANDBOX_DISABLED_BANNER_TEXT = {sandbox_banner_js_val};
         window.fillFilesData = ALL_FILL_FILES;
         window.cmEditors = {{}};
@@ -4905,7 +5201,7 @@ def report_view(
                 return '<span style="font-size: 0.75rem; color: var(--text-tertiary); font-style: italic;">' + escapeHtml(reason || 'File contains no function bodies to blank.') + '</span>';
             }}
 
-            const totalCount = blankedFunctions.length;
+            const totalCount = Number(blankedFunctions.length) || 0;
             const shouldCollapse = totalCount > 15;
 
             const groupOrder = [];
@@ -4928,7 +5224,7 @@ def report_view(
             let html = '';
             groupOrder.forEach(function(key) {{
                 const g = groups[key];
-                const count = g.items.length;
+                const count = Number(g.items.length) || 0;
                 const groupTitle = g.isClass ? ('class ' + escapeHtml(g.className)) : 'Top-level Functions';
                 const groupCountLabel = g.isClass ? (count + (count === 1 ? ' method' : ' methods')) : (count + (count === 1 ? ' function' : ' functions'));
                 const icon = g.isClass ? '🏛️' : '📁';
@@ -4983,8 +5279,8 @@ def report_view(
             // Handle Fill the Blanks grading results specially
             if (gradingMethod === 'fill_the_blanks' || diff.blank_details || diff.blanked_evaluated !== undefined) {{
                 const blankDetails = diff.blank_details || [];
-                const blankedCount = diff.blanked_evaluated !== undefined ? diff.blanked_evaluated : blankDetails.length;
-                const implementedCount = diff.implemented_count !== undefined ? diff.implemented_count : blankDetails.filter(b => b.status === 'implemented').length;
+                const blankedCount = Number(diff.blanked_evaluated !== undefined ? diff.blanked_evaluated : blankDetails.length) || 0;
+                const implementedCount = Number(diff.implemented_count !== undefined ? diff.implemented_count : blankDetails.filter(b => b.status === 'implemented').length) || 0;
 
                 let implementedPills = '';
                 let stubPills = '';
@@ -5048,9 +5344,9 @@ def report_view(
                 extraPills += '<span style="display: inline-flex; align-items: center; gap: 0.3rem; background: var(--panel-raised); border: 1px solid var(--hairline); color: var(--text-secondary); padding: 0.2rem 0.5rem; border-radius: 3px; font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.75rem;">+ ' + name + ' <span style="opacity: 0.75; font-size: 0.6875rem;">(' + kind + ')</span></span> ';
             }});
 
-            const totalExpected = present.length + missing.length;
+            const totalExpected = Number(present.length + missing.length) || 0;
             const isAllMatched = (missing.length === 0 && totalExpected > 0);
-            const matchSummary = totalExpected > 0 ? (present.length + '/' + totalExpected + ' symbols matched' + (isAllMatched ? ' ✓' : '')) : (present.length + ' matched');
+            const matchSummary = totalExpected > 0 ? ((Number(present.length) || 0) + '/' + totalExpected + ' symbols matched' + (isAllMatched ? ' ✓' : '')) : ((Number(present.length) || 0) + ' matched');
 
             let sectionsHtml = '';
             if (presentPills) {{
@@ -5075,11 +5371,11 @@ def report_view(
         function renderConsoleHtmlInJs(exec) {{
             if (!exec) return '';
             const eObj = (exec.execution) ? exec.execution : exec;
-            const exitCode = (eObj.exit_code !== undefined && eObj.exit_code !== null) ? eObj.exit_code : 0;
+            const exitCode = (eObj.exit_code !== undefined && eObj.exit_code !== null) ? (Number(eObj.exit_code) || 0) : 0;
             const isSuccess = (exitCode === 0 && !eObj.timed_out && !eObj.memory_exceeded);
             const stdout = eObj.stdout || '';
             const stderr = eObj.stderr || '';
-            const execMs = (eObj.execution_time_ms !== undefined && eObj.execution_time_ms !== null) ? (eObj.execution_time_ms + 'ms') : '';
+            const execMs = (eObj.execution_time_ms !== undefined && eObj.execution_time_ms !== null && Number(eObj.execution_time_ms) > 0) ? ((Number(eObj.execution_time_ms) || 0) + 'ms') : '';
             const exitBadgeClass = isSuccess ? 'badge-teal' : 'badge-crimson';
             const exitBadgeText = 'EXIT ' + exitCode + (eObj.timed_out ? ' (TIMED OUT)' : (eObj.memory_exceeded ? ' (OOM)' : ''));
             const dotColor = isSuccess ? 'teal' : 'crimson';
@@ -6644,7 +6940,7 @@ def settings_view(
             <div style="background: var(--panel-raised); border: 1px solid var(--hairline); border-radius: 4px; padding: 1.25rem;">
                 <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.35rem;">Enterprise Code Validation Suite</div>
                 <p style="color: var(--text-secondary); font-size: 0.85rem; line-height: 1.45; margin-bottom: 1rem;">
-                    Your account has unlimited access to repository analysis, priority processing, and interactive dependency graphs.
+                    Your account has unlimited access to repository analysis and interactive dependency graphs.
                 </p>
                 <a href="/api/billing/portal" class="btn btn-secondary" style="width: 100%; justify-content: center; padding: 0.75rem;">
                     Manage Subscription &amp; Invoices &rarr;
@@ -6697,7 +6993,7 @@ def settings_view(
                     </div>
                     <div style="display: flex; align-items: center; gap: 0.5rem;">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                        <span>Priority syntax parsing &amp; automatic tier grouping queue</span>
+                        <span>Syntax parsing &amp; automatic tier grouping</span>
                     </div>
                     <div style="display: flex; align-items: center; gap: 0.5rem;">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>

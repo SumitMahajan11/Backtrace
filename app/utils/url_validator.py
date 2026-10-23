@@ -110,4 +110,4 @@ def check_repo_reachability(url: str, timeout_seconds: float = 10.0) -> None:
                     f"GitHub returned error HTTP {response.status_code} for repository '{cleaned_url}'."
                 )
     except httpx.RequestError as e:
-        raise InvalidURLError(f"Failed to reach repository URL: {e}") from e
+        raise InvalidURLError("Failed to reach repository URL. Verify the repository is publicly accessible.") from e

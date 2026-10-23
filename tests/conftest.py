@@ -2,6 +2,14 @@ import os
 import subprocess
 import pytest
 import httpx
+
+os.environ.setdefault("ENVIRONMENT", "test")
+os.environ.setdefault("SANDBOX_ENABLED", "true")
+os.environ.setdefault("RETENTION_CLEANUP_ENABLED", "false")
+
+from app.core.config import get_settings
+get_settings.cache_clear()
+
 from app.services.piston_health import piston_health_monitor
 
 _discovered_piston_health = False
@@ -10,7 +18,10 @@ def pytest_configure(config):
     """Discover reachable Piston URL once for test session and isolate Sentry monitoring."""
     os.environ["SENTRY_DSN"] = ""
     os.environ["DEBUG"] = "false"
-    os.environ["ENVIRONMENT"] = "testing"
+    os.environ["ENVIRONMENT"] = "test"
+    os.environ["SANDBOX_ENABLED"] = "true"
+    os.environ["RETENTION_CLEANUP_ENABLED"] = "false"
+    get_settings.cache_clear()
     os.environ["DATABASE_URL"] = "sqlite:///:memory:"
     os.environ["REDIS_URL"] = "redis://127.0.0.1:6379/0"
     global _discovered_piston_health

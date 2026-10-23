@@ -25,6 +25,8 @@ def get_remote_head_commit(github_url: str, timeout_seconds: float = 10.0) -> st
             env=env,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=timeout_seconds,
         )
         if res.returncode == 0 and res.stdout.strip():

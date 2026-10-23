@@ -2,6 +2,7 @@
 
 import configparser
 import os
+import re
 import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -55,6 +56,32 @@ def get_max_repo_mb() -> int:
         return 200
 
 
+REF_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/@-]{0,199}$")
+
+
+def validate_commit_ref(ref: Optional[str]) -> Optional[str]:
+    """
+    Validates branch or commit_ref against malicious git flags, shell injection, or illegal chars.
+    Must match ^[A-Za-z0-9][A-Za-z0-9._/@-]{0,199}$.
+    Returns stripped ref or None if empty.
+    Raises ValueError on invalid patterns.
+    """
+    if not ref or not ref.strip():
+        return None
+    cleaned = ref.strip()
+    if cleaned.startswith("-"):
+        raise ValueError(
+            f"Invalid branch or commit reference '{cleaned}'. "
+            "References starting with '-' are not allowed."
+        )
+    if not REF_PATTERN.match(cleaned):
+        raise ValueError(
+            f"Invalid branch or commit reference '{cleaned}'. "
+            "Reference must start with an alphanumeric character and contain only alphanumeric, '.', '_', '/', '@', or '-' (max 200 chars)."
+        )
+    return cleaned
+
+
 def check_repo_size_preflight(
     github_url: str,
     commit_ref: Optional[str] = None,
@@ -85,7 +112,12 @@ def check_repo_size_preflight(
     except ValueError as e:
         raise InvalidURLError(str(e))
 
-    tree_sha = commit_ref.strip() if commit_ref and commit_ref.strip() else "HEAD"
+    try:
+        clean_ref = validate_commit_ref(commit_ref)
+    except ValueError as e:
+        raise InvalidURLError(str(e))
+
+    tree_sha = clean_ref if clean_ref else "HEAD"
 
     headers = {
         "User-Agent": "Backtrace-Preflight/1.0",
@@ -238,12 +270,24 @@ class IngestionService:
         # Step 1: Input & Security Validation
         owner, repo_name = validate_github_url(github_url)
         validated_ip = validate_ssrf("github.com")
-        check_repo_reachability(github_url)
 
         try:
             clean_subpath = sanitize_and_validate_subpath(subpath)
         except ValueError as e:
             raise InvalidURLError(str(e))
+
+        try:
+            clean_ref = validate_commit_ref(commit_ref)
+        except ValueError as e:
+            raise InvalidURLError(str(e))
+
+        target_ref = clean_ref if clean_ref else "HEAD"
+        if target_ref.startswith("-"):
+            raise InvalidURLError(
+                f"Invalid ref '{target_ref}': references starting with '-' are not allowed."
+            )
+
+        check_repo_reachability(github_url)
 
         start_time = time.time()
 
@@ -256,23 +300,40 @@ class IngestionService:
                 timeout_seconds=self.timeout_seconds,
             )
 
-            # 2b. Checkout specified ref or HEAD
-            target_ref = commit_ref.strip() if commit_ref and commit_ref.strip() else "HEAD"
-            try:
+            # 2b. Checkout specified ref or HEAD safely with --detach and trailing --
+            if target_ref != "HEAD":
+                # Try origin/<ref> first (works for remote-tracking branches in fresh clones),
+                # then bare <ref> (works for tags, commit SHAs, or local branches).
+                checked_out = False
+                for candidate in [f"origin/{target_ref}", target_ref]:
+                    try:
+                        run_sandboxed_git_command(
+                            ["checkout", "--detach", candidate, "--"],
+                            cwd=clone_dir,
+                            timeout_seconds=self.timeout_seconds,
+                        )
+                        checked_out = True
+                        break
+                    except Exception:
+                        continue
+                if not checked_out:
+                    raise InvalidURLError(
+                        f"Could not check out ref '{target_ref}'. "
+                        "Verify the branch name, tag, or commit SHA exists in the repository."
+                    )
+            else:
                 run_sandboxed_git_command(
-                    ["checkout", target_ref],
+                    ["checkout", "--detach", "HEAD", "--"],
                     cwd=clone_dir,
                     timeout_seconds=self.timeout_seconds,
                 )
-            except Exception:
-                if target_ref != "HEAD":
-                    run_sandboxed_git_command(
-                        ["checkout", "HEAD"],
-                        cwd=clone_dir,
-                        timeout_seconds=self.timeout_seconds,
-                    )
-                else:
-                    raise
+
+            # Ensure subpath stays strictly inside clone directory
+            if clean_subpath:
+                joined_sub = (clone_dir / clean_subpath).resolve()
+                base_res = clone_dir.resolve()
+                if base_res not in joined_sub.parents and joined_sub != base_res:
+                    raise InvalidURLError(f"Subpath '{clean_subpath}' resolves outside clone directory.")
 
             clone_duration = round(time.time() - start_time, 2)
 
@@ -345,23 +406,61 @@ class IngestionService:
         file_contents: Dict[str, str] = {}
         skipped_items: List[SkippedItem] = []
 
+        base_resolved = base_dir.resolve()
+        if subpath:
+            joined_path = (base_dir / subpath).resolve()
+            if base_resolved not in joined_path.parents and joined_path != base_resolved:
+                raise ValueError(f"Subpath '{subpath}' resolves outside clone directory.")
+
         valid_file_count = 0
         total_size_bytes = 0
 
         for root, dirs, files in os.walk(base_dir, followlinks=False):
             rel_root = Path(root).relative_to(base_dir)
 
-            # Filter ignored directories in-place during walk
-            dirs[:] = [d for d in dirs if not is_ignored_directory(d)]
+            # Filter ignored directories in-place during walk; also skip and
+            # report any directory (symlink or not) whose resolved path is outside the clone.
+            filtered_dirs = []
+            for d in dirs:
+                dir_path = Path(root) / d
+                if is_ignored_directory(d):
+                    continue
+                try:
+                    resolved_dir = dir_path.resolve()
+                except (OSError, RuntimeError):
+                    skipped_items.append(
+                        SkippedItem(
+                            path=str((rel_root / d).as_posix()),
+                            reason="skipped — unresolvable directory",
+                        )
+                    )
+                    continue
+                if not resolved_dir.is_relative_to(base_resolved):
+                    skipped_items.append(
+                        SkippedItem(
+                            path=str((rel_root / d).as_posix()),
+                            reason="skipped — directory resolves outside clone boundary",
+                        )
+                    )
+                    continue
+                filtered_dirs.append(d)
+            dirs[:] = filtered_dirs
 
             for file_name in files:
                 abs_path = Path(root) / file_name
                 rel_path = str((rel_root / file_name).as_posix())
 
-                # 1. Symlink detection
-                if abs_path.is_symlink() or os.path.islink(abs_path):
+                # 1. Resolve EVERY file path and skip if outside the clone boundary
+                try:
+                    resolved_file = abs_path.resolve()
+                    if not resolved_file.is_relative_to(base_resolved):
+                        skipped_items.append(
+                            SkippedItem(path=rel_path, reason="skipped — file resolves outside clone boundary")
+                        )
+                        continue
+                except (OSError, RuntimeError):
                     skipped_items.append(
-                        SkippedItem(path=rel_path, reason="skipped — symlink")
+                        SkippedItem(path=rel_path, reason="skipped — unresolvable file or broken symlink")
                     )
                     continue
 

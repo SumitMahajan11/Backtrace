@@ -87,28 +87,78 @@ def get_default_llm_provider() -> Optional[NarrationLLMCallable]:
     """
     Detects configured LLM provider:
     1. Groq if LLM_PROVIDER=groq.
-    2. Local Ollama if LLM_PROVIDER=ollama (probes local Ollama on 127.0.0.1:11434).
+    2. Local Ollama if LLM_PROVIDER=ollama (probes local Ollama on 127.0.0.1:11434 or configured base URL).
     3. None if LLM_PROVIDER is unset or any other value (makes no network call).
     """
-    provider_env = os.getenv("LLM_PROVIDER", "").strip().lower()
+    provider_env = ""
+    base_url = "http://127.0.0.1:11434"
+    configured_model = "llama3.2:3b"
+    timeout = 120.0
+    try:
+        from app.core.config import get_settings
+        settings = get_settings()
+        if hasattr(settings, "OLLAMA_TIMEOUT") and settings.OLLAMA_TIMEOUT is not None:
+            timeout = float(settings.OLLAMA_TIMEOUT)
+        if settings.LLM_PROVIDER:
+            provider_env = str(settings.LLM_PROVIDER).strip().lower()
+        if hasattr(settings, "OLLAMA_BASE_URL") and settings.OLLAMA_BASE_URL:
+            base_url = str(settings.OLLAMA_BASE_URL).strip()
+        if hasattr(settings, "OLLAMA_MODEL") and settings.OLLAMA_MODEL:
+            configured_model = str(settings.OLLAMA_MODEL).strip()
+    except Exception:
+        timeout = 120.0
+
+    # Environment variable overrides
+    env_override = os.getenv("LLM_PROVIDER", "").strip().lower()
+    if env_override:
+        provider_env = env_override
+
+    base_url = os.getenv("OLLAMA_BASE_URL", os.getenv("OLLAMA_ENDPOINT", base_url)).strip()
+    env_model = os.getenv("OLLAMA_MODEL")
+    if env_model is not None and env_model.strip():
+        configured_model = env_model.strip()
+    elif env_model is not None and not env_model.strip():
+        configured_model = "llama3.2:3b"
+    if not configured_model:
+        configured_model = "llama3.2:3b"
+
+    if os.getenv("OLLAMA_TIMEOUT"):
+        try:
+            timeout = float(os.getenv("OLLAMA_TIMEOUT", str(timeout)))
+        except ValueError:
+            pass
+
     if provider_env == "groq":
         return create_groq_provider()
     elif provider_env == "ollama":
+        tags_url = f"{base_url.rstrip('/')}/api/tags"
         try:
-            with httpx.Client(timeout=1.0) as client:
-                res = client.get("http://127.0.0.1:11434/api/tags")
+            with httpx.Client(timeout=3.0) as client:
+                res = client.get(tags_url)
                 if res.status_code == 200:
                     tags = res.json().get("models", [])
                     model_names = [m.get("name", "") for m in tags]
                     if not model_names:
                         return None
-                    chosen_model = model_names[0]
+
+                    # Prefer configured model if present in available tags
+                    chosen_model = None
                     for name in model_names:
-                        if "llama" in name:
+                        if name == configured_model or name.startswith(f"{configured_model}:") or configured_model.startswith(f"{name}:"):
                             chosen_model = name
                             break
-                    return create_ollama_provider(model=chosen_model)
-        except Exception:
-            pass
+
+                    if not chosen_model:
+                        for name in model_names:
+                            if "llama" in name:
+                                chosen_model = name
+                                break
+
+                    if not chosen_model:
+                        chosen_model = model_names[0]
+
+                    return create_ollama_provider(model=chosen_model, base_url=base_url, timeout=timeout)
+        except Exception as exc:
+            logger.warning("Ollama probe to %s failed: %s", tags_url, exc)
 
     return None

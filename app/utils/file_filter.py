@@ -80,7 +80,7 @@ def validate_safe_path(target_path: Path, base_dir: Path) -> bool:
 def sanitize_and_validate_subpath(subpath: Optional[str]) -> Optional[str]:
     """
     Sanitizes and strictly validates user-supplied subdirectory path against path traversal,
-    null bytes, absolute prefixes, and dangerous characters.
+    null bytes, absolute prefixes, drive letters, backslashes, and dangerous characters.
     Returns normalized clean subpath (e.g. 'packages/api') or None.
     Raises ValueError on malicious or invalid patterns.
     """
@@ -93,24 +93,33 @@ def sanitize_and_validate_subpath(subpath: Optional[str]) -> Optional[str]:
     if "\x00" in raw or "\0" in raw:
         raise ValueError("Invalid subdirectory path: Null byte injection detected.")
 
-    # 2. Normalize separators
-    norm = raw.replace("\\", "/").strip("/")
+    # 2. Backslash rejection
+    if "\\" in raw:
+        raise ValueError("Invalid subdirectory path: Backslashes are prohibited.")
 
-    # 3. Path traversal patterns & absolute prefixes
-    segments = [s for s in norm.split("/") if s]
-    if ".." in segments or any(".." in s for s in segments):
-        raise ValueError("Invalid subdirectory path: Directory traversal ('..') is strictly prohibited.")
-    if raw.startswith("/") or raw.startswith("\\") or ":" in raw:
+    # 3. Drive letter check
+    import re
+    if re.search(r"^[a-zA-Z]:", raw) or ":" in raw:
+        raise ValueError("Invalid subdirectory path: Drive letters are prohibited.")
+
+    # 4. Absolute path check
+    if raw.startswith("/") or raw.startswith("\\") or Path(raw).is_absolute():
         raise ValueError("Invalid subdirectory path: Absolute filesystem paths are prohibited.")
 
-    # 4. Length and segment depth guards
+    # 5. Directory traversal check ('..')
+    if ".." in raw:
+        raise ValueError("Invalid subdirectory path: Directory traversal ('..') is strictly prohibited.")
+
+    norm = raw.strip("/")
+    segments = [s for s in norm.split("/") if s]
+
+    # 6. Length and segment depth guards
     if len(norm) > 255:
         raise ValueError("Invalid subdirectory path: Path exceeds 255 character limit.")
     if len(segments) > 16:
         raise ValueError("Invalid subdirectory path: Path exceeds maximum directory nesting depth (16).")
 
-    # 5. Segment character validation
-    import re
+    # 7. Segment character validation
     for seg in segments:
         if not re.match(r"^[a-zA-Z0-9_\-\.]+$", seg):
             raise ValueError(f"Invalid subdirectory path: Segment '{seg}' contains illegal characters.")

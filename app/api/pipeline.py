@@ -31,16 +31,17 @@ class PipelineRunResponse(BaseModel):
     user_tier: str
     monthly_usage_count: int
     report_summary: Optional[Dict[str, Any]] = None
+    narration_source: str = "template"
 
 
-@router.post("/pipeline/run", response_model=PipelineRunResponse, summary="Execute 11-Layer Reverse Engineering Pipeline")
+@router.post("/pipeline/run", response_model=PipelineRunResponse, summary="Execute Backtrace Reverse Engineering Pipeline")
 def execute_pipeline(
     payload: PipelineRunRequest,
     current_user: UserModel = Depends(get_current_user),
     session: Session = Depends(get_db),
 ):
     """
-    Triggers execution of the complete 11-layer reverse-engineering analysis pipeline.
+    Triggers execution of the complete Backtrace reverse-engineering analysis pipeline.
     
     Protected endpoint: Requires a valid, unexpired JWT session access token.
     Quota-gated endpoint:
@@ -84,11 +85,16 @@ def execute_pipeline(
             detail=f"Pipeline execution failed: {result.error or 'Unknown error'}",
         )
 
+    narration_source_val = getattr(result, "narration_source", None) or (
+        getattr(result.report, "narration_source", "template") if result.report else "template"
+    )
+
     summary = None
     if result.report:
         summary = {
             "total_files": result.report.architecture_overview.total_files,
             "milestone_count": len(result.report.milestones),
+            "narration_source": narration_source_val,
         }
 
     executed_layers = [e.stage.value for e in result.events] if result.events else [
@@ -105,6 +111,7 @@ def execute_pipeline(
         user_tier=tier,
         monthly_usage_count=usage_count,
         report_summary=summary,
+        narration_source=narration_source_val,
     )
 
 

@@ -278,6 +278,21 @@ class AnalysisJobModel(Base):
         else:
             self.quiz_output_json = json.dumps(val)
 
+    @property
+    def narration_source(self) -> str:
+        try:
+            gd = self.graph_data
+            if isinstance(gd, dict) and gd.get("narration_source") in ("llm", "template"):
+                return gd["narration_source"]
+        except Exception:
+            pass
+        if self.markdown_output:
+            import re
+            m = re.search(r"<!--\s*narration_source:\s*(llm|template)\s*-->", self.markdown_output)
+            if m:
+                return m.group(1)
+        return "template"
+
 
 class MilestoneAttemptModel(Base):
     """Database model tracking user attempts and structural verification per milestone tier."""
