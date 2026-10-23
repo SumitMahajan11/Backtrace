@@ -22,6 +22,7 @@ from app.services.scaffold_generator import ScaffoldGenerator
 from app.services.structural_verifier import StructuralVerifier
 from app.core.config import billing_enabled
 from app.ui.sanitizer import sanitize_text, render_safe_markdown, truncate_text_clean, render_user_markdown
+from app.sequence.confidence_scoring import confidence_summary, ConfidenceSummary
 
 SANDBOX_DISABLED_BANNER_TEXT = "Code execution is turned off on this free demo. Running user code safely needs an isolated sandbox server, which this host can't provide. Everything else works, and structure checks still run. See the full run-and-grade flow in the video."
 
@@ -3260,69 +3261,30 @@ def report_view(
         </div>
         """
 
-    # Sequence Confidence Calculation for Overview KPI Bento Grid
-    conf_summary = graph_data.get("confidence_summary") if graph_data else None
-    total_nodes_count = len(nodes)
-    if conf_summary and isinstance(conf_summary, dict):
-        h_pct = conf_summary.get("high_pct", 0.0)
-        m_pct = conf_summary.get("medium_pct", 0.0)
-        l_pct = conf_summary.get("low_pct", 0.0)
-        h_disp = int(h_pct) if isinstance(h_pct, (int, float)) and h_pct == int(h_pct) else h_pct
-        m_disp = int(m_pct) if isinstance(m_pct, (int, float)) and m_pct == int(m_pct) else m_pct
-        l_disp = int(l_pct) if isinstance(l_pct, (int, float)) and l_pct == int(l_pct) else l_pct
-        if h_pct >= 50:
-            overall_conf_label = f"HIGH ({h_disp}%)"
-            overall_conf_val = "high"
-            overall_conf_color = "var(--teal)"
-        elif h_pct + m_pct >= 50:
-            overall_conf_label = f"MEDIUM ({m_disp}%)"
-            overall_conf_val = "medium"
-            overall_conf_color = "var(--amber)"
-        else:
-            overall_conf_label = f"Share of files with low confidence: {l_disp}%"
-            overall_conf_val = "low"
-            overall_conf_color = "var(--brass)"
-        conf_sub_text = f"{h_disp}% High &bull; {m_disp}% Med"
-    elif total_nodes_count > 0:
-        h_nodes = sum(1 for n in nodes if str(n.get("confidence", "")).lower() == "high")
-        m_nodes = sum(1 for n in nodes if str(n.get("confidence", "")).lower() == "medium")
-        l_nodes = sum(1 for n in nodes if str(n.get("confidence", "")).lower() == "low")
-        h_pct = round((h_nodes / total_nodes_count) * 100)
-        m_pct = round((m_nodes / total_nodes_count) * 100)
-        l_pct = round((l_nodes / total_nodes_count) * 100)
-        if h_pct >= 50:
-            overall_conf_label = f"HIGH ({h_pct}%)"
-            overall_conf_val = "high"
-            overall_conf_color = "var(--teal)"
-        elif h_pct + m_pct >= 50:
-            overall_conf_label = f"MEDIUM ({m_pct}%)"
-            overall_conf_val = "medium"
-            overall_conf_color = "var(--amber)"
-        else:
-            overall_conf_label = f"Share of files with low confidence: {l_pct}%"
-            overall_conf_val = "low"
-            overall_conf_color = "var(--brass)"
-        conf_sub_text = "estimated from graph nodes"
+    # Sequence Confidence Calculation for Overview KPI Bento Grid using unified confidence_summary
+    nodes = graph_data.get("nodes", []) if graph_data else []
+    conf_summary_raw = graph_data.get("confidence_summary") if graph_data else None
+
+    if nodes:
+        conf_summary = confidence_summary(nodes)
+    elif conf_summary_raw and isinstance(conf_summary_raw, dict):
+        conf_summary = ConfidenceSummary(
+            high_pct=int(round(conf_summary_raw.get("high_pct", 0))),
+            medium_pct=int(round(conf_summary_raw.get("medium_pct", 0))),
+            low_pct=int(round(conf_summary_raw.get("low_pct", 0))),
+            overall_score=int(round(conf_summary_raw.get("overall_score", conf_summary_raw.get("high_pct", 0)))),
+            high_count=int(conf_summary_raw.get("high_count", 0)),
+            medium_count=int(conf_summary_raw.get("medium_count", 0)),
+            low_count=int(conf_summary_raw.get("low_count", 0)),
+            total_files=int(conf_summary_raw.get("total_files", len(nodes))),
+        )
     elif milestones_data:
-        all_confs = [m.get("confidence_badge", "") for m in milestones_data]
-        h_count = sum(1 for c in all_confs if "HIGH" in c.upper())
-        m_count = sum(1 for c in all_confs if "MEDIUM" in c.upper())
-        tot = len(all_confs) or 1
-        h_pct = round((h_count / tot) * 100)
-        if h_pct >= 50:
-            overall_conf_label = f"HIGH ({h_pct}%)"
-            overall_conf_val = "high"
-            overall_conf_color = "var(--teal)"
-        else:
-            overall_conf_label = "MEDIUM"
-            overall_conf_val = "medium"
-            overall_conf_color = "var(--amber)"
-        conf_sub_text = "Milestone Calibration"
+        conf_summary = confidence_summary(milestones_data)
     else:
-        overall_conf_label = "HIGH"
-        overall_conf_val = "high"
-        overall_conf_color = "var(--teal)"
-        conf_sub_text = "Verified Structure"
+        conf_summary = confidence_summary([])
+
+    conf_icon_val = "high" if conf_summary.high_pct >= 50 else ("medium" if conf_summary.high_pct + conf_summary.medium_pct >= 50 else "low")
+    overall_conf_color = "var(--teal)" if conf_summary.high_pct >= 50 else ("var(--amber)" if conf_summary.high_pct + conf_summary.medium_pct >= 50 else "var(--brass)")
 
     overview_section_html = f"""
     <div class="stratum-card" id="section-overview" style="margin-bottom: 2rem;">
@@ -3356,13 +3318,13 @@ def report_view(
                 <div class="kpi-value" style="color: var(--teal);">{total_tiers} Tiers</div>
                 <div class="kpi-sub">Bottom-Up Build Sequence</div>
             </div>
-            <div class="kpi-card">
-                <div class="kpi-label" style="display: flex; align-items: center; justify-content: space-between;">
-                    <span>CONFIDENCE SCORE</span>
-                    {_render_confidence_info_icon(overall_conf_val)}
+            <div class="kpi-card" data-metric="CONFIDENCE SCORE">
+                <div class="kpi-label" style="display: flex; align-items: center; justify-content: space-between;" title="CONFIDENCE SCORE">
+                    <span>Confidence</span>
+                    {_render_confidence_info_icon(conf_icon_val)}
                 </div>
-                <div class="kpi-value" style="color: {overall_conf_color}; font-size: 1.15rem;">{overall_conf_label}</div>
-                <div class="kpi-sub">{conf_sub_text}</div>
+                <div class="kpi-value" style="color: {overall_conf_color}; font-size: 1.25rem;">{conf_summary.high_pct}%</div>
+                <div class="kpi-sub">{conf_summary.low_count} files low confidence</div>
             </div>
             <div class="kpi-card">
                 <div class="kpi-label">ENTRY POINTS</div>
@@ -6340,9 +6302,9 @@ def report_view(
             const exports = node.exports || [];
             document.getElementById('inspect-exports').textContent = exports.length ? exports.join(', ') : 'No public exports declared';
             
-            // Inbound & outbound deps
-            const inDeps = GRAPH_EDGES.filter(e => e.target === nodeId).map(e => e.source);
-            const outDeps = GRAPH_EDGES.filter(e => e.source === nodeId).map(e => e.target);
+            // Inbound & outbound deps (deduplicated)
+            const inDeps = Array.from(new Set(GRAPH_EDGES.filter(e => e.target === nodeId).map(e => e.source)));
+            const outDeps = Array.from(new Set(GRAPH_EDGES.filter(e => e.source === nodeId).map(e => e.target)));
             
             let depStr = '';
             if (outDeps.length) depStr += 'Imports (' + outDeps.length + '): ' + outDeps.join(', ');

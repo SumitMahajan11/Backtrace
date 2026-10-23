@@ -1,6 +1,7 @@
 """Confidence Scoring Engine (Layer 6 Stage C)."""
 
-from typing import List, Optional
+import math
+from typing import Any, Dict, List, Optional
 from app.models.history import CommitHistoryResult
 from app.sequence.schema import (
     RefinedOrderingResult,
@@ -8,6 +9,162 @@ from app.sequence.schema import (
     ScoredFileEntry,
     ScoredOrderingResult,
 )
+
+
+class ConfidenceSummary(dict):
+    """Container for confidence calculation metrics supporting dict and attribute access."""
+
+    def __init__(
+        self,
+        high_pct: int,
+        medium_pct: int,
+        low_pct: int,
+        overall_score: int,
+        high_count: int = 0,
+        medium_count: int = 0,
+        low_count: int = 0,
+        total_files: int = 0,
+    ):
+        super().__init__(
+            high_pct=high_pct,
+            medium_pct=medium_pct,
+            low_pct=low_pct,
+            overall_score=overall_score,
+            high_count=high_count,
+            medium_count=medium_count,
+            low_count=low_count,
+            total_files=total_files,
+        )
+
+    @property
+    def high_pct(self) -> int:
+        return self["high_pct"]
+
+    @property
+    def medium_pct(self) -> int:
+        return self["medium_pct"]
+
+    @property
+    def low_pct(self) -> int:
+        return self["low_pct"]
+
+    @property
+    def overall_score(self) -> int:
+        return self["overall_score"]
+
+    @property
+    def high_count(self) -> int:
+        return self["high_count"]
+
+    @property
+    def medium_count(self) -> int:
+        return self["medium_count"]
+
+    @property
+    def low_count(self) -> int:
+        return self["low_count"]
+
+    @property
+    def total_files(self) -> int:
+        return self["total_files"]
+
+
+def confidence_summary(files: List[Any]) -> ConfidenceSummary:
+    """Computes distribution percentages and overall confidence score across repository files.
+
+    Formula:
+        Given N total files:
+        1. Extract confidence rating ('high', 'medium', or 'low') for each file:
+           - from string elements ('high', 'medium', 'low'),
+           - from objects with a 'confidence' attribute (e.g. ScoredFileEntry, Node),
+           - or from dictionaries with a 'confidence' or 'confidence_badge' key.
+        2. Tally file counts per rating:
+           high_count = count(files where confidence == 'high')
+           medium_count = count(files where confidence == 'medium')
+           low_count = count(files where confidence == 'low')
+        3. If N == 0:
+           high_pct = 0, medium_pct = 0, low_pct = 0, overall_score = 0.
+        4. If N > 0:
+           Calculate exact float percentage shares: (count / N) * 100.0.
+           Round each percentage to a whole number (integer) using the Largest Remainder
+           Method (Hare-Niemeyer method) such that:
+             high_pct + medium_pct + low_pct == 100 (exactly)
+        5. Define overall_score = high_pct.
+
+    Args:
+        files: List of file objects, dictionaries, or confidence strings.
+
+    Returns:
+        ConfidenceSummary containing whole numbers:
+            high_pct: Percentage of high-confidence files.
+            medium_pct: Percentage of medium-confidence files.
+            low_pct: Percentage of low-confidence files.
+            overall_score: Defined as high_pct.
+            high_count: Count of high-confidence files.
+            medium_count: Count of medium-confidence files.
+            low_count: Count of low-confidence files.
+            total_files: Total files evaluated.
+    """
+    total = len(files)
+    high_count, medium_count, low_count = 0, 0, 0
+
+    for item in files:
+        if isinstance(item, str):
+            c = item.lower()
+        elif isinstance(item, dict):
+            c = str(item.get("confidence", item.get("confidence_badge", item.get("dominant_confidence", "high")))).lower()
+        else:
+            c = str(getattr(item, "confidence", getattr(item, "confidence_badge", getattr(item, "dominant_confidence", "high")))).lower()
+
+        if "high" in c:
+            high_count += 1
+        elif "medium" in c or "med" in c:
+            medium_count += 1
+        elif "low" in c:
+            low_count += 1
+        else:
+            high_count += 1
+
+    if total == 0:
+        return ConfidenceSummary(
+            high_pct=0,
+            medium_pct=0,
+            low_pct=0,
+            overall_score=0,
+            high_count=0,
+            medium_count=0,
+            low_count=0,
+            total_files=0,
+        )
+
+    exact = [
+        (high_count / total) * 100.0,
+        (medium_count / total) * 100.0,
+        (low_count / total) * 100.0,
+    ]
+    floors = [int(math.floor(x)) for x in exact]
+    remainder = 100 - sum(floors)
+
+    remainders = [(exact[i] - floors[i], i) for i in range(3)]
+    remainders.sort(key=lambda x: x[0], reverse=True)
+
+    for i in range(remainder):
+        idx = remainders[i][1]
+        floors[idx] += 1
+
+    high_pct, medium_pct, low_pct = floors[0], floors[1], floors[2]
+    overall_score = high_pct
+
+    return ConfidenceSummary(
+        high_pct=high_pct,
+        medium_pct=medium_pct,
+        low_pct=low_pct,
+        overall_score=overall_score,
+        high_count=high_count,
+        medium_count=medium_count,
+        low_count=low_count,
+        total_files=total,
+    )
 
 
 class ConfidenceScoringEngine:
@@ -62,24 +219,18 @@ class ConfidenceScoringEngine:
                 )
             )
 
-        # 3. Compute Repo-Level Confidence Summary Metrics
-        total_count = len(scored_entries)
-        if total_count == 0:
-            high_pct, medium_pct, low_pct = 0.0, 0.0, 0.0
-        else:
-            high_count = sum(1 for f in scored_entries if f.confidence == "high")
-            medium_count = sum(1 for f in scored_entries if f.confidence == "medium")
-            low_count = sum(1 for f in scored_entries if f.confidence == "low")
-
-            high_pct = round((high_count / total_count) * 100.0, 2)
-            medium_pct = round((medium_count / total_count) * 100.0, 2)
-            low_pct = round((low_count / total_count) * 100.0, 2)
-
+        # 3. Compute Repo-Level Confidence Summary Metrics using unified confidence_summary
+        summary_data = confidence_summary(scored_entries)
         summary = RepoConfidenceSummary(
-            high_pct=high_pct,
-            medium_pct=medium_pct,
-            low_pct=low_pct,
+            high_pct=summary_data.high_pct,
+            medium_pct=summary_data.medium_pct,
+            low_pct=summary_data.low_pct,
             history_available=history_available,
+            high_count=summary_data.high_count,
+            medium_count=summary_data.medium_count,
+            low_count=summary_data.low_count,
+            overall_score=summary_data.overall_score,
+            total_files=summary_data.total_files,
         )
 
         return ScoredOrderingResult(

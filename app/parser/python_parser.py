@@ -2,7 +2,7 @@
 
 import ast
 from pathlib import Path
-from typing import Dict, List, Set, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 from app.parser.base import BaseLanguageParser
 from app.parser.schema import FileNode, ImportCategory, ImportEdge
@@ -33,10 +33,9 @@ class PythonLanguageParser(BaseLanguageParser):
         classes: List[str] = []
         functions: List[str] = []
         exports: List[str] = []
-        is_entry = file_path.endswith("__main__.py")
-        entry_type = "main_file" if is_entry else None
+        is_entry, entry_type = self._detect_entry_point(file_path, code_content, tree)
 
-        # Inspect top-level symbols for exports and entry points
+        # Inspect top-level symbols for exports
         for node in ast.walk(tree):
             if isinstance(node, ast.ClassDef):
                 classes.append(node.name)
@@ -44,19 +43,20 @@ class PythonLanguageParser(BaseLanguageParser):
             elif isinstance(node, ast.FunctionDef):
                 functions.append(node.name)
                 exports.append(node.name)
-                if node.name == "main" and not is_entry:
-                    is_entry = True
-                    entry_type = "main_function"
-            elif isinstance(node, ast.If):
-                # Detect `if __name__ == "__main__":`
-                if self._is_name_main_check(node):
-                    is_entry = True
-                    entry_type = "name_eq_main"
 
         # Walk AST for imports
         visitor = PythonImportVisitor(file_path, all_repo_files)
         visitor.visit(tree)
-        edges = visitor.edges
+
+        # Deduplicate edges by (source_file, target_file) pair
+        deduped_edges: List[ImportEdge] = []
+        seen_pairs: Set[Tuple[str, str]] = set()
+        for e in visitor.edges:
+            pair = (e.source_path or file_path, e.target)
+            if pair not in seen_pairs:
+                seen_pairs.add(pair)
+                deduped_edges.append(e)
+        edges = deduped_edges
 
         file_node = FileNode(
             path=file_path,
@@ -70,6 +70,80 @@ class PythonLanguageParser(BaseLanguageParser):
         )
 
         return file_node, edges
+
+    def _is_test_file(self, file_path: str) -> bool:
+        """Checks if a file path matches tests/, test_*.py, *_test.py, or conftest.py."""
+        norm = file_path.replace("\\", "/").strip("/")
+        parts = norm.split("/")
+        filename = parts[-1]
+        if "tests" in parts or parts[0] == "tests" or "/tests/" in f"/{norm}/":
+            return True
+        if filename.startswith("test_") and filename.endswith(".py"):
+            return True
+        if filename.endswith("_test.py"):
+            return True
+        if filename == "conftest.py":
+            return True
+        return False
+
+    def _detect_entry_point(
+        self, file_path: str, code_content: str, tree: ast.AST
+    ) -> Tuple[bool, Optional[str]]:
+        """Determines if a file is an application entry point.
+
+        Rules:
+        1. Exclude any file whose path matches tests/, test_*.py, *_test.py, conftest.py.
+        2. A file is an application entry point if ANY of:
+           - it contains FastAPI( or Flask( or Django settings with WSGI/ASGI application
+           - it contains if __name__ == "__main__"
+           - it is named main.py, app.py, manage.py, wsgi.py, asgi.py, or server.py at repo root or inside top-level package
+           - it contains uvicorn.run(
+        """
+        if self._is_test_file(file_path):
+            return False, None
+
+        # Rule 1: Framework application definitions
+        if "FastAPI(" in code_content:
+            return True, "fastapi_app"
+        if "Flask(" in code_content:
+            return True, "flask_app"
+        if (
+            "WSGI_APPLICATION" in code_content
+            or "ASGI_APPLICATION" in code_content
+            or "get_wsgi_application" in code_content
+            or "get_asgi_application" in code_content
+            or ("django" in code_content.lower() and ("wsgi" in code_content.lower() or "asgi" in code_content.lower()))
+        ):
+            return True, "django_app"
+
+        # Rule 2: if __name__ == "__main__"
+        if 'if __name__ == "__main__"' in code_content or "if __name__ == '__main__'" in code_content:
+            return True, "name_eq_main"
+        for node in ast.walk(tree):
+            if isinstance(node, ast.If) and self._is_name_main_check(node):
+                return True, "name_eq_main"
+
+        # Rule 3: Standard entry filenames at root or inside top-level package
+        norm_path = file_path.replace("\\", "/").strip("/")
+        parts = norm_path.split("/")
+        filename = parts[-1]
+        ENTRY_NAMES = {
+            "main.py",
+            "app.py",
+            "manage.py",
+            "wsgi.py",
+            "asgi.py",
+            "server.py",
+            "__main__.py",
+        }
+        if len(parts) <= 2 and filename in ENTRY_NAMES:
+            return True, "entry_filename"
+
+        # Rule 4: contains uvicorn.run(
+        if "uvicorn.run(" in code_content:
+            return True, "uvicorn_run"
+
+        return False, None
 
     def _is_name_main_check(self, node: ast.If) -> bool:
         if isinstance(node.test, ast.Compare):

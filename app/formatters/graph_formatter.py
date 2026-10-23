@@ -3,8 +3,54 @@
 Generates interactive JSON DAG structures and Mermaid diagrams from synthesized repository data.
 """
 
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional, Set, Tuple
 from app.synthesis.schema import SynthesizedRepositoryReport
+
+
+def dedupe_edges(edges: List[Any]) -> List[Any]:
+    """Dedupes dependency edges by the pair (source_file, target_file).
+
+    A file importing another file ten times is one edge.
+    Supports list of dicts with 'source'/'target' or ImportEdge objects.
+    """
+    seen: Set[Tuple[str, str]] = set()
+    deduped = []
+    for e in edges:
+        if isinstance(e, dict):
+            src = str(e.get("source") or e.get("source_file") or e.get("source_path") or "")
+            tgt = str(e.get("target") or e.get("target_file") or "")
+        else:
+            src = str(getattr(e, "source_path", None) or getattr(e, "source", "") or "")
+            tgt = str(getattr(e, "target", "") or "")
+        pair = (src, tgt)
+        if pair not in seen and src and tgt:
+            seen.add(pair)
+            deduped.append(e)
+    return deduped
+
+
+def imported_by(target_file: str, edges: Optional[List[Any]] = None) -> List[str]:
+    """Returns a deduplicated, sorted list of source files importing the given target file."""
+    if edges is None:
+        edges = []
+    seen = set()
+    importers = []
+    norm_target = target_file.replace("\\", "/").strip("/")
+    target_name = norm_target.split("/")[-1]
+    for e in edges:
+        if isinstance(e, dict):
+            src = str(e.get("source") or e.get("source_file") or e.get("source_path") or "")
+            tgt = str(e.get("target") or e.get("target_file") or "")
+        else:
+            src = str(getattr(e, "source_path", None) or getattr(e, "source", "") or "")
+            tgt = str(getattr(e, "target", "") or "")
+        norm_tgt = tgt.replace("\\", "/").strip("/")
+        tgt_name = norm_tgt.split("/")[-1]
+        if norm_tgt == norm_target or tgt_name == target_name or norm_tgt.endswith("/" + norm_target):
+            if src and src not in seen:
+                seen.add(src)
+                importers.append(src)
+    return sorted(importers)
 
 
 DOMAIN_COLOR_DEFS: Dict[str, tuple[str, str]] = {
@@ -68,8 +114,8 @@ class GraphExportFormatter:
                     "exports": file_exports,
                 })
 
-        # File-level dependency edges
-        file_edges: List[Dict[str, Any]] = list(report.file_dependencies) if report.file_dependencies else []
+        # File-level dependency edges (deduplicated by (source_file, target_file) pair)
+        file_edges: List[Dict[str, Any]] = dedupe_edges(list(report.file_dependencies) if report.file_dependencies else [])
 
         # Milestone-level dependency edges
         milestone_edges: List[Dict[str, Any]] = []

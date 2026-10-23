@@ -72,6 +72,11 @@ class RepoConfidenceSummary(BaseModel):
     medium_pct: float
     low_pct: float
     history_available: bool = True
+    high_count: int = 0
+    medium_count: int = 0
+    low_count: int = 0
+    overall_score: Optional[int] = None
+    total_files: int = 0
 
 
 class ScoredOrderingResult(BaseModel):

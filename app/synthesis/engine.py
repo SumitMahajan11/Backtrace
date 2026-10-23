@@ -6,7 +6,7 @@ SynthesizedRepositoryReport.
 """
 
 from datetime import datetime, timezone
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Set, Tuple
 
 from app.parser.schema import FileNode
 from app.rag.engine import HybridRAGEngine
@@ -53,7 +53,7 @@ class SynthesisEngine:
 
         for node in parsed_files:
             lang_counts[node.language] = lang_counts.get(node.language, 0) + 1
-            if node.entry_point:
+            if node.entry_point and not self._is_test_path(node.path):
                 entry_points.append(node.path)
             
             # Extract genuine code symbols (classes, functions, exports), strictly excluding filenames
@@ -145,17 +145,23 @@ class SynthesisEngine:
             )
             synthesized_milestones.append(synth_m)
 
-        # Collect internal file-level import edges for graph visualizations
+        # Collect internal file-level import edges for graph visualizations (deduped by (source, target))
         file_dependencies: List[Dict[str, Any]] = []
+        seen_edges: Set[Tuple[str, str]] = set()
         if parsed_files:
             for node in parsed_files:
                 for imp in node.imports:
                     if not imp.is_external and imp.resolved and imp.target:
-                        file_dependencies.append({
-                            "source": imp.source_path or node.path,
-                            "target": imp.target,
-                            "type": "import",
-                        })
+                        src = imp.source_path or node.path
+                        tgt = imp.target
+                        pair = (src, tgt)
+                        if pair not in seen_edges:
+                            seen_edges.add(pair)
+                            file_dependencies.append({
+                                "source": src,
+                                "target": tgt,
+                                "type": "import",
+                            })
 
         timestamp_str = datetime.now(timezone.utc).isoformat()
         narration_source = getattr(narration_result, "source", "template")
@@ -173,6 +179,22 @@ class SynthesisEngine:
             metadata=metadata,
             narration_source=narration_source,
         )
+
+    @staticmethod
+    def _is_test_path(path: str) -> bool:
+        """Checks if a file path matches tests/, test_*.py, *_test.py, or conftest.py."""
+        norm = path.replace("\\", "/").strip("/")
+        parts = norm.split("/")
+        filename = parts[-1]
+        if "tests" in parts or parts[0] == "tests" or "/tests/" in f"/{norm}/":
+            return True
+        if filename.startswith("test_") and filename.endswith(".py"):
+            return True
+        if filename.endswith("_test.py"):
+            return True
+        if filename == "conftest.py":
+            return True
+        return False
 
     def _determine_architectural_role(self, step: BuildStepNarrative) -> str:
         """Assigns clear, pedagogical architectural role description to each step."""

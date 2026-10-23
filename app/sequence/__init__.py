@@ -1,7 +1,11 @@
 """Layer 6 Sequence Reasoning Engine - Stage A, B, C, & D Modules."""
 
 from app.sequence.baseline_ordering import BaselineOrderingEngine
-from app.sequence.confidence_scoring import ConfidenceScoringEngine
+from app.sequence.confidence_scoring import (
+    ConfidenceScoringEngine,
+    ConfidenceSummary,
+    confidence_summary,
+)
 from app.sequence.constrained_tie_breaking import ConstrainedTieBreakerEngine
 from app.sequence.narration_engine import NarrationEngine, STAGE_D_SYSTEM_PROMPT
 from app.sequence.schema import (
