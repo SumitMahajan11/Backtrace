@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.models.db import SubscriptionModel, UserModel, utc_now
 from app.storage.billing_repository import BillingRepository
+from app.core.config import billing_enabled
 
 # Stripe & Quota Configuration
 def _get_billing_setting(attr: str, default: Any = "") -> Any:
@@ -32,7 +33,7 @@ def _get_billing_setting(attr: str, default: Any = "") -> Any:
     return default
 
 
-STRIPE_BILLING_ENABLED: bool = bool(_get_billing_setting("STRIPE_BILLING_ENABLED", True))
+STRIPE_BILLING_ENABLED: bool = billing_enabled()
 STRIPE_API_KEY: str = str(_get_billing_setting("STRIPE_SECRET_KEY", os.getenv("STRIPE_API_KEY", os.getenv("STRIPE_SECRET_KEY", ""))))
 STRIPE_WEBHOOK_SECRET: str = str(_get_billing_setting("STRIPE_WEBHOOK_SECRET", os.getenv("STRIPE_WEBHOOK_SECRET", "")))
 STRIPE_PRICE_ID: str = str(_get_billing_setting("STRIPE_PRICE_ID_PRO", os.getenv("STRIPE_PRICE_ID", "price_backtrace_pro_monthly")))
@@ -66,84 +67,24 @@ class BillingService:
     @classmethod
     def get_pro_price_details(cls, price_id: Optional[str] = None) -> Dict[str, Any]:
         """
-        Dynamically fetches the Stripe Price object for the Pro subscription tier.
-        Caches the response in-memory for 1 hour to prevent latency and API rate-limiting.
+        Returns Pro subscription price display details without calling Stripe API.
         """
-        if not _get_billing_setting("STRIPE_BILLING_ENABLED", True):
-            return {
-                "price_id": None,
-                "unit_amount": None,
-                "amount_formatted": "Free",
-                "currency": "usd",
-                "interval": "month",
-            }
+        pro_price_display = os.getenv("PRO_PRICE_DISPLAY")
+        if not pro_price_display:
+            try:
+                from app.core.config import get_settings
+                pro_price_display = getattr(get_settings(), "PRO_PRICE_DISPLAY", "$9 / month")
+            except Exception:
+                pro_price_display = "$9 / month"
 
-        api_key = _get_billing_setting("STRIPE_SECRET_KEY", os.getenv("STRIPE_API_KEY", STRIPE_API_KEY))
-        if api_key:
-            stripe.api_key = api_key
-
-        p_id = price_id or _get_billing_setting("STRIPE_PRICE_ID_PRO", os.getenv("STRIPE_PRICE_ID", STRIPE_PRICE_ID))
-        if not p_id:
-            return {
-                "price_id": None,
-                "unit_amount": None,
-                "amount_formatted": "Upgrade",
-                "currency": "usd",
-                "interval": "month",
-            }
-
-        now = time.time()
-        if p_id in cls._price_cache:
-            cached_time, cached_data = cls._price_cache[p_id]
-            if now - cached_time < cls._PRICE_CACHE_TTL:
-                return cached_data
-
-        try:
-            price_obj = stripe.Price.retrieve(p_id)
-            unit_amount = getattr(price_obj, "unit_amount", 0)
-            currency = getattr(price_obj, "currency", "usd").lower()
-            recurring = getattr(price_obj, "recurring", None)
-            interval = recurring.get("interval", "month") if recurring else "month"
-
-            # Dynamic Currency Formatting
-            symbol_map = {
-                "usd": "$",
-                "inr": "₹",
-                "eur": "€",
-                "gbp": "£",
-                "cad": "CA$",
-                "aud": "A$",
-                "jpy": "¥",
-            }
-            symbol = symbol_map.get(currency, f"{currency.upper()} ")
-
-            if currency in ["jpy", "krw"]:
-                amount_formatted = f"{symbol}{unit_amount:,}"
-            else:
-                amount_decimal = unit_amount / 100.0
-                if amount_decimal.is_integer():
-                    amount_formatted = f"{symbol}{int(amount_decimal)}"
-                else:
-                    amount_formatted = f"{symbol}{amount_decimal:.2f}"
-
-            result = {
-                "price_id": p_id,
-                "unit_amount": unit_amount,
-                "currency": currency,
-                "interval": interval,
-                "amount_formatted": amount_formatted,
-            }
-            cls._price_cache[p_id] = (now, result)
-            return result
-        except Exception as exc:
-            return {
-                "price_id": p_id,
-                "unit_amount": None,
-                "amount_formatted": "Upgrade to Pro",
-                "currency": "usd",
-                "interval": "month",
-                "error": str(exc),
-            }
+        return {
+            "price_id": price_id,
+            "unit_amount": None,
+            "amount_formatted": pro_price_display,
+            "currency": "usd",
+            "interval": "month",
+            "price_display": pro_price_display,
+        }
 
     @staticmethod
     def get_quota_limit() -> int:
@@ -163,8 +104,8 @@ class BillingService:
         Creates a hosted Stripe Checkout Session for upgrading to the Paid tier.
         Zero PCI scope: Raw credit card data never touches Backtrace application code.
         """
-        if not _get_billing_setting("STRIPE_BILLING_ENABLED", True):
-            raise BillingServiceError("Billing service is disabled on this instance.", status_code=503)
+        if not billing_enabled():
+            raise BillingServiceError("Billing service is disabled on this instance.", status_code=404)
 
         api_key = _get_billing_setting("STRIPE_SECRET_KEY", os.getenv("STRIPE_API_KEY", STRIPE_API_KEY))
         if api_key:
@@ -180,7 +121,6 @@ class BillingService:
 
         checkout_kwargs: Dict[str, Any] = {
             "mode": "subscription",
-            "payment_method_types": ["card"],
             "line_items": [
                 {
                     "price": p_id,
@@ -204,6 +144,8 @@ class BillingService:
         try:
             checkout_session = stripe.checkout.Session.create(**checkout_kwargs)
             return checkout_session.url
+        except stripe.error.StripeError:
+            raise
         except Exception as exc:
             raise BillingServiceError(f"Stripe Checkout error: {exc}", status_code=502)
 
@@ -218,8 +160,8 @@ class BillingService:
         Creates a hosted Stripe Customer Portal Session for subscription management.
         Guarantees users can only access their own customer portal.
         """
-        if not _get_billing_setting("STRIPE_BILLING_ENABLED", True):
-            raise BillingServiceError("Billing service is disabled on this instance.", status_code=503)
+        if not billing_enabled():
+            raise BillingServiceError("Billing service is disabled on this instance.", status_code=404)
 
         if not stripe.api_key and STRIPE_API_KEY:
             stripe.api_key = STRIPE_API_KEY
@@ -253,7 +195,7 @@ class BillingService:
         Verifies the cryptographic HMAC-SHA256 signature on incoming Stripe webhooks.
         Rejects spoofed requests missing or failing signature verification.
         """
-        if not _get_billing_setting("STRIPE_BILLING_ENABLED", True):
+        if not billing_enabled():
             raise BillingServiceError("Billing service is disabled on this instance.", status_code=503)
 
         secret = webhook_secret or _get_billing_setting("STRIPE_WEBHOOK_SECRET", STRIPE_WEBHOOK_SECRET)

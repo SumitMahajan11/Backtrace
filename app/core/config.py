@@ -4,11 +4,19 @@ Provides strict typed settings with fail-fast validation for production environm
 In production mode, all required credentials must be explicitly provided without fallback defaults.
 """
 
+import os
 from functools import lru_cache
 from typing import Any, Literal, Optional
 from urllib.parse import urlsplit
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def billing_enabled() -> bool:
+    """Returns True only when STRIPE_BILLING_ENABLED env var equals 'true' (case-insensitive).
+    Missing or any other value means False.
+    """
+    return os.getenv("STRIPE_BILLING_ENABLED", "").strip().lower() == "true"
 
 
 class Settings(BaseSettings):
@@ -56,13 +64,15 @@ class Settings(BaseSettings):
     GITHUB_PAT: Optional[str] = None
 
     # Stripe Billing
-    STRIPE_BILLING_ENABLED: bool = True
+    STRIPE_BILLING_ENABLED: bool = False
     STRIPE_SECRET_KEY: Optional[str] = None
     STRIPE_WEBHOOK_SECRET: Optional[str] = None
     STRIPE_PRICE_ID_PRO: Optional[str] = None
     STRIPE_SUCCESS_URL: str = "http://localhost:8000/dashboard?session_id={CHECKOUT_SESSION_ID}"
     STRIPE_CANCEL_URL: str = "http://localhost:8000/dashboard"
     FREE_TIER_MONTHLY_LIMIT: int = 5
+    PRO_PRICE_DISPLAY: str = "$9 / month"
+    PRO_LIMIT: str = "Unlimited"
 
     # Monitoring & Analytics
     SENTRY_DSN: Optional[str] = None
@@ -188,7 +198,7 @@ class Settings(BaseSettings):
             errors.append("JWT_SECRET_KEY cannot use development default in production")
 
         # 3. Stripe Billing Credentials (enforced in production when STRIPE_BILLING_ENABLED is True)
-        if self.STRIPE_BILLING_ENABLED:
+        if billing_enabled():
             if not self.STRIPE_SECRET_KEY or not self.STRIPE_SECRET_KEY.strip():
                 errors.append("STRIPE_SECRET_KEY is required in production")
             elif not (self.STRIPE_SECRET_KEY.startswith("sk_live_") or self.STRIPE_SECRET_KEY.startswith("sk_test_")):

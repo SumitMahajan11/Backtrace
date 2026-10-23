@@ -20,6 +20,7 @@ from app.services.hint_engine import HintEngine
 from app.services.piston_health import piston_health_monitor
 from app.services.scaffold_generator import ScaffoldGenerator
 from app.services.structural_verifier import StructuralVerifier
+from app.core.config import billing_enabled
 from app.ui.sanitizer import sanitize_text, render_safe_markdown, truncate_text_clean
 
 SANDBOX_DISABLED_BANNER_TEXT = "Code execution is turned off on this free demo. Running user code safely needs an isolated sandbox server, which this host can't provide. Everything else works, and structure checks still run. See the full run-and-grade flow in the video."
@@ -1439,14 +1440,14 @@ def dashboard_view(
         quota_badge = '<span class="badge badge-paid">PRO TIER</span>'
         consumption_text = "UNLIMITED ANALYSIS JOBS"
         meter_pct = 100
-        tier_action = '<a href="/api/billing/portal" class="btn btn-sm btn-secondary">Manage Billing</a>'
+        tier_action = '<a href="/api/billing/portal" class="btn btn-sm btn-secondary">Manage Billing</a>' if billing_enabled() else ""
     else:
         quota_badge = '<span class="badge badge-free">FREE TIER</span>'
         limit_val = int(limit) if limit is not None else 5
         pct = min(100, int((used / max(1, limit_val)) * 100))
         meter_pct = pct
         consumption_text = f"{used} / {limit_val} JOBS ALLOTTED ({pct}% CONSUMED)"
-        tier_action = '<a href="/api/billing/checkout" class="btn btn-sm btn-primary">Upgrade to Pro</a>'
+        tier_action = '<a href="/api/billing/checkout" class="btn btn-sm btn-primary">Upgrade to Pro</a>' if billing_enabled() else ""
 
     error_html = f'<div class="alert-error" style="margin-bottom: 1.5rem;">{sanitize_text(error)}</div>' if error else ""
     success_html = (
@@ -6865,6 +6866,7 @@ def settings_view(
     pricing_details: Dict[str, Any],
     error: Optional[str] = None,
     success: Optional[str] = None,
+    billing_error: bool = False,
 ) -> str:
     """
     Renders the Settings & Billing view with Archival Dossier aesthetic.
@@ -6897,10 +6899,28 @@ def settings_view(
     email = sanitize_text(current_user.email or "No email synced")
     created_at = sanitize_text(current_user.created_at.strftime("%Y-%m-%d %H:%M:%S UTC") if hasattr(current_user.created_at, "strftime") else str(current_user.created_at))
 
-    amount_formatted = sanitize_text(pricing_details.get("amount_formatted", "Upgrade"))
-    interval = sanitize_text(pricing_details.get("interval", "month"))
+    pro_price_display = sanitize_text(
+        pricing_details.get("price_display")
+        or pricing_details.get("amount_formatted")
+        or os.getenv("PRO_PRICE_DISPLAY", "$9 / month")
+    )
 
-    error_html = f'<div class="alert-error" style="margin-bottom: 1.5rem;">{sanitize_text(error)}</div>' if error else ""
+    try:
+        from app.core.config import get_settings
+        _cfg = get_settings()
+        free_limit = getattr(_cfg, "FREE_TIER_MONTHLY_LIMIT", 5)
+        pro_limit = getattr(_cfg, "PRO_LIMIT", "Unlimited")
+    except Exception:
+        free_limit = 5
+        pro_limit = "Unlimited"
+
+    if billing_error or error == "We couldn't start checkout. Please try again in a few minutes.":
+        error_html = '<div class="alert-error" style="margin-bottom: 1.5rem;">We couldn\'t start checkout. Please try again in a few minutes.</div>'
+    elif error:
+        error_html = f'<div class="alert-error" style="margin-bottom: 1.5rem;">{sanitize_text(error)}</div>'
+    else:
+        error_html = ""
+
     success_html = f'<div style="background: rgba(45, 212, 191, 0.1); border: 1px solid var(--teal); color: var(--teal); padding: 0.75rem 1rem; border-radius: 4px; margin-bottom: 1.5rem; font-size: 0.875rem;">{sanitize_text(success)}</div>' if success else ""
 
     avatar_markup = f'<img src="{user_avatar}" alt="@{username}" style="width: 52px; height: 52px; border-radius: 4px; object-fit: cover; border: 1px solid var(--hairline);">' if user_avatar else f'''
@@ -6949,6 +6969,36 @@ def settings_view(
         </div>
         """
     else:
+        upgrade_card_html = ""
+        if billing_enabled():
+            upgrade_card_html = f"""
+            <!-- Upgrade Card with Dynamic Stripe Price -->
+            <div style="background: var(--panel-raised); border: 1px solid var(--brass-border); border-radius: 4px; padding: 1.5rem; position: relative; overflow: hidden; margin-top: 1.25rem;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem;">
+                    <div>
+                        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--brass); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;">
+                            ENTERPRISE CODE VALIDATION SUITE
+                        </div>
+                        <div style="display: flex; align-items: baseline; gap: 0.4rem; margin-top: 0.35rem;">
+                            <span style="font-family: 'Newsreader', serif; font-size: 2.25rem; font-weight: 500; color: var(--text-primary);">{pro_price_display}</span>
+                        </div>
+                    </div>
+                    <span class="badge" style="background: var(--brass-soft); color: var(--brass); border-color: var(--brass-border);">RECOMMENDED</span>
+                </div>
+
+                <div style="display: flex; flex-direction: column; gap: 0.6rem; margin-bottom: 1.5rem; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.4;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                        <span>More analyses per month ({pro_limit} instead of {free_limit})</span>
+                    </div>
+                </div>
+
+                <a href="/api/billing/checkout" class="btn btn-primary" style="width: 100%; justify-content: center; padding: 0.85rem; font-size: 0.95rem;">
+                    Upgrade to Pro via Stripe &rarr;
+                </a>
+            </div>
+            """
+
         plan_card_html = f"""
         <div class="stratum-card" style="margin-bottom: 1.5rem;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
@@ -6957,7 +7007,7 @@ def settings_view(
             </div>
 
             <!-- Quota Meter Box -->
-            <div style="background: var(--panel-inset); padding: 1.25rem; border-radius: 4px; border: 1px solid var(--hairline); margin-bottom: 1.25rem;">
+            <div style="background: var(--panel-inset); padding: 1.25rem; border-radius: 4px; border: 1px solid var(--hairline);">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
                     <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase;">Billing Cycle Allocation</span>
                     <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.8125rem; font-weight: 600; color: var(--brass);">{monthly_usage} / {monthly_quota} CONSUMED ({pct}%)</span>
@@ -6971,40 +7021,7 @@ def settings_view(
                 </div>
             </div>
 
-            <!-- Upgrade Card with Dynamic Stripe Price -->
-            <div style="background: var(--panel-raised); border: 1px solid var(--brass-border); border-radius: 4px; padding: 1.5rem; position: relative; overflow: hidden;">
-                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem;">
-                    <div>
-                        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--brass); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;">
-                            ENTERPRISE CODE VALIDATION SUITE
-                        </div>
-                        <div style="display: flex; align-items: baseline; gap: 0.4rem; margin-top: 0.35rem;">
-                            <span style="font-family: 'Newsreader', serif; font-size: 2.25rem; font-weight: 500; color: var(--text-primary);">{amount_formatted}</span>
-                            <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.8125rem; color: var(--text-tertiary);">/ {interval}</span>
-                        </div>
-                    </div>
-                    <span class="badge" style="background: var(--brass-soft); color: var(--brass); border-color: var(--brass-border);">RECOMMENDED</span>
-                </div>
-
-                <div style="display: flex; flex-col; gap: 0.6rem; margin-bottom: 1.5rem; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.4;">
-                    <div style="display: flex; align-items: center; gap: 0.5rem;">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                        <span><strong>Unlimited</strong> repository architecture reconstructions</span>
-                    </div>
-                    <div style="display: flex; align-items: center; gap: 0.5rem;">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                        <span>Syntax parsing &amp; automatic tier grouping</span>
-                    </div>
-                    <div style="display: flex; align-items: center; gap: 0.5rem;">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                        <span>Interactive dependency graph visualization &amp; comprehension quizzes</span>
-                    </div>
-                </div>
-
-                <a href="/api/billing/checkout" class="btn btn-primary" style="width: 100%; justify-content: center; padding: 0.85rem; font-size: 0.95rem;">
-                    Upgrade to Pro via Stripe &rarr;
-                </a>
-            </div>
+            {upgrade_card_html}
         </div>
         """
 

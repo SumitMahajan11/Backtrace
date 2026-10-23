@@ -1,17 +1,20 @@
-"""Billing and Subscription API Router for Stripe Hosted Checkout and Customer Portal."""
-
+import logging
 import os
 from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, Optional
+import stripe
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user, get_db
+from app.core.config import billing_enabled
 from app.models.db import UserModel
 from app.services.billing_service import BillingService, BillingServiceError
 from app.storage.billing_repository import BillingRepository
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/billing", tags=["Billing"])
 
@@ -53,6 +56,9 @@ def create_checkout(
     Creates a hosted Stripe Checkout Session for upgrading the authenticated user to the Paid tier.
     Zero-PCI compliance: Redirects to Stripe hosted checkout page.
     """
+    if not billing_enabled():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Billing service is not enabled")
+
     s_url = payload.success_url if payload else None
     c_url = payload.cancel_url if payload else None
 
@@ -64,13 +70,17 @@ def create_checkout(
             cancel_url=c_url,
         )
         return CheckoutSessionResponse(checkout_url=url)
+    except stripe.error.StripeError as exc:
+        logger.exception("Stripe Checkout failed: %s", exc)
+        return RedirectResponse(url="/settings?billing=error", status_code=status.HTTP_303_SEE_OTHER)
     except BillingServiceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.message)
+        if exc.status_code == 404:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.message)
+        logger.exception("Billing service error during checkout: %s", exc)
+        return RedirectResponse(url="/settings?billing=error", status_code=status.HTTP_303_SEE_OTHER)
     except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create Stripe Checkout session: {exc}",
-        )
+        logger.exception("Unexpected error during checkout: %s", exc)
+        return RedirectResponse(url="/settings?billing=error", status_code=status.HTTP_303_SEE_OTHER)
 
 
 @router.get("/checkout", summary="Redirect to Stripe Checkout Session")
@@ -81,6 +91,9 @@ def get_checkout_redirect(
     session: Session = Depends(get_db),
 ):
     """Browser GET endpoint that creates a Stripe checkout session and redirects immediately."""
+    if not billing_enabled():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Billing service is not enabled")
+
     try:
         url = BillingService.create_checkout_session(
             user=current_user,
@@ -89,13 +102,17 @@ def get_checkout_redirect(
             cancel_url=cancel_url,
         )
         return RedirectResponse(url=url, status_code=status.HTTP_303_SEE_OTHER)
+    except stripe.error.StripeError as exc:
+        logger.exception("Stripe Checkout failed: %s", exc)
+        return RedirectResponse(url="/settings?billing=error", status_code=status.HTTP_303_SEE_OTHER)
     except BillingServiceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.message)
+        if exc.status_code == 404:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.message)
+        logger.exception("Billing service error during checkout: %s", exc)
+        return RedirectResponse(url="/settings?billing=error", status_code=status.HTTP_303_SEE_OTHER)
     except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create Stripe Checkout session: {exc}",
-        )
+        logger.exception("Unexpected error during checkout: %s", exc)
+        return RedirectResponse(url="/settings?billing=error", status_code=status.HTTP_303_SEE_OTHER)
 
 
 @router.post("/portal", response_model=CustomerPortalResponse, summary="Create Stripe Customer Portal Session")
@@ -108,6 +125,9 @@ def create_customer_portal(
     Creates a hosted Stripe Customer Portal Session for managing subscription and payment methods.
     Derived strictly from the authenticated user's verified customer record.
     """
+    if not billing_enabled():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Billing service is not enabled")
+
     r_url = payload.return_url if payload else None
 
     try:
@@ -133,6 +153,9 @@ def get_customer_portal_redirect(
     session: Session = Depends(get_db),
 ):
     """Browser GET endpoint that creates a Customer Portal session and redirects immediately."""
+    if not billing_enabled():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Billing service is not enabled")
+
     try:
         url = BillingService.create_customer_portal_session(
             user=current_user,

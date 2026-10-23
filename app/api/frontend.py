@@ -114,6 +114,7 @@ def show_settings(
     request: Request,
     error: Optional[str] = Query(None),
     success: Optional[str] = Query(None),
+    billing: Optional[str] = Query(None),
     session_id: Optional[str] = Query(None),
     user: Optional[UserModel] = Depends(get_current_user_optional),
     session: Session = Depends(get_db),
@@ -125,6 +126,11 @@ def show_settings(
     """
     if not user:
         return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
+
+    billing_error = False
+    if billing == "error" or request.query_params.get("billing") == "error":
+        billing_error = True
+        error = "We couldn't start checkout. Please try again in a few minutes."
 
     if session_id:
         try:
@@ -148,6 +154,7 @@ def show_settings(
             pricing_details=pricing_details,
             error=error,
             success=success,
+            billing_error=billing_error,
         )
     )
 
