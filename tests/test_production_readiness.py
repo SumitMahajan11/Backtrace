@@ -181,26 +181,34 @@ def test_stripe_webhook_rejects_invalid_cryptographic_signature():
     assert exc_info.value.status_code == 400
 
 
-def test_postgres_engine_configures_pool_pre_ping_and_pool_recycle(monkeypatch):
+def test_postgres_engine_configures_pool_pre_ping_and_pool_recycle(tmp_path):
     """
     Validates that when DATABASE_URL points to PostgreSQL (such as Neon),
     the SQLAlchemy engine is configured with pool_pre_ping=True to discard stale
     connections after idle compute suspension, and pool_recycle=1800 (or DB_POOL_RECYCLE).
+    Runs in a subprocess to avoid mutating app.db.session in the test runner process.
     """
-    import importlib
-    from sqlalchemy.engine import Engine
-    import app.db.session as session_module
+    import os
+    import subprocess
+    import sys
 
+    code = (
+        "from sqlalchemy.engine import Engine\n"
+        "import app.db.session as session_module\n"
+        "assert isinstance(session_module.engine, Engine)\n"
+        "assert getattr(session_module.engine.pool, '_pre_ping', False) is True\n"
+        "assert getattr(session_module.engine.pool, '_recycle', 0) == 1800\n"
+    )
+
+    env = dict(os.environ)
     neon_url = "postgresql://user:pass@ep-neon-123.us-east-2.aws.neon.tech/neondb?sslmode=require"
-    monkeypatch.setenv("DATABASE_URL", neon_url)
-    monkeypatch.setenv("ENVIRONMENT", "production")
-    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+    env["DATABASE_URL"] = neon_url
+    env["ENVIRONMENT"] = "production"
+    env.pop("PYTEST_CURRENT_TEST", None)
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    current_pythonpath = env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = f"{repo_root};{current_pythonpath}" if current_pythonpath else repo_root
 
-    try:
-        reloaded = importlib.reload(session_module)
-        assert isinstance(reloaded.engine, Engine)
-        assert getattr(reloaded.engine.pool, "_pre_ping", False) is True
-        assert getattr(reloaded.engine.pool, "_recycle", 0) == 1800
-    finally:
-        monkeypatch.undo()
-        importlib.reload(session_module)
+    res = subprocess.run([sys.executable, "-c", code], cwd=str(tmp_path), env=env, capture_output=True, text=True)
+    assert res.returncode == 0, f"Subprocess failed with code {res.returncode}:\nstdout: {res.stdout}\nstderr: {res.stderr}"
+

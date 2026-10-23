@@ -3383,4 +3383,104 @@ def test_path_truncation_and_xss_prevention_in_report_nodes_tabs_and_tooltips():
         assert f'id="fill-tab-btn-1-{i}"' in html_out
 
 
+@pytest.mark.parametrize("payload", [
+    "<img src=x onerror=alert(1)>",
+    '"><svg onload=alert(1)>',
+])
+def test_payload_xss_prevention_in_report_and_settings_views(payload):
+    """
+    Threat Model: Verify that dangerous XSS payloads ('<img src=x onerror=alert(1)>' and
+    '"><svg onload=alert(1)>') injected into:
+    1. LLM-derived raw_markdown (through report_view)
+    2. Codebase quiz questions, options, and explanation (through report_view)
+    3. User avatar_url and github_username (through report_view nav header)
+    4. User avatar_url and github_username (through settings_view)
+    are strictly escaped and never rendered as raw active HTML or unescaped tag breakouts.
+    """
+    import html
+    from app.models.db import AnalysisJobModel, UserModel
+    from app.ui.components import report_view, settings_view
+
+    escaped_payload = html.escape(payload, quote=True)
+
+    user = UserModel(
+        id=1,
+        github_id=998877,
+        github_username=payload,
+        email="payload@example.com",
+        avatar_url=payload,
+    )
+
+    job = AnalysisJobModel(
+        id="job_payload_test",
+        user_id=1,
+        repo_url="https://github.com/org/repo",
+        repo_name="repo",
+        status="completed",
+    )
+
+    quiz_data = {
+        "questions": [
+            {
+                "question": f"Question containing {payload}",
+                "options": [f"Option A {payload}", f"Option B {payload}"],
+                "answer": f"Option A {payload}",
+                "explanation": f"Explanation with {payload}",
+                "correct_index": 0,
+                "tier": 1,
+            }
+        ]
+    }
+
+    raw_markdown = f"# Architecture Synthesis\n\nSection detailing {payload}\n\n- Bullet item with {payload}"
+
+    # 1. Render through report_view
+    rep_html = report_view(
+        job=job,
+        raw_markdown=raw_markdown,
+        graph_data={"nodes": [], "edges": []},
+        quiz_data=quiz_data,
+        current_user=user,
+    )
+
+    # In report_view, verify payloads are sanitized and cannot inject raw tags or attribute breakout:
+    assert "<img src=x" not in rep_html
+    assert '"><svg' not in rep_html
+    assert "<svg onload" not in rep_html
+    assert "<svg onload=" not in rep_html
+
+    # Verify escaped representations are present in their respective sections:
+    # Markdown
+    assert escaped_payload in rep_html
+    # Quiz question
+    assert html.escape(f"Question containing {payload}", quote=True) in rep_html
+    # Quiz options
+    assert html.escape(f"Option A {payload}", quote=True) in rep_html
+    # Quiz explanation
+    assert html.escape(f"Explanation with {payload}", quote=True) in rep_html
+    # User avatar & username in nav
+    assert 'alt="Avatar"' in rep_html
+    assert f'src="{escaped_payload}"' in rep_html
+    assert f'@{escaped_payload}' in rep_html
+
+    # 2. Render through settings_view
+    set_html = settings_view(
+        current_user=user,
+        billing_status={"tier": "free", "monthly_usage": 0, "monthly_quota": 5},
+        pricing_details={"amount_formatted": "$19/mo", "interval": "month"},
+    )
+
+    # In settings_view, verify payloads are sanitized:
+    assert "<img src=x" not in set_html
+    assert '"><svg' not in set_html
+    assert "<svg onload" not in set_html
+    assert "<svg onload=" not in set_html
+
+    # Verify escaped representations exist in avatar markup and username:
+    assert f'src="{escaped_payload}"' in set_html
+    assert f'alt="@{escaped_payload}"' in set_html
+    assert f'@{escaped_payload}' in set_html
+
+
+
 
