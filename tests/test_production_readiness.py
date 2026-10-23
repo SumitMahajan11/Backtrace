@@ -212,3 +212,20 @@ def test_postgres_engine_configures_pool_pre_ping_and_pool_recycle(tmp_path):
     res = subprocess.run([sys.executable, "-c", code], cwd=str(tmp_path), env=env, capture_output=True, text=True)
     assert res.returncode == 0, f"Subprocess failed with code {res.returncode}:\nstdout: {res.stdout}\nstderr: {res.stderr}"
 
+
+def test_production_config_allows_optional_stripe_billing():
+    """Validates that production environment succeeds without Stripe keys when STRIPE_BILLING_ENABLED=False."""
+    settings = Settings(
+        ENVIRONMENT="production",
+        GITHUB_CLIENT_ID="gh_client_test_id",
+        GITHUB_CLIENT_SECRET="gh_client_test_secret",
+        GITHUB_REDIRECT_URI="https://backtrace.onrender.com/auth/github/callback",
+        JWT_SECRET_KEY="a" * 32,
+        DATABASE_URL="postgresql://user:pass@ep-test.neon.tech/neondb?sslmode=require",
+        STRIPE_BILLING_ENABLED=False,
+        STRIPE_SECRET_KEY=None,
+        STRIPE_WEBHOOK_SECRET=None,
+        STRIPE_PRICE_ID_PRO=None,
+    )
+    assert settings.STRIPE_BILLING_ENABLED is False
+    assert settings.is_production is True

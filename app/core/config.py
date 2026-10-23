@@ -56,6 +56,7 @@ class Settings(BaseSettings):
     GITHUB_PAT: Optional[str] = None
 
     # Stripe Billing
+    STRIPE_BILLING_ENABLED: bool = True
     STRIPE_SECRET_KEY: Optional[str] = None
     STRIPE_WEBHOOK_SECRET: Optional[str] = None
     STRIPE_PRICE_ID_PRO: Optional[str] = None
@@ -186,21 +187,32 @@ class Settings(BaseSettings):
         if "development_secret_key" in self.JWT_SECRET_KEY:
             errors.append("JWT_SECRET_KEY cannot use development default in production")
 
-        # 3. Stripe Billing Credentials
-        if not self.STRIPE_SECRET_KEY or not self.STRIPE_SECRET_KEY.strip():
-            errors.append("STRIPE_SECRET_KEY is required in production")
-        elif not (self.STRIPE_SECRET_KEY.startswith("sk_live_") or self.STRIPE_SECRET_KEY.startswith("sk_test_")):
-            errors.append("STRIPE_SECRET_KEY must be a valid Stripe API key (sk_live_... or sk_test_...)")
+        # 3. Stripe Billing Credentials (enforced in production when STRIPE_BILLING_ENABLED is True)
+        if self.STRIPE_BILLING_ENABLED:
+            if not self.STRIPE_SECRET_KEY or not self.STRIPE_SECRET_KEY.strip():
+                errors.append("STRIPE_SECRET_KEY is required in production")
+            elif not (self.STRIPE_SECRET_KEY.startswith("sk_live_") or self.STRIPE_SECRET_KEY.startswith("sk_test_")):
+                errors.append("STRIPE_SECRET_KEY must be a valid Stripe API key (sk_live_... or sk_test_...)")
 
-        if not self.STRIPE_WEBHOOK_SECRET or not self.STRIPE_WEBHOOK_SECRET.strip():
-            errors.append("STRIPE_WEBHOOK_SECRET is required in production")
-        elif not self.STRIPE_WEBHOOK_SECRET.startswith("whsec_"):
-            errors.append("STRIPE_WEBHOOK_SECRET must be a valid Stripe webhook secret (whsec_...)")
+            if not self.STRIPE_WEBHOOK_SECRET or not self.STRIPE_WEBHOOK_SECRET.strip():
+                errors.append("STRIPE_WEBHOOK_SECRET is required in production")
+            elif not self.STRIPE_WEBHOOK_SECRET.startswith("whsec_"):
+                errors.append("STRIPE_WEBHOOK_SECRET must be a valid Stripe webhook secret (whsec_...)")
 
-        if not self.STRIPE_PRICE_ID_PRO or not self.STRIPE_PRICE_ID_PRO.strip():
-            errors.append("STRIPE_PRICE_ID_PRO is required in production")
-        elif not self.STRIPE_PRICE_ID_PRO.startswith("price_"):
-            errors.append("STRIPE_PRICE_ID_PRO must start with 'price_'")
+            if not self.STRIPE_PRICE_ID_PRO or not self.STRIPE_PRICE_ID_PRO.strip():
+                errors.append("STRIPE_PRICE_ID_PRO is required in production")
+            elif not self.STRIPE_PRICE_ID_PRO.startswith("price_"):
+                errors.append("STRIPE_PRICE_ID_PRO must start with 'price_'")
+        else:
+            if self.STRIPE_SECRET_KEY and self.STRIPE_SECRET_KEY.strip():
+                if not (self.STRIPE_SECRET_KEY.startswith("sk_live_") or self.STRIPE_SECRET_KEY.startswith("sk_test_")):
+                    errors.append("STRIPE_SECRET_KEY must be a valid Stripe API key (sk_live_... or sk_test_...)")
+            if self.STRIPE_WEBHOOK_SECRET and self.STRIPE_WEBHOOK_SECRET.strip():
+                if not self.STRIPE_WEBHOOK_SECRET.startswith("whsec_"):
+                    errors.append("STRIPE_WEBHOOK_SECRET must be a valid Stripe webhook secret (whsec_...)")
+            if self.STRIPE_PRICE_ID_PRO and self.STRIPE_PRICE_ID_PRO.strip():
+                if not self.STRIPE_PRICE_ID_PRO.startswith("price_"):
+                    errors.append("STRIPE_PRICE_ID_PRO must start with 'price_'")
 
         # 4. Debug check
         if self.DEBUG:

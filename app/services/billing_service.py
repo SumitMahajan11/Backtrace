@@ -15,22 +15,29 @@ from app.storage.billing_repository import BillingRepository
 def _get_billing_setting(attr: str, default: Any = "") -> Any:
     env_val = os.getenv(attr)
     if env_val is not None and str(env_val).strip():
+        if isinstance(default, bool):
+            return str(env_val).strip().lower() not in ("0", "false", "no", "off")
         return env_val
     try:
         from app.core.config import get_settings
         settings = get_settings()
         val = getattr(settings, attr, None)
-        if val is not None and str(val).strip():
-            return val
+        if val is not None:
+            if isinstance(default, bool):
+                return bool(val)
+            if str(val).strip():
+                return val
     except Exception:
         pass
     return default
 
 
+STRIPE_BILLING_ENABLED: bool = bool(_get_billing_setting("STRIPE_BILLING_ENABLED", True))
 STRIPE_API_KEY: str = str(_get_billing_setting("STRIPE_SECRET_KEY", os.getenv("STRIPE_API_KEY", os.getenv("STRIPE_SECRET_KEY", ""))))
 STRIPE_WEBHOOK_SECRET: str = str(_get_billing_setting("STRIPE_WEBHOOK_SECRET", os.getenv("STRIPE_WEBHOOK_SECRET", "")))
 STRIPE_PRICE_ID: str = str(_get_billing_setting("STRIPE_PRICE_ID_PRO", os.getenv("STRIPE_PRICE_ID", "price_backtrace_pro_monthly")))
-FREE_TIER_MONTHLY_QUOTA: int = int(_get_billing_setting("FREE_TIER_MONTHLY_LIMIT", os.getenv("FREE_TIER_MONTHLY_QUOTA", "5")))
+STRIPE_FREE_TIER_MONTHLY_QUOTA: int = int(_get_billing_setting("FREE_TIER_MONTHLY_LIMIT", os.getenv("FREE_TIER_MONTHLY_QUOTA", "5")))
+FREE_TIER_MONTHLY_QUOTA: int = STRIPE_FREE_TIER_MONTHLY_QUOTA
 
 DEFAULT_SUCCESS_URL: str = str(_get_billing_setting(
     "STRIPE_SUCCESS_URL", os.getenv("STRIPE_SUCCESS_URL", "http://localhost:8000/dashboard?session_id={CHECKOUT_SESSION_ID}")
@@ -62,6 +69,15 @@ class BillingService:
         Dynamically fetches the Stripe Price object for the Pro subscription tier.
         Caches the response in-memory for 1 hour to prevent latency and API rate-limiting.
         """
+        if not _get_billing_setting("STRIPE_BILLING_ENABLED", True):
+            return {
+                "price_id": None,
+                "unit_amount": None,
+                "amount_formatted": "Free",
+                "currency": "usd",
+                "interval": "month",
+            }
+
         api_key = _get_billing_setting("STRIPE_SECRET_KEY", os.getenv("STRIPE_API_KEY", STRIPE_API_KEY))
         if api_key:
             stripe.api_key = api_key
@@ -147,6 +163,9 @@ class BillingService:
         Creates a hosted Stripe Checkout Session for upgrading to the Paid tier.
         Zero PCI scope: Raw credit card data never touches Backtrace application code.
         """
+        if not _get_billing_setting("STRIPE_BILLING_ENABLED", True):
+            raise BillingServiceError("Billing service is disabled on this instance.", status_code=503)
+
         api_key = _get_billing_setting("STRIPE_SECRET_KEY", os.getenv("STRIPE_API_KEY", STRIPE_API_KEY))
         if api_key:
             stripe.api_key = api_key
@@ -199,6 +218,9 @@ class BillingService:
         Creates a hosted Stripe Customer Portal Session for subscription management.
         Guarantees users can only access their own customer portal.
         """
+        if not _get_billing_setting("STRIPE_BILLING_ENABLED", True):
+            raise BillingServiceError("Billing service is disabled on this instance.", status_code=503)
+
         if not stripe.api_key and STRIPE_API_KEY:
             stripe.api_key = STRIPE_API_KEY
 
@@ -231,6 +253,9 @@ class BillingService:
         Verifies the cryptographic HMAC-SHA256 signature on incoming Stripe webhooks.
         Rejects spoofed requests missing or failing signature verification.
         """
+        if not _get_billing_setting("STRIPE_BILLING_ENABLED", True):
+            raise BillingServiceError("Billing service is disabled on this instance.", status_code=503)
+
         secret = webhook_secret or _get_billing_setting("STRIPE_WEBHOOK_SECRET", STRIPE_WEBHOOK_SECRET)
         if not sig_header:
             raise BillingServiceError("Missing Stripe-Signature header", status_code=400)
