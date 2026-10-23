@@ -3154,4 +3154,78 @@ def test_script_tag_breakout_prevention_in_report_and_embedded_json():
     assert "\\u003c/script\\u003e" in malicious_html or "&lt;/script&gt;" in malicious_html
 
 
+def test_path_truncation_and_xss_prevention_in_report_nodes_tabs_and_tooltips():
+    """
+    Threat Model: Verify that a 200-character file path containing an XSS payload
+    ('<img src=x onerror=alert(1)>') positioned at the head, middle, and tail
+    is safely sanitized and never emits raw '<img' tags in DAG nodes, tab buttons,
+    or tooltips, even when subjected to middle-truncation via _truncate_path_middle.
+    """
+    from app.ui.components import report_view
+    from app.models.db import AnalysisJobModel
+
+    payload = "<img src=x onerror=alert(1)>"
+    head_path = f"{payload}/{'a' * 180}.py"
+    mid_path = f"{'b' * 90}/{payload}/{'c' * 90}.py"
+    tail_path = f"{'d' * 180}/{payload}"
+
+    assert len(head_path) >= 200
+    assert len(mid_path) >= 200
+    assert len(tail_path) >= 200
+
+    job = AnalysisJobModel(
+        id="job_path_xss",
+        user_id=1,
+        repo_url="https://github.com/org/repo",
+        repo_name="repo",
+        status="completed",
+    )
+
+    test_paths = [head_path, mid_path, tail_path]
+    nodes = [
+        {
+            "id": f"node_{i}",
+            "label": f"label_{i}.py",
+            "path": p,
+            "tier": 1,
+            "exports": ["func"],
+        }
+        for i, p in enumerate(test_paths)
+    ]
+
+    raw_md = f"""# Synthesis Report
+## 3. Step-by-Step Architectural Milestones
+### Milestone 1: Core Tier (Tier 1)
+**[HIGH CONFIDENCE]** -- *Core*
+**Overview:** Core implementation
+**Included Files (3):**
+- `{head_path}`
+- `{mid_path}`
+- `{tail_path}`
+"""
+
+    html_out = report_view(
+        job=job,
+        raw_markdown=raw_md,
+        graph_data={"nodes": nodes, "edges": []},
+        quiz_data={"questions": []},
+    )
+
+    # 1. No raw '<img' anywhere in the output
+    assert "<img" not in html_out
+
+    # 2. Assert safe escaped representation exists in node SVG, title tooltip, and tab buttons
+    escaped_tag = "&lt;img src=x onerror=alert(1)&gt;"
+    assert escaped_tag in html_out
+
+    # 3. Check each path specifically in node attributes, tooltips, and tab buttons
+    for i, p in enumerate(test_paths):
+        # Node SVG and title
+        assert f'id="dag-node-node_{i}"' in html_out
+        # File tabs in milestone view
+        assert f'id="read-tab-btn-1-{i}"' in html_out
+        assert f'id="guess-tab-btn-1-{i}"' in html_out
+        assert f'id="fill-tab-btn-1-{i}"' in html_out
+
+
 
