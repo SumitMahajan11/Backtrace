@@ -107,10 +107,10 @@ def test_settings_free_user_view(client, create_user, test_db):
         assert "Profile information and notification email are synced directly from GitHub OAuth" in html
 
         # 2. Themes
-        assert "Archival Visual Standard" in html
+        assert "Theme" in html
         assert "Dark Architecture Report" in html
         assert "Light Archival" in html
-        assert "Detect OS Scheme" in html
+        assert "Detect my system" in html
 
         # 3. Quota & Plan
         assert "FREE TIER" in html

@@ -226,7 +226,7 @@ def test_ui_shows_redaction_notice_and_guess_it_disabling():
     )
     assert "Some values were hidden for security" in html_out
     assert "guess-disabled-banner" not in html_out
-    assert "Guess It Disabled" not in html_out
+    assert "Try it Disabled" not in html_out
 
     # Case 2: File source missing (empty dict)
     file_contents_missing = {}
@@ -240,7 +240,7 @@ def test_ui_shows_redaction_notice_and_guess_it_disabling():
         file_contents=file_contents_missing,
         redacted_files=set(),
     )
-    assert "Guess It Disabled" in html_out_missing
+    assert "Try it Disabled" in html_out_missing
 
 
 def test_extraction_py_no_false_redaction_notice_or_skip():

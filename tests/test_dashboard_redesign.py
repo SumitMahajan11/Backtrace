@@ -88,7 +88,7 @@ def test_dashboard_free_user_empty_state(client, create_user):
     html = resp.text
 
     # Editorial Header
-    assert "Root-Cause Analysis Ledger" in html
+    assert "Analyze a repository" in html
     assert "ARCHITECTURE REPORT REPOSITORY PARSING" in html
     assert "Submit version-controlled source archives" in html
 

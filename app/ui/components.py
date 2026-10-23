@@ -24,7 +24,7 @@ from app.core.config import billing_enabled
 from app.ui.sanitizer import sanitize_text, render_safe_markdown, truncate_text_clean, render_user_markdown
 from app.sequence.confidence_scoring import confidence_summary, ConfidenceSummary
 
-SANDBOX_DISABLED_BANNER_TEXT = "Code execution is turned off on this free demo. Running user code safely needs an isolated sandbox server, which this host can't provide. Everything else works, and structure checks still run. See the full run-and-grade flow in the video."
+SANDBOX_DISABLED_BANNER_TEXT = "Code execution is turned off on this free demo. Running user code safely needs an isolated sandbox server, which this host can't provide. Everything else works, and structure checks still run."
 
 
 def _safe_script_json_dumps(obj: Any) -> str:
@@ -39,6 +39,47 @@ def _safe_script_json_dumps(obj: Any) -> str:
         .replace("\u2028", "\\u2028")
         .replace("\u2029", "\\u2029")
     )
+
+
+def format_time_tag(dt_obj: Any) -> str:
+    """Outputs an ISO timestamp as <time datetime="ISO" title="UTC">UTC</time> with no microseconds.
+    Client-side JavaScript rewrites inner text to toLocaleString() based on user browser locale.
+    """
+    if not dt_obj:
+        return ""
+    d: Optional[datetime] = None
+    if isinstance(dt_obj, (int, float)):
+        try:
+            val = float(dt_obj)
+            sec = val / 1000.0 if val > 1e11 else val
+            d = datetime.fromtimestamp(sec, tz=timezone.utc)
+        except Exception:
+            return html.escape(str(dt_obj))
+    elif isinstance(dt_obj, datetime):
+        d = dt_obj
+    elif isinstance(dt_obj, str):
+        clean_str = dt_obj.strip()
+        if not clean_str:
+            return ""
+        try:
+            if clean_str.endswith(" UTC"):
+                clean_str = clean_str[:-4].strip() + "+00:00"
+            elif clean_str.endswith("Z"):
+                clean_str = clean_str[:-1] + "+00:00"
+            d = datetime.fromisoformat(clean_str)
+        except Exception:
+            return html.escape(clean_str)
+
+    if d is not None and hasattr(d, "replace"):
+        d = d.replace(microsecond=0)
+        if d.tzinfo is None:
+            d = d.replace(tzinfo=timezone.utc)
+        else:
+            d = d.astimezone(timezone.utc)
+        iso_str = d.isoformat()
+        utc_str = d.strftime("%Y-%m-%d %H:%M:%S UTC")
+        return f'<time datetime="{iso_str}" title="{utc_str}">{utc_str}</time>'
+    return html.escape(str(dt_obj))
 
 
 def get_narration_source(
@@ -78,7 +119,7 @@ def get_narration_label(source: str) -> str:
     """Returns honest label based on narration source."""
     if source == "llm":
         return "LLM Step-by-Step Narration"
-    return "Step-by-step narration (template)"
+    return "Step-by-step narration"
 
 
 
@@ -1155,6 +1196,12 @@ def page_shell(
         document.addEventListener('DOMContentLoaded', function() {{
             const current = document.documentElement.getAttribute('data-theme') || 'dark';
             updateThemeControls(current);
+            document.querySelectorAll('time[datetime]').forEach(function(el) {{
+                const dt = new Date(el.getAttribute('datetime'));
+                if (!isNaN(dt.getTime())) {{
+                    el.textContent = dt.toLocaleString();
+                }}
+            }});
         }});
     </script>
     {extra_scripts}
@@ -1556,7 +1603,7 @@ def dashboard_view(
         repo_url = sanitize_text(job.repo_url)
         repo_display = sanitize_text(job.repo_name or (job.repo_url.rstrip("/").split("/")[-1] if "/" in job.repo_url else job.repo_url))
         status = sanitize_text(job.status)
-        created_at = sanitize_text(job.created_at.strftime("%Y-%m-%d %H:%M:%S UTC") if hasattr(job.created_at, "strftime") else str(job.created_at))
+        created_at = format_time_tag(job.created_at)
         duration_str = f"{job.execution_time_seconds:.1f}s" if getattr(job, "execution_time_seconds", 0) else "—"
 
         status_badge_class = f"badge-{status}" if status in ["completed", "running", "failed", "pending"] else "badge-free"
@@ -1721,7 +1768,7 @@ def dashboard_view(
                         <th>Repository Specification</th>
                         <th>Status</th>
                         <th>Learning Progress</th>
-                        <th>Submitted (UTC)</th>
+                        <th>Submitted</th>
                         <th>Duration</th>
                         <th style="text-align: right;">Action</th>
                     </tr>
@@ -1743,10 +1790,10 @@ def dashboard_view(
                 </span>
             </div>
             <h1 style="font-size: 2.25rem; font-weight: 500; letter-spacing: -0.02em; margin-bottom: 0.5rem;">
-                Root-Cause Analysis Ledger
+                Analyze a repository
             </h1>
             <p style="color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5;">
-                Submit version-controlled source archives to initiate deep commit and change history analysis, chronological tier synthesis, and automated root-cause change tracking.
+                Submit version-controlled source archives. Reads your repository and builds a step-by-step learning guide from how the files import each other.
             </p>
         </div>
         
@@ -1789,7 +1836,7 @@ def dashboard_view(
             </div>
             <div class="chip">
                 <span class="chip-dot brass"></span>
-                <span>Secure Temporary Sandbox</span>
+                <span>Code analysis only. Code is not executed.</span>
             </div>
         </div>
 
@@ -1860,7 +1907,7 @@ def dashboard_view(
     <div class="stratum-card">
         <div class="card-header">
             <div style="display: flex; align-items: center; gap: 0.65rem;">
-                <h2 style="font-size: 1.35rem; font-weight: 500;">Analysis History Ledger</h2>
+                <h2 style="font-size: 1.35rem; font-weight: 500;">Analysis history</h2>
                 <span class="chip">{len(past_jobs)} ANALYSIS JOB RECORDS</span>
             </div>
             <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--text-tertiary);">
@@ -1979,7 +2026,7 @@ def progress_view(
             "00",
             "Consent & Auth Gate",
             '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>',
-            "Authorizing repository access and establishing a secure ephemeral execution boundary.",
+            "Authorizing repository access.",
             "Verified GitHub OAuth scopes and validated repository read permissions against security policies.",
         ),
         (
@@ -1987,8 +2034,8 @@ def progress_view(
             "01",
             "Shallow Clone",
             '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>',
-            "Fetching the target codebase into an isolated, memory-bounded analysis container.",
-            "Executed blobless shallow git clone (depth=1) into an isolated ephemeral sandbox environment.",
+            "Fetching the target codebase.",
+            "Executed blobless shallow git clone (depth=1).",
         ),
         (
             "stage_2",
@@ -2577,8 +2624,6 @@ def progress_view(
 
             <div style="display: flex; justify-content: space-between; align-items: center; font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--text-tertiary); border-top: 1px solid var(--hairline-soft); padding-top: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
                 <span>CHANNEL: <strong>/api/analyses/{job_id}/events</strong></span>
-                <span>DOCKET: <strong>JOB-{job_id}</strong></span>
-                <span>TENANT SECURITY: <strong style="color: var(--teal);">IDOR VERIFIED</strong></span>
             </div>
         </div>
 
@@ -2869,7 +2914,7 @@ def _render_server_diff_html(
     elif grading_method == "expected_output":
         tier_tag = '<span class="badge badge-amber" style="font-size: 0.65rem; letter-spacing: 0.04em;">TIER 2 // EXPECTED OUTPUT</span>'
     elif grading_method == "fill_the_blanks":
-        tier_tag = '<span class="badge badge-teal" style="font-size: 0.65rem; letter-spacing: 0.04em;">TIER 3 // FILL THE BLANKS (SCOPED EVALUATION)</span>'
+        tier_tag = '<span class="badge badge-teal" style="font-size: 0.65rem; letter-spacing: 0.04em;">TIER 3 // FILL THE GAPS (SCOPED EVALUATION)</span>'
     else:
         tier_tag = '<span class="badge badge-brass" style="font-size: 0.65rem; letter-spacing: 0.04em;">TIER 3 // Structure Comparison</span>'
 
@@ -3065,7 +3110,7 @@ def report_view(
     raw_repo_name = getattr(job, "repo_name", None) if hasattr(job, "repo_name") else (job.get("repo_name") if isinstance(job, dict) else None)
     repo_name = sanitize_text(raw_repo_name or (repo_url.rstrip("/").split("/")[-1] if "/" in repo_url else repo_url))
     raw_created_at = getattr(job, "created_at", None) if hasattr(job, "created_at") else (job.get("created_at") if isinstance(job, dict) else None)
-    created_at = sanitize_text(raw_created_at.strftime("%Y-%m-%d %H:%M:%S UTC") if hasattr(raw_created_at, "strftime") else str(raw_created_at or ""))
+    created_at = format_time_tag(raw_created_at)
     exec_time = getattr(job, "execution_time_seconds", None) if hasattr(job, "execution_time_seconds") else (job.get("execution_time_seconds") if isinstance(job, dict) else None)
     duration = f"{exec_time:.1f}s" if exec_time else "Completed"
     raw_run_id = getattr(job, "run_id", None) if hasattr(job, "run_id") else (job.get("run_id") if isinstance(job, dict) else None)
@@ -3078,6 +3123,25 @@ def report_view(
     safe_markdown_html = render_safe_markdown(raw_markdown)
     narration_src = get_narration_source(job=job, raw_markdown=raw_markdown, graph_data=graph_data)
     narration_label = get_narration_label(narration_src)
+    narration_badge_html = (
+        f'<span class="chip" id="narration-source-label"><span class="chip-dot brass"></span> {narration_label}</span>'
+        if narration_src == "llm"
+        else ""
+    )
+
+    has_git_history = True
+    if graph_data and isinstance(graph_data.get("confidence_summary"), dict):
+        has_git_history = bool(graph_data["confidence_summary"].get("history_available", True))
+    elif "no git history" in (parsed_md.get("confidence_calibration", "") + raw_markdown).lower():
+        has_git_history = False
+
+    no_history_note_html = ""
+    if not has_git_history:
+        no_history_note_html = """
+        <div id="no-history-note" class="stratum-card" style="background: rgba(245, 158, 11, 0.08); border: 1px solid var(--amber); border-left: 4px solid var(--amber); padding: 0.85rem 1.15rem; margin-bottom: 1.5rem; border-radius: 4px; font-family: 'IBM Plex Sans', sans-serif; font-size: 0.875rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.6rem;">
+            <span>Order is estimated from imports (no git history).</span>
+        </div>
+        """
 
     is_showcase = bool(getattr(job, "is_showcase", False) if hasattr(job, "is_showcase") else (job.get("is_showcase", False) if isinstance(job, dict) else False))
 
@@ -3096,7 +3160,7 @@ def report_view(
         sandbox_banner_html = ""
     elif not sandbox_enabled:
         video_link_html = (
-            f' <a href="{html.escape(demo_video_url)}" target="_blank" rel="noopener noreferrer" style="color: var(--teal); font-weight: 600; text-decoration: underline;">Watch the video</a>'
+            f' <a href="{html.escape(demo_video_url)}" target="_blank" rel="noopener noreferrer" style="color: var(--teal); font-weight: 600; text-decoration: underline;">See the full flow in the video.</a>'
             if demo_video_url
             else ""
         )
@@ -3689,7 +3753,7 @@ def report_view(
                             <th>Module / File</th>
                             <th>Tier</th>
                             <th>Domain</th>
-                            <th>Exported Invariants</th>
+                            <th>What this file exposes</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -4083,7 +4147,7 @@ def report_view(
             if not has_any_real_source:
                 guess_disabled_banner_html = """
                 <div class="guess-disabled-banner" style="margin-bottom: 0.85rem; padding: 0.75rem 1rem; background: rgba(245, 158, 11, 0.08); border-left: 3px solid var(--amber); border-radius: 3px; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; line-height: 1.45; color: var(--amber);">
-                    <span>⚠️</span> <strong>Guess It Disabled:</strong> Reference source files are not available for this milestone. Try re-running the analysis to view and verify against the real implementation.
+                    <span>⚠️</span> <strong>Try it Disabled:</strong> Reference source files are not available for this milestone. Try re-running the analysis to view and verify against the real implementation.
                 </div>
                 """
                 # Run Code remains enabled as an unmetered sandbox scratchpad, while Submit Verification requires reference source
@@ -4101,9 +4165,9 @@ def report_view(
             submit_fill_note_html = ""
 
             if not sandbox_enabled:
-                btn_run_disabled = 'disabled title="Run is unavailable on this demo" style="cursor: not-allowed; opacity: 0.5;"'
-                btn_run_fill_disabled = 'disabled title="Run is unavailable on this demo" style="cursor: not-allowed; opacity: 0.5;"'
-                run_note_html = '<div class="demo-run-note" style="font-family: \'IBM Plex Mono\', monospace; font-size: 0.6875rem; color: var(--text-tertiary); margin-top: 0.25rem;">Run is unavailable on this demo.</div>'
+                btn_run_disabled = 'disabled title="Code execution is turned off on this demo" style="cursor: not-allowed; opacity: 0.5;"'
+                btn_run_fill_disabled = 'disabled title="Code execution is turned off on this demo" style="cursor: not-allowed; opacity: 0.5;"'
+                run_note_html = ""
                 submit_fill_note_html = '<div class="demo-submit-note" style="font-family: \'IBM Plex Mono\', monospace; font-size: 0.6875rem; color: var(--text-tertiary); margin-top: 0.25rem;">No points are awarded on this demo.</div>'
 
                 if requires_execution:
@@ -4228,14 +4292,14 @@ def report_view(
             if has_any_scaffold:
                 fill_mode_btn_html = f"""
                 <button type="button" id="mode-btn-fill-{m_tier}" class="milestone-mode-tab-btn" onclick="switchMilestoneMode({m_tier}, 'fill')" style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.35rem 0.75rem; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; font-weight: 500; border-radius: 3px; border: none; cursor: pointer; transition: all 120ms ease; background: transparent; color: var(--text-secondary);">
-                    <span>🧩</span> Fill the Blanks
+                    <span>🧩</span> Fill the gaps
                 </button>
                 """
             else:
                 disable_note = html.escape(first_fill_file.get("reason") or "File contains only constants, type declarations, or exports with no function bodies to scaffold.")
                 fill_mode_btn_html = f"""
                 <button type="button" id="mode-btn-fill-{m_tier}" class="milestone-mode-tab-btn disabled" disabled title="{disable_note}" style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.35rem 0.75rem; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; font-weight: 500; border-radius: 3px; border: none; cursor: not-allowed; opacity: 0.45; background: transparent; color: var(--text-tertiary);">
-                    <span>🧩</span> Fill the Blanks <span class="tag" style="font-size: 0.6rem; padding: 0.05rem 0.3rem;">No Blanks</span>
+                    <span>🧩</span> Fill the gaps <span class="tag" style="font-size: 0.6rem; padding: 0.05rem 0.3rem;">No Blanks</span>
                 </button>
                 """
 
@@ -4252,6 +4316,11 @@ def report_view(
 
             reviewed_btn_text = "Reviewed &amp; Verified ✓" if attempt_status == "structurally_verified" else "Mark as Reviewed"
             read_intro_label = "Architecture Implementation" if is_showcase else "Read through this milestone's actual implementation"
+
+            if not has_git_history and "LOW" in m_conf_badge.upper():
+                conf_badge_html = ""
+            else:
+                conf_badge_html = _render_confidence_badge_with_tooltip(m_conf_badge)
 
             if is_showcase:
                 items_html += f"""
@@ -4273,7 +4342,7 @@ def report_view(
                         </div>
                         <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
                             {status_chip}
-                            {_render_confidence_badge_with_tooltip(m_conf_badge)}
+                            {conf_badge_html}
                         </div>
                     </div>
 
@@ -4336,7 +4405,7 @@ def report_view(
                         </div>
                         <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
                             {status_chip}
-                            {_render_confidence_badge_with_tooltip(m_conf_badge)}
+                            {conf_badge_html}
                         </div>
                     </div>
 
@@ -4366,15 +4435,15 @@ def report_view(
                         <div class="milestone-mode-switcher" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; border-bottom: 1px solid var(--hairline-soft); padding-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
                             <div style="display: flex; align-items: center; gap: 0.35rem; background: var(--panel-raised); border: 1px solid var(--hairline); border-radius: 4px; padding: 0.2rem;">
                                 <button type="button" id="mode-btn-guess-{m_tier}" class="milestone-mode-tab-btn active" onclick="switchMilestoneMode({m_tier}, 'guess')" style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.35rem 0.75rem; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; font-weight: 600; border-radius: 3px; border: none; cursor: pointer; transition: all 120ms ease; background: var(--panel); color: var(--brass); box-shadow: 0 1px 3px rgba(0,0,0,0.2);">
-                                    <span>✏️</span> Guess It
+                                    <span>✏️</span> Try it
                                 </button>
                                 {fill_mode_btn_html}
                                 <button type="button" id="mode-btn-read-{m_tier}" class="milestone-mode-tab-btn" onclick="switchMilestoneMode({m_tier}, 'read')" style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.35rem 0.75rem; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; font-weight: 500; border-radius: 3px; border: none; cursor: pointer; transition: all 120ms ease; background: transparent; color: var(--text-secondary);">
-                                    <span>📖</span> Just Read It
+                                    <span>📖</span> Read it
                                 </button>
                             </div>
                             <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--text-tertiary);">
-                                ENGAGEMENT MODE
+                                PRACTICE MODE
                             </div>
                         </div>
 
@@ -4602,7 +4671,7 @@ def report_view(
                             <!-- Task Instructions Banner -->
                             <div class="fill-instruction-banner" style="margin-bottom: 0.85rem; padding: 0.75rem 1rem; background: var(--panel-raised); border-left: 3px solid var(--teal); border-radius: 3px; font-family: 'IBM Plex Sans', sans-serif; font-size: 0.825rem; line-height: 1.5; color: var(--text-secondary);">
                                 <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.2rem; display: flex; align-items: center; gap: 0.35rem;">
-                                    <span>🧩</span> <strong>Fill the Blanks Instructions:</strong>
+                                    <span>🧩</span> <strong>Fill the gaps Instructions:</strong>
                                 </div>
                                 <div>
                                     Fill in the missing function/method implementations (<code style="color: var(--teal); background: var(--panel); padding: 0.1rem 0.3rem; border-radius: 2px;">pass</code> / <code style="color: var(--teal); background: var(--panel); padding: 0.1rem 0.3rem; border-radius: 2px;"># TODO</code> stubs) for <span class="mono" id="fill-target-filename-{m_tier}" style="color: var(--teal); font-weight: 600; font-size: 0.8rem; background: var(--panel); padding: 0.1rem 0.4rem; border-radius: 3px; border: 1px solid var(--hairline);">{first_fill_name}</span>. Signatures, docstrings, imports, and top-level definitions are preserved.
@@ -4744,7 +4813,7 @@ def report_view(
                     <h2 style="font-size: 1.45rem; font-weight: 500; margin-top: 0.15rem;">Step-by-Step Milestones &amp; Learning Guide</h2>
                 </div>
                 <div style="display: flex; align-items: center; gap: 0.5rem;">
-                    <span class="chip" id="narration-source-label"><span class="chip-dot brass"></span> {narration_label}</span>
+                    {narration_badge_html}
                     <span class="chip"><span class="chip-dot brass"></span> {len(milestones_data)} Milestones</span>
                 </div>
             </div>
@@ -4768,7 +4837,7 @@ def report_view(
                     <h2 style="font-size: 1.45rem; font-weight: 500; margin-top: 0.15rem;">Step-by-Step Milestones &amp; Learning Guide</h2>
                 </div>
                 <div style="display: flex; align-items: center; gap: 0.5rem;">
-                    <span class="chip" id="narration-source-label"><span class="chip-dot brass"></span> {narration_label}</span>
+                    {narration_badge_html}
                 </div>
             </div>
             <p style="color: var(--text-secondary); font-size: 0.85rem;">No structured milestone steps found in this report.</p>
@@ -5242,7 +5311,7 @@ def report_view(
             }} else if (gradingMethod === 'expected_output') {{
                 tierTag = '<span class="badge badge-amber" style="font-size: 0.65rem; letter-spacing: 0.04em;">TIER 2 // EXPECTED OUTPUT</span>';
             }} else if (gradingMethod === 'fill_the_blanks') {{
-                tierTag = '<span class="badge badge-teal" style="font-size: 0.65rem; letter-spacing: 0.04em;">TIER 3 // FILL THE BLANKS (SCOPED EVALUATION)</span>';
+                tierTag = '<span class="badge badge-teal" style="font-size: 0.65rem; letter-spacing: 0.04em;">TIER 3 // FILL THE GAPS (SCOPED EVALUATION)</span>';
             }}
 
             let banner = '';
@@ -6758,6 +6827,7 @@ def report_view(
     content = f"""
     <div style="max-width: 1040px; margin: 0 auto;">
         {showcase_banner_html}
+        {no_history_note_html}
         <!-- Top Dossier Navigation & Meta Bar -->
         <div style="margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
             <div>
@@ -6880,7 +6950,7 @@ def settings_view(
     user_avatar = sanitize_text(current_user.avatar_url) if current_user.avatar_url else ""
     username = sanitize_text(current_user.github_username or "archaeologist")
     email = sanitize_text(current_user.email or "No email synced")
-    created_at = sanitize_text(current_user.created_at.strftime("%Y-%m-%d %H:%M:%S UTC") if hasattr(current_user.created_at, "strftime") else str(current_user.created_at))
+    created_at = format_time_tag(current_user.created_at)
 
     pro_price_display = sanitize_text(
         pricing_details.get("price_display")
@@ -6941,7 +7011,7 @@ def settings_view(
             </div>
 
             <div style="background: var(--panel-raised); border: 1px solid var(--hairline); border-radius: 4px; padding: 1.25rem;">
-                <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.35rem;">Enterprise Code Validation Suite</div>
+                <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.35rem;">Test files</div>
                 <p style="color: var(--text-secondary); font-size: 0.85rem; line-height: 1.45; margin-bottom: 1rem;">
                     Your account has unlimited access to repository analysis and interactive dependency graphs.
                 </p>
@@ -6960,7 +7030,7 @@ def settings_view(
                 <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem;">
                     <div>
                         <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--brass); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;">
-                            ENTERPRISE CODE VALIDATION SUITE
+                            TEST FILES
                         </div>
                         <div style="display: flex; align-items: baseline; gap: 0.4rem; margin-top: 0.35rem;">
                             <span style="font-family: 'Newsreader', serif; font-size: 2.25rem; font-weight: 500; color: var(--text-primary);">{pro_price_display}</span>
@@ -7015,7 +7085,7 @@ def settings_view(
             <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem;">
                 <span class="chip-dot brass"></span>
                 <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--brass); text-transform: uppercase; letter-spacing: 0.05em;">
-                    INSTITUTIONAL LEDGER // SETTINGS
+                    ANALYSIS HISTORY // SETTINGS
                 </span>
             </div>
             <h1 style="font-size: 2.25rem; font-weight: 500; letter-spacing: -0.02em; margin-bottom: 0.4rem;">
@@ -7072,7 +7142,7 @@ def settings_view(
             <!-- Section 2: Visual Telemetry / Theme Matrix -->
             <div class="stratum-card" style="margin-bottom: 1.5rem;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
-                    <h2 style="font-size: 1.25rem; font-weight: 500;">Archival Visual Standard</h2>
+                    <h2 style="font-size: 1.25rem; font-weight: 500;">Theme</h2>
                     <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--text-tertiary);">RUNTIME: DATA-THEME</span>
                 </div>
                 <p style="color: var(--text-secondary); font-size: 0.85rem; line-height: 1.5; margin-bottom: 1.25rem;">
@@ -7112,9 +7182,9 @@ def settings_view(
                 </div>
 
                 <div style="display: flex; justify-content: space-between; align-items: center; background: var(--panel-raised); padding: 0.65rem 1rem; border-radius: 4px; font-size: 0.8125rem;">
-                    <span style="color: var(--text-secondary);">Hardware Synchronization:</span>
+                    <span style="color: var(--text-secondary);">Editor shortcuts:</span>
                     <button type="button" class="btn btn-sm btn-ghost" onclick="applyThemePreference('system')" style="font-size: 0.75rem;">
-                        Detect OS Scheme
+                        Detect my system
                     </button>
                 </div>
             </div>
@@ -7321,7 +7391,7 @@ def rewards_view(
         pts = e.points_awarded
         pts_color = "#10b981" if pts > 0 else ("#ef4444" if pts < 0 else "var(--text-tertiary)")
         pts_prefix = "+" if pts > 0 else ""
-        created_str = e.created_at.strftime("%Y-%m-%d %H:%M:%S UTC") if hasattr(e.created_at, "strftime") else str(e.created_at)[:19]
+        created_str = format_time_tag(e.created_at)
 
         ledger_rows += f"""
         <tr style="border-bottom: 1px solid var(--hairline-soft);">

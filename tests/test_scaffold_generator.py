@@ -316,7 +316,7 @@ func main() {
         file_path="src/main.go",
     )
     assert result_go["has_scaffold"] is False
-    assert result_go["reason"] == "Fill the Blanks mode is currently available for Python files. Try Guess It or Just Read It for this file instead."
+    assert result_go["reason"] == "Fill the gaps mode is currently available for Python files. Try Try it or Read it for this file instead."
     assert "Syntax error" not in (result_go["reason"] or "")
 
     # Test Rust file
@@ -327,7 +327,7 @@ func main() {
         file_path="src/lib.rs",
     )
     assert result_rs["has_scaffold"] is False
-    assert result_rs["reason"] == "Fill the Blanks mode is currently available for Python files. Try Guess It or Just Read It for this file instead."
+    assert result_rs["reason"] == "Fill the gaps mode is currently available for Python files. Try Try it or Read it for this file instead."
 
     # Test TypeScript file
     sample_ts_code = 'export function add(a: number, b: number): number { return a + b; }'
@@ -337,7 +337,7 @@ func main() {
         file_path="src/index.ts",
     )
     assert result_ts["has_scaffold"] is False
-    assert result_ts["reason"] == "Fill the Blanks mode is currently available for Python files. Try Guess It or Just Read It for this file instead."
+    assert result_ts["reason"] == "Fill the gaps mode is currently available for Python files. Try Try it or Read it for this file instead."
 
 
 def test_generate_scaffold_genuine_python_syntax_error_preserves_error():

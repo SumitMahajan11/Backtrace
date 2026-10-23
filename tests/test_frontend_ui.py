@@ -184,7 +184,7 @@ def test_dashboard_view_free_and_paid_tier_indicators(client, create_user):
     client.cookies.set("access_token", token)
     resp = client.get("/dashboard")
     assert resp.status_code == 200
-    assert "Root-Cause Analysis Ledger" in resp.text
+    assert "Analyze a repository" in resp.text
     assert "FREE TIER" in resp.text
     assert "0 / 5" in resp.text
     assert "Reconstruct Repository History" in resp.text
@@ -1270,7 +1270,9 @@ def test_dashboard_and_report_timestamps_include_seconds_for_same_minute_jobs(cl
     assert resp_report.status_code == 200
     report_html = resp_report.text
 
-    assert "SYNTHESIZED: 2026-09-23 10:15:12 UTC" in report_html
+    assert "SYNTHESIZED:" in report_html
+    assert 'title="2026-09-23 10:15:12 UTC"' in report_html
+    assert '<time datetime="2026-09-23T10:15:12+00:00"' in report_html
 
 
 # =========================================================================
@@ -1329,11 +1331,11 @@ def test_milestone_mode_switcher_renders_options(client, create_user, test_db):
     assert 'id="mode-btn-guess-0"' in html_text
     assert 'id="mode-btn-fill-0"' in html_text
     assert 'id="mode-btn-read-0"' in html_text
-    assert "Guess It" in html_text
-    assert "Fill the Blanks" in html_text
-    assert "Just Read It" in html_text
+    assert "Try it" in html_text
+    assert "Fill the gaps" in html_text
+    assert "Read it" in html_text
 
-    # Fill the Blanks is disabled
+    # Fill the gaps is disabled
     assert 'id="mode-btn-fill-0" class="milestone-mode-tab-btn disabled" disabled' in html_text
 
     # Workspaces
@@ -1833,7 +1835,7 @@ MAX_RETRIES = 5
 
     # 3. Milestone 0 Fill the Blanks Workspace structure
     assert 'id="workspace-fill-0"' in html_text
-    assert 'Fill the Blanks Instructions:' in html_text
+    assert 'Fill the gaps Instructions:' in html_text
     assert 'id="fill-target-filename-0"' in html_text
     assert 'math_ops.py' in html_text
     assert 'calculate_total' in html_text
@@ -1917,7 +1919,7 @@ func Helper() {
     # Milestone 0 should have disabled Fill the Blanks tab with clear non-Python tooltip
     assert 'id="mode-btn-fill-0"' in html_text
     assert 'disabled' in html_text
-    assert "Fill the Blanks mode is currently available for Python files. Try Guess It or Just Read It for this file instead." in html_text
+    assert "Fill the gaps mode is currently available for Python files. Try Try it or Read it for this file instead." in html_text
     assert "Syntax error" not in html_text
 
 

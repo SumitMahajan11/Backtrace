@@ -166,14 +166,14 @@ def test_milestone_page_banner_when_disabled_and_enabled(client, create_user, te
     assert resp.status_code == 200
     assert SANDBOX_DISABLED_BANNER_TEXT in resp.text
     assert "sandbox-disabled-banner" in resp.text
-    assert "Watch the video</a>" not in resp.text
+    assert "See the full flow in the video" not in resp.text
 
     # 2. When disabled with video URL
     monkeypatch.setenv("DEMO_VIDEO_URL", "https://youtube.com/watch?v=12345")
     resp_video = client.get(f"/report/{job_id}")
     assert resp_video.status_code == 200
     assert SANDBOX_DISABLED_BANNER_TEXT in resp_video.text
-    assert "Watch the video</a>" in resp_video.text
+    assert "See the full flow in the video.</a>" in resp_video.text
     assert 'href="https://youtube.com/watch?v=12345"' in resp_video.text
 
     # 3. When enabled: NO banner, NO video link, looks as before
@@ -191,7 +191,7 @@ def test_milestone_page_banner_when_disabled_and_enabled(client, create_user, te
 def test_run_button_disabled_state_and_notes(client, create_user, test_db, monkeypatch):
     """
     d) The Run button has the disabled attribute when disabled.
-       Also verifies the note under the button: 'Run is unavailable on this demo.'
+       The per-milestone note 'Run is unavailable on this demo.' has been removed in favor of the single banner.
     """
     SessionLocal, _ = test_db
     user = create_user(github_id=9902, username="run_button_user")
@@ -227,7 +227,7 @@ def test_run_button_disabled_state_and_notes(client, create_user, test_db, monke
         )
         job_id = job.id
 
-    # 1. When SANDBOX_ENABLED=false: Run button is disabled with note
+    # 1. When SANDBOX_ENABLED=false: Run button is disabled (per-milestone note removed)
     monkeypatch.setenv("SANDBOX_ENABLED", "false")
     resp = client.get(f"/report/{job_id}")
     assert resp.status_code == 200
@@ -235,7 +235,7 @@ def test_run_button_disabled_state_and_notes(client, create_user, test_db, monke
 
     # Check Run button has disabled attribute
     assert re.search(r'<button\s+[^>]*id="btn-run-0"[^>]*disabled', html) is not None
-    assert "Run is unavailable on this demo." in html
+    assert "Run is unavailable on this demo." not in html
 
     # 2. When SANDBOX_ENABLED=true: Run button is enabled, no note
     monkeypatch.setenv("SANDBOX_ENABLED", "true")

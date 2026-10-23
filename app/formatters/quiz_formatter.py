@@ -22,15 +22,17 @@ class QuizFormatter:
         # Question 1: Foundational Architecture
         if report.milestones:
             m0 = report.milestones[0]
+            m0_count = len(m0.files)
+            leaf_text = "This file is a leaf primitive" if m0_count == 1 else f"These {m0_count} files are leaf primitives"
             questions.append({
                 "id": "q_foundational",
                 "tier": m0.tier,
                 "question": f"Why should a developer begin reverse-engineering `{report.repo_name}` at Milestone {m0.tier} ({m0.title})?",
                 "options": [
-                    f"These {len(m0.files)} files are leaf primitives with 0 internal dependencies.",
-                    "These files contain the top-level CLI entry point.",
-                    "These files contain end-to-end integration tests.",
-                    "These files were the most recently edited in git history.",
+                    f"{leaf_text} with 0 internal dependencies.",
+                    "These files contain the top-level CLI entry point." if m0_count > 1 else "This file contains the top-level CLI entry point.",
+                    "These files contain end-to-end integration tests." if m0_count > 1 else "This file contains end-to-end integration tests.",
+                    "These files were the most recently edited in git history." if m0_count > 1 else "This file was the most recently edited in git history.",
                 ],
                 "correct_option_index": 0,
                 "explanation": f"Milestone 0 represents starting foundational files (files with no internal dependencies) that can be understood in isolation without prior knowledge of the rest of the codebase.",

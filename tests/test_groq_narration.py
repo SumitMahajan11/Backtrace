@@ -115,7 +115,7 @@ def test_groq_provider_timeout_fallback(sample_scored_result, caplog):
             result = engine.generate_narration(sample_scored_result, llm_provider=provider)
 
         assert result.source == "template"
-        assert get_narration_label(result.source) == "Step-by-step narration (template)"
+        assert get_narration_label(result.source) == "Step-by-step narration"
         assert len(result.steps) > 0
 
 
@@ -131,7 +131,7 @@ def test_groq_provider_429_fallback(sample_scored_result, caplog):
             result = engine.generate_narration(sample_scored_result, llm_provider=provider)
 
         assert result.source == "template"
-        assert get_narration_label(result.source) == "Step-by-step narration (template)"
+        assert get_narration_label(result.source) == "Step-by-step narration"
 
 
 def test_groq_provider_500_fallback(sample_scored_result, caplog):
@@ -146,7 +146,7 @@ def test_groq_provider_500_fallback(sample_scored_result, caplog):
             result = engine.generate_narration(sample_scored_result, llm_provider=provider)
 
         assert result.source == "template"
-        assert get_narration_label(result.source) == "Step-by-step narration (template)"
+        assert get_narration_label(result.source) == "Step-by-step narration"
 
 
 def test_groq_provider_malformed_json_fallback(sample_scored_result, caplog):
@@ -161,7 +161,7 @@ def test_groq_provider_malformed_json_fallback(sample_scored_result, caplog):
             result = engine.generate_narration(sample_scored_result, llm_provider=provider)
 
         assert result.source == "template"
-        assert get_narration_label(result.source) == "Step-by-step narration (template)"
+        assert get_narration_label(result.source) == "Step-by-step narration"
 
 
 def test_groq_provider_missing_key_fallback(sample_scored_result, monkeypatch, caplog):
@@ -174,7 +174,7 @@ def test_groq_provider_missing_key_fallback(sample_scored_result, monkeypatch, c
         result = engine.generate_narration(sample_scored_result, llm_provider=provider)
 
     assert result.source == "template"
-    assert get_narration_label(result.source) == "Step-by-step narration (template)"
+    assert get_narration_label(result.source) == "Step-by-step narration"
 
 
 def test_groq_provider_empty_reply_fallback(sample_scored_result, caplog):
@@ -195,7 +195,7 @@ def test_groq_provider_empty_reply_fallback(sample_scored_result, caplog):
                 result = engine.generate_narration(sample_scored_result, llm_provider=provider)
 
             assert result.source == "template"
-            assert get_narration_label(result.source) == "Step-by-step narration (template)"
+            assert get_narration_label(result.source) == "Step-by-step narration"
 
 
 def test_no_api_key_or_prompt_logged(sample_scored_result, caplog):
@@ -234,7 +234,7 @@ def test_narration_label_text_for_both_sources(mock_user):
     """Prove: Label text for both sources in helper and UI rendering."""
     # 1. Pure helper test
     assert get_narration_label("llm") == "LLM Step-by-Step Narration"
-    assert get_narration_label("template") == "Step-by-step narration (template)"
+    assert get_narration_label("template") == "Step-by-step narration"
 
     # 2. Progress View test for LLM source
     job_llm = {
@@ -247,7 +247,7 @@ def test_narration_label_text_for_both_sources(mock_user):
     }
     progress_html_llm = progress_view(job_llm, mock_user)
     assert "LLM Step-by-Step Narration" in progress_html_llm
-    assert "Step-by-step narration (template)" not in progress_html_llm
+    assert "(template)" not in progress_html_llm.lower()
 
     # 3. Progress View test for Template source
     job_tpl = {
@@ -259,7 +259,8 @@ def test_narration_label_text_for_both_sources(mock_user):
         "graph_data": {"narration_source": "template"},
     }
     progress_html_tpl = progress_view(job_tpl, mock_user)
-    assert "Step-by-step narration (template)" in progress_html_tpl
+    assert "Step-by-step narration" in progress_html_tpl
+    assert "(template)" not in progress_html_tpl.lower()
     assert "LLM Step-by-Step Narration" not in progress_html_tpl
 
     # 4. Report View test for LLM source
@@ -280,7 +281,7 @@ def test_narration_label_text_for_both_sources(mock_user):
         current_user=mock_user,
     )
     assert "LLM Step-by-Step Narration" in report_html_llm
-    assert "Step-by-step narration (template)" not in report_html_llm
+    assert "(template)" not in report_html_llm.lower()
 
     # 5. Report View test for Template source
     report_md_tpl = (
@@ -299,7 +300,8 @@ def test_narration_label_text_for_both_sources(mock_user):
         quiz_data=None,
         current_user=mock_user,
     )
-    assert "Step-by-step narration (template)" in report_html_tpl
+    # Template badge is removed from rendered pages
+    assert "(template)" not in report_html_tpl.lower()
     assert "LLM Step-by-Step Narration" not in report_html_tpl
 
 
@@ -348,12 +350,12 @@ def test_partial_failure_gives_source_template(sample_scored_result):
     # Call 2 fails in the same run -> partial failure across run's provider calls
     res2 = engine.generate_narration(sample_scored_result, llm_provider=fail_provider)
     assert res2.source == "template"
-    assert get_narration_label(res2.source) == "Step-by-step narration (template)"
+    assert get_narration_label(res2.source) == "Step-by-step narration"
 
     # Call 3 in same run: fail-fast activated, also returns template
     res3 = engine.generate_narration(sample_scored_result, llm_provider=ok_provider)
     assert res3.source == "template"
-    assert get_narration_label(res3.source) == "Step-by-step narration (template)"
+    assert get_narration_label(res3.source) == "Step-by-step narration"
 
 
 def test_all_calls_succeed_gives_source_llm(sample_scored_result):
@@ -421,7 +423,7 @@ def test_honest_narration_one_milestone_fell_back(sample_scored_result):
     res = engine.generate_narration(sample_scored_result, llm_provider=fallback_one_milestone_provider)
     # Because Milestone 2 fell back, overall source must be honest: "template"
     assert res.source == "template"
-    assert get_narration_label(res.source) == "Step-by-step narration (template)"
+    assert get_narration_label(res.source) == "Step-by-step narration"
 
 
 def test_honest_narration_call_failed(sample_scored_result):
@@ -432,7 +434,7 @@ def test_honest_narration_call_failed(sample_scored_result):
     engine = NarrationEngine()
     res = engine.generate_narration(sample_scored_result, llm_provider=failing_provider)
     assert res.source == "template"
-    assert get_narration_label(res.source) == "Step-by-step narration (template)"
+    assert get_narration_label(res.source) == "Step-by-step narration"
 
 
 def test_time_budget_switches_to_templates(sample_scored_result):
@@ -453,7 +455,7 @@ def test_time_budget_switches_to_templates(sample_scored_result):
     # Provider should be skipped due to exhausted time budget
     assert called is False
     assert result.source == "template"
-    assert get_narration_label(result.source) == "Step-by-step narration (template)"
+    assert get_narration_label(result.source) == "Step-by-step narration"
 
 
 def test_llm_provider_unset_makes_no_httpx_call(monkeypatch):

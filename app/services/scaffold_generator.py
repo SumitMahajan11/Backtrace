@@ -125,8 +125,8 @@ class ScaffoldGenerator:
 
     PYTHON_EXTENSIONS: Set[str] = {".py", ".pyi", ".pyw"}
     NON_PYTHON_REASON: str = (
-        "Fill the Blanks mode is currently available for Python files. "
-        "Try Guess It or Just Read It for this file instead."
+        "Fill the gaps mode is currently available for Python files. "
+        "Try Try it or Read it for this file instead."
     )
 
     @classmethod

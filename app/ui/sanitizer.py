@@ -99,8 +99,11 @@ def render_safe_markdown(markdown_text: Optional[str]) -> str:
     if not markdown_text:
         return "<p class='text-muted'>No report content available.</p>"
 
+    # Strip HTML comments (e.g. <!-- narration_source: ... -->) from rendered output
+    clean_text = re.sub(r"<!--.*?-->", "", markdown_text, flags=re.DOTALL)
+
     # 1. Escape all raw HTML entities first (Defense in depth)
-    escaped = html.escape(markdown_text, quote=True)
+    escaped = html.escape(clean_text, quote=True)
 
     # 2. Extract and protect code blocks
     code_blocks = []

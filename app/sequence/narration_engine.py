@@ -181,7 +181,7 @@ class NarrationEngine:
             disclosure_lines = [
                 f"**Confidence & Verification Calibration ({total_files} Scored Files):**",
                 f"- **Verified History & Clear Structure ({summary.high_pct}% High Confidence):** "
-                f"These files have clean acyclic dependencies and were ordered using verified Git commit timestamps (`--follow`).",
+                f"These files have clean acyclic dependencies and were ordered based on git history.",
             ]
 
             if summary.medium_pct > 0.0:
@@ -424,9 +424,10 @@ class NarrationEngine:
             dominant_domain = top_dom if (top_count / max(len(files_in_tier), 1)) >= 0.5 else "mixed"
 
             # Derive pedagogical title and explanation
+            has_history = bool(scored_result.repo_confidence_summary and scored_result.repo_confidence_summary.history_available)
             title = self._derive_step_title(tier_idx, total_tiers, files_in_tier, is_cyclic, domain_groups, dominant_domain)
             explanation = self._derive_step_explanation(
-                tier_idx, total_tiers, files_in_tier, is_cyclic, domain_groups, dominant_domain
+                tier_idx, total_tiers, files_in_tier, is_cyclic, domain_groups, dominant_domain, has_history=has_history
             )
 
             steps.append(
@@ -534,6 +535,7 @@ class NarrationEngine:
         is_cyclic: bool,
         domain_groups: Dict[str, List[str]],
         dominant_domain: str,
+        has_history: bool = True,
     ) -> str:
         """Derives a pedagogical narrative explaining the architectural role, domain breakdown, and confidence provenance."""
         file_count = len(files)
@@ -548,8 +550,8 @@ class NarrationEngine:
 
         # Build confidence provenance sentence
         prov_parts = []
-        if confs.get("high", 0) > 0:
-            prov_parts.append(f"{confs['high']}/{file_count} files verified via Git history (`--follow`)")
+        if confs.get("high", 0) > 0 and has_history:
+            prov_parts.append(f"{confs['high']}/{file_count} files based on git history")
         if confs.get("medium", 0) > 0:
             prov_parts.append(f"{confs['medium']}/{file_count} ordered using estimated patterns")
         if confs.get("low", 0) > 0:
@@ -573,8 +575,9 @@ class NarrationEngine:
         domain_section = ("\n" + "\n".join(domain_lines)) if domain_lines else ""
 
         if tier_idx == 0:
+            files_phrase = "This file has zero internal dependencies" if file_count == 1 else f"These {file_count} files have zero internal dependencies"
             return (
-                f"**Role:** Start by implementing {sample_files}. These {file_count} files have zero internal dependencies "
+                f"**Role:** Start by implementing {sample_files}. {files_phrase} "
                 f"of their own, serving as independent foundation primitives or self-contained starting points.{domain_section}\n"
                 f"**Confidence & Provenance:** {provenance_str}."
             )
@@ -601,8 +604,9 @@ class NarrationEngine:
                     f"integration behaviors, and error handling for features implemented in earlier tiers."
                 )
             else:
+                consume_phrase = "This file consumes the modules built in earlier tiers" if file_count == 1 else f"These {file_count} files consume the modules built in earlier tiers"
                 role_intro = (
-                    f"Implement the test suite files ({sample_files}). These {file_count} files consume the modules built in earlier tiers "
+                    f"Implement the test suite files ({sample_files}). {consume_phrase} "
                     f"to validate subsystem contracts, error handling, and behavioral regressions."
                 )
             return (
@@ -625,8 +629,9 @@ class NarrationEngine:
                     f"integrations, and sample setups built upon earlier tiers."
                 )
             else:
+                demo_phrase = "This file demonstrates practical" if file_count == 1 else f"These {file_count} files demonstrate practical"
                 role_intro = (
-                    f"Implement reference application examples ({sample_files}). These {file_count} files demonstrate practical "
+                    f"Implement reference application examples ({sample_files}). {demo_phrase} "
                     f"usage patterns and application setups built upon earlier tiers."
                 )
             return (
@@ -640,8 +645,9 @@ class NarrationEngine:
                 f"**Confidence & Provenance:** {provenance_str}."
             )
         else:
+            tier_phrase = "This file builds upon the foundational contracts established in previous tiers" if file_count == 1 else f"These {file_count} files build upon the foundational contracts established in previous tiers"
             return (
-                f"**Role:** Implement {sample_files}. These {file_count} files build upon the foundational contracts established in previous tiers, "
+                f"**Role:** Implement {sample_files}. {tier_phrase}, "
                 f"introducing intermediate utilities, service handlers, and domain components.{domain_section}\n"
                 f"**Confidence & Provenance:** {provenance_str}."
             )
