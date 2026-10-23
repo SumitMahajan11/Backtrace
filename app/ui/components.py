@@ -2809,16 +2809,16 @@ def _render_grouped_fill_chips(
 
         open_attr = "" if should_collapse else " open"
         html_parts.append(
-            f'<details{open_attr} class="fill-chip-group" style="margin-bottom: 0.4rem; background: var(--panel); border: 1px solid var(--hairline); border-radius: 4px; padding: 0.35rem 0.6rem;">\n'
-            f'<summary style="cursor: pointer; font-family: \'IBM Plex Mono\', monospace; font-size: 0.72rem; font-weight: 600; color: var(--text-secondary); user-select: none; display: flex; align-items: center; justify-content: space-between;">\n'
-            f'<span>{icon} {group_title} <span style="opacity: 0.7; font-weight: normal; font-size: 0.6875rem;">({count_label})</span></span>\n'
-            f'<span style="font-size: 0.65rem; color: var(--text-tertiary);">▾</span>\n'
-            f'</summary>\n'
-            f'<div style="display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.4rem; padding-top: 0.35rem; border-top: 1px solid var(--hairline-soft);">\n{chips_html}</div>\n'
+            f'<details{open_attr} class="fill-chip-group" style="margin-bottom: 0.4rem; background: var(--panel); border: 1px solid var(--hairline); border-radius: 4px; padding: 0.35rem 0.6rem;">'
+            f'<summary style="cursor: pointer; font-family: \'IBM Plex Mono\', monospace; font-size: 0.72rem; font-weight: 600; color: var(--text-secondary); user-select: none; display: flex; align-items: center; justify-content: space-between;">'
+            f'<span>{icon} {group_title} <span style="opacity: 0.7; font-weight: normal; font-size: 0.6875rem;">({count_label})</span></span>'
+            f'<span style="font-size: 0.65rem; color: var(--text-tertiary);">▾</span>'
+            f'</summary>'
+            f'<div style="display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.4rem; padding-top: 0.35rem; border-top: 1px solid var(--hairline-soft);">{chips_html}</div>'
             f'</details>'
         )
 
-    return "\n".join(html_parts)
+    return "".join(html_parts)
 
 
 def _render_server_diff_html(
@@ -2908,9 +2908,7 @@ def _render_server_diff_html(
             fill_sections_html += f"""
             <div style="background: rgba(244, 63, 94, 0.06); border: 1px solid rgba(244, 63, 94, 0.25); border-radius: 4px; padding: 0.45rem 0.75rem; margin-bottom: 0.4rem;">
                 <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--crimson); font-weight: 600; margin-bottom: 0.35rem;">UNIMPLEMENTED / STUB BLANKS:</div>
-                <div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">
-                    {stub_pills}
-                </div>
+                <div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">{stub_pills}</div>
             </div>
             """
         return f"""
@@ -2964,18 +2962,14 @@ def _render_server_diff_html(
         sections_html += f"""
         <div style="background: rgba(244, 63, 94, 0.06); border: 1px solid rgba(244, 63, 94, 0.25); border-radius: 4px; padding: 0.45rem 0.75rem; margin-bottom: 0.4rem;">
             <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--crimson); font-weight: 600; margin-bottom: 0.35rem;">MISSING EXPECTED SYMBOLS ({len(missing_syms)}):</div>
-            <div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">
-                {missing_pills}
-            </div>
+            <div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">{missing_pills}</div>
         </div>
         """
     if extra_pills:
         sections_html += f"""
         <div style="background: var(--panel); border: 1px solid var(--hairline); border-radius: 4px; padding: 0.45rem 0.75rem; margin-bottom: 0.4rem;">
             <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--text-tertiary); font-weight: 600; margin-bottom: 0.35rem;">EXTRA / AUXILIARY SYMBOLS ({len(extra_syms)}):</div>
-            <div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">
-                {extra_pills}
-            </div>
+            <div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">{extra_pills}</div>
         </div>
         """
 
@@ -5243,12 +5237,12 @@ def report_view(
                 }});
 
                 const openAttr = shouldCollapse ? '' : ' open';
-                html += '<details' + openAttr + ' class="fill-chip-group" style="margin-bottom: 0.4rem; background: var(--panel); border: 1px solid var(--hairline); border-radius: 4px; padding: 0.35rem 0.6rem;"> ' +
-                    '<summary style="cursor: pointer; font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.72rem; font-weight: 600; color: var(--text-secondary); user-select: none; display: flex; align-items: center; justify-content: space-between;"> ' +
+                html += '<details' + openAttr + ' class="fill-chip-group" style="margin-bottom: 0.4rem; background: var(--panel); border: 1px solid var(--hairline); border-radius: 4px; padding: 0.35rem 0.6rem;">' +
+                    '<summary style="cursor: pointer; font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.72rem; font-weight: 600; color: var(--text-secondary); user-select: none; display: flex; align-items: center; justify-content: space-between;">' +
                         '<span>' + icon + ' ' + groupTitle + ' <span style="opacity: 0.7; font-weight: normal; font-size: 0.6875rem;">(' + groupCountLabel + ')</span></span>' +
                         '<span style="font-size: 0.65rem; color: var(--text-tertiary);">▾</span>' +
                     '</summary>' +
-                    '<div style="display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.4rem; padding-top: 0.35rem; border-top: 1px solid var(--hairline-soft);"> ' +
+                    '<div style="display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.4rem; padding-top: 0.35rem; border-top: 1px solid var(--hairline-soft);">' +
                         chipsHtml +
                     '</div>' +
                 '</details>';
@@ -5269,9 +5263,9 @@ def report_view(
 
             let banner = '';
             if (isVerified) {{
-                banner = '<div class="diff-banner success" style="background: rgba(45, 212, 191, 0.12); border: 1px solid var(--teal-border); color: var(--teal); padding: 0.65rem 0.85rem; border-radius: 4px; font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.75rem; font-weight: 600; margin-bottom: 0.65rem; display: flex; justify-content: space-between; align-items: center; gap: 0.4rem; flex-wrap: wrap;"> <div style="display: flex; align-items: center; gap: 0.4rem;"> <span>✓</span> VERIFIED: Milestone requirements fulfilled</div> ' + tierTag + '</div>';
+                banner = '<div class="diff-banner success" style="background: rgba(45, 212, 191, 0.12); border: 1px solid var(--teal-border); color: var(--teal); padding: 0.65rem 0.85rem; border-radius: 4px; font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.75rem; font-weight: 600; margin-bottom: 0.65rem; display: flex; justify-content: space-between; align-items: center; gap: 0.4rem; flex-wrap: wrap;"><div style="display: flex; align-items: center; gap: 0.4rem;"><span>✓</span> VERIFIED: Milestone requirements fulfilled</div>' + tierTag + '</div>';
             }} else {{
-                banner = '<div class="diff-banner failure" style="background: rgba(244, 63, 94, 0.12); border: 1px solid rgba(244, 63, 94, 0.35); color: var(--crimson); padding: 0.65rem 0.85rem; border-radius: 4px; font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.75rem; font-weight: 600; margin-bottom: 0.65rem; display: flex; justify-content: space-between; align-items: center; gap: 0.4rem; flex-wrap: wrap;"> <div style="display: flex; align-items: center; gap: 0.4rem;"> <span>⚠</span> VERIFICATION GAPS: Requirements not yet satisfied</div> ' + tierTag + '</div>';
+                banner = '<div class="diff-banner failure" style="background: rgba(244, 63, 94, 0.12); border: 1px solid rgba(244, 63, 94, 0.35); color: var(--crimson); padding: 0.65rem 0.85rem; border-radius: 4px; font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.75rem; font-weight: 600; margin-bottom: 0.65rem; display: flex; justify-content: space-between; align-items: center; gap: 0.4rem; flex-wrap: wrap;"><div style="display: flex; align-items: center; gap: 0.4rem;"><span>⚠</span> VERIFICATION GAPS: Requirements not yet satisfied</div>' + tierTag + '</div>';
             }}
 
             const diff = (result && result.diff) ? result.diff : (result || {{}});
@@ -5305,19 +5299,19 @@ def report_view(
                 if (implementedPills) {{
                     const isAllDone = (implementedCount === blankedCount && blankedCount > 0);
                     const fillSummary = implementedCount + '/' + blankedCount + ' functions completed' + (isAllDone ? ' ✓' : '');
-                    fillSectionsHtml += '<details class="matched-symbols-collapse" style="background: var(--panel); border: 1px solid var(--teal-border); border-radius: 4px; padding: 0.45rem 0.75rem; margin-bottom: 0.4rem;"> ' +
-                        '<summary style="cursor: pointer; font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.72rem; font-weight: 600; color: var(--teal); display: flex; align-items: center; justify-content: space-between; user-select: none;"> ' +
+                    fillSectionsHtml += '<details class="matched-symbols-collapse" style="background: var(--panel); border: 1px solid var(--teal-border); border-radius: 4px; padding: 0.45rem 0.75rem; margin-bottom: 0.4rem;">' +
+                        '<summary style="cursor: pointer; font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.72rem; font-weight: 600; color: var(--teal); display: flex; align-items: center; justify-content: space-between; user-select: none;">' +
                             '<span>IMPLEMENTED BLANKS (' + fillSummary + '):</span>' +
                             '<span style="font-size: 0.6875rem; opacity: 0.85; font-weight: normal;">View list ▾</span>' +
                         '</summary>' +
-                        '<div style="display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.5rem; padding-top: 0.4rem; border-top: 1px solid var(--hairline-soft);"> ' + implementedPills + '</div>' +
+                        '<div style="display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.5rem; padding-top: 0.4rem; border-top: 1px solid var(--hairline-soft);">' + implementedPills + '</div>' +
                     '</details>';
                 }}
                 if (stubPills) {{
-                    fillSectionsHtml += '<div style="background: rgba(244, 63, 94, 0.06); border: 1px solid rgba(244, 63, 94, 0.25); border-radius: 4px; padding: 0.45rem 0.75rem; margin-bottom: 0.4rem;"> <div style="font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.6875rem; color: var(--crimson); font-weight: 600; margin-bottom: 0.35rem;">UNIMPLEMENTED / STUB BLANKS:</div> <div style="display: flex; flex-wrap: wrap; gap: 0.35rem;"> ' + stubPills + '</div></div>';
+                    fillSectionsHtml += '<div style="background: rgba(244, 63, 94, 0.06); border: 1px solid rgba(244, 63, 94, 0.25); border-radius: 4px; padding: 0.45rem 0.75rem; margin-bottom: 0.4rem;"><div style="font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.6875rem; color: var(--crimson); font-weight: 600; margin-bottom: 0.35rem;">UNIMPLEMENTED / STUB BLANKS:</div><div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">' + stubPills + '</div></div>';
                 }}
 
-                return banner + errHtml + '<div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem;"> ' + fillSectionsHtml + '</div>';
+                return banner + errHtml + '<div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem;">' + fillSectionsHtml + '</div>';
             }}
 
             // Standard Guess It AST Diff rendering
@@ -5356,22 +5350,22 @@ def report_view(
 
             let sectionsHtml = '';
             if (presentPills) {{
-                sectionsHtml += '<details class="matched-symbols-collapse" style="background: var(--panel); border: 1px solid var(--teal-border); border-radius: 4px; padding: 0.45rem 0.75rem; margin-bottom: 0.4rem;"> ' +
-                    '<summary style="cursor: pointer; font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.72rem; font-weight: 600; color: var(--teal); display: flex; align-items: center; justify-content: space-between; user-select: none;"> ' +
+                sectionsHtml += '<details class="matched-symbols-collapse" style="background: var(--panel); border: 1px solid var(--teal-border); border-radius: 4px; padding: 0.45rem 0.75rem; margin-bottom: 0.4rem;">' +
+                    '<summary style="cursor: pointer; font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.72rem; font-weight: 600; color: var(--teal); display: flex; align-items: center; justify-content: space-between; user-select: none;">' +
                         '<span>PRESENT &amp; MATCHED SYMBOLS (' + matchSummary + '):</span>' +
                         '<span style="font-size: 0.6875rem; opacity: 0.85; font-weight: normal;">View list ▾</span>' +
                     '</summary>' +
-                    '<div style="display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.5rem; padding-top: 0.4rem; border-top: 1px solid var(--hairline-soft);"> ' + presentPills + '</div>' +
+                    '<div style="display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.5rem; padding-top: 0.4rem; border-top: 1px solid var(--hairline-soft);">' + presentPills + '</div>' +
                 '</details>';
             }}
             if (missingPills) {{
-                sectionsHtml += '<div style="background: rgba(244, 63, 94, 0.06); border: 1px solid rgba(244, 63, 94, 0.25); border-radius: 4px; padding: 0.45rem 0.75rem; margin-bottom: 0.4rem;"> <div style="font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.6875rem; color: var(--crimson); font-weight: 600; margin-bottom: 0.35rem;">MISSING EXPECTED SYMBOLS (' + missing.length + '):</div> <div style="display: flex; flex-wrap: wrap; gap: 0.35rem;"> ' + missingPills + '</div></div>';
+                sectionsHtml += '<div style="background: rgba(244, 63, 94, 0.06); border: 1px solid rgba(244, 63, 94, 0.25); border-radius: 4px; padding: 0.45rem 0.75rem; margin-bottom: 0.4rem;"><div style="font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.6875rem; color: var(--crimson); font-weight: 600; margin-bottom: 0.35rem;">MISSING EXPECTED SYMBOLS (' + missing.length + '):</div><div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">' + missingPills + '</div></div>';
             }}
             if (extraPills) {{
-                sectionsHtml += '<div style="background: var(--panel); border: 1px solid var(--hairline); border-radius: 4px; padding: 0.45rem 0.75rem; margin-bottom: 0.4rem;"> <div style="font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.6875rem; color: var(--text-tertiary); font-weight: 600; margin-bottom: 0.35rem;">EXTRA / AUXILIARY SYMBOLS (' + extra.length + '):</div> <div style="display: flex; flex-wrap: wrap; gap: 0.35rem;"> ' + extraPills + '</div></div>';
+                sectionsHtml += '<div style="background: var(--panel); border: 1px solid var(--hairline); border-radius: 4px; padding: 0.45rem 0.75rem; margin-bottom: 0.4rem;"><div style="font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.6875rem; color: var(--text-tertiary); font-weight: 600; margin-bottom: 0.35rem;">EXTRA / AUXILIARY SYMBOLS (' + extra.length + '):</div><div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">' + extraPills + '</div></div>';
             }}
 
-            return banner + errHtml + '<div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem;"> ' + sectionsHtml + '</div>';
+            return banner + errHtml + '<div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem;">' + sectionsHtml + '</div>';
         }}
 
         function renderConsoleHtmlInJs(exec) {{
@@ -5397,16 +5391,16 @@ def report_view(
                 content = '<div style="color: var(--text-tertiary); font-style: italic;">(Process completed with no output)</div>';
             }}
 
-            return '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; border-bottom: 1px solid var(--hairline); padding-bottom: 0.4rem;"> ' +
-                '<div style="display: flex; align-items: center; gap: 0.5rem;"> ' +
-                    '<span class="chip-dot ' + dotColor + '"> </span>' +
+            return '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; border-bottom: 1px solid var(--hairline); padding-bottom: 0.4rem;">' +
+                '<div style="display: flex; align-items: center; gap: 0.5rem;">' +
+                    '<span class="chip-dot ' + dotColor + '"></span>' +
                     '<span style="font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.72rem; font-weight: 600; color: var(--text-primary); text-transform: uppercase;">Execution Console</span>' +
                     '<span class="badge ' + exitBadgeClass + '" style="font-size: 0.65rem;">' + exitBadgeText + '</span>' +
                     (execMs ? '<span class="tag" style="font-size: 0.65rem;">' + execMs + '</span>' : '') +
                 '</div>' +
                 '<span style="font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.65rem; color: var(--text-tertiary);">UNMETERED PLAYGROUND</span>' +
-            '</div> ' +
-            '<pre style="background: #0d0e12; padding: 0.75rem; border-radius: 3px; border: 1px solid var(--hairline-soft); font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.78rem; line-height: 1.45; overflow-x: auto; margin: 0;"> <code>' + content + '</code></pre>';
+            '</div>' +
+            '<pre style="background: #0d0e12; padding: 0.75rem; border-radius: 3px; border: 1px solid var(--hairline-soft); font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.78rem; line-height: 1.45; overflow-x: auto; margin: 0;"><code>' + content + '</code></pre>';
         }}
 
         async function runMilestoneCode(jobId, tier) {{
