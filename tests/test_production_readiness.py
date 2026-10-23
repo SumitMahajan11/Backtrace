@@ -179,3 +179,28 @@ def test_stripe_webhook_rejects_invalid_cryptographic_signature():
         )
     assert "Invalid Stripe webhook signature" in str(exc_info.value)
     assert exc_info.value.status_code == 400
+
+
+def test_postgres_engine_configures_pool_pre_ping_and_pool_recycle(monkeypatch):
+    """
+    Validates that when DATABASE_URL points to PostgreSQL (such as Neon),
+    the SQLAlchemy engine is configured with pool_pre_ping=True to discard stale
+    connections after idle compute suspension, and pool_recycle=1800 (or DB_POOL_RECYCLE).
+    """
+    import importlib
+    from sqlalchemy.engine import Engine
+    import app.db.session as session_module
+
+    neon_url = "postgresql://user:pass@ep-neon-123.us-east-2.aws.neon.tech/neondb?sslmode=require"
+    monkeypatch.setenv("DATABASE_URL", neon_url)
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+
+    try:
+        reloaded = importlib.reload(session_module)
+        assert isinstance(reloaded.engine, Engine)
+        assert getattr(reloaded.engine.pool, "_pre_ping", False) is True
+        assert getattr(reloaded.engine.pool, "_recycle", 0) == 1800
+    finally:
+        monkeypatch.undo()
+        importlib.reload(session_module)
