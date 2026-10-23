@@ -27,7 +27,7 @@ target_metadata = Base.metadata
 
 # Override sqlalchemy.url from environment if present
 if DATABASE_URL:
-    config.set_main_option("sqlalchemy.url", DATABASE_URL)
+    config.set_main_option("sqlalchemy.url", DATABASE_URL.replace("%", "%%"))
 
 
 def run_migrations_offline() -> None:
@@ -70,14 +70,30 @@ def run_migrations_online() -> None:
         poolclass=pool.NullPool,
     )
 
-    with connectable.connect() as connection:
-        context.configure(
-            connection=connection,
-            target_metadata=target_metadata,
-        )
+    try:
+        with connectable.connect() as connection:
+            context.configure(
+                connection=connection,
+                target_metadata=target_metadata,
+            )
 
-        with context.begin_transaction():
-            context.run_migrations()
+            with context.begin_transaction():
+                context.run_migrations()
+    except Exception as exc:
+        err_msg = str(exc)
+        if 'could not translate host name "postgres"' in err_msg or "host name \"postgres\"" in err_msg:
+            sys.stderr.write(
+                "\n"
+                "=" * 72 + "\n"
+                "❌ DATABASE CONNECTION ERROR:\n"
+                "Alembic attempted to connect to host 'postgres', which is a Docker-internal\n"
+                "service name and cannot be resolved on your local host.\n\n"
+                "If you intended to run migrations against Neon PostgreSQL, set DATABASE_URL:\n"
+                "  $env:DATABASE_URL = 'postgresql://user:pass@ep-xyz.neon.tech/neondb?sslmode=require'\n"
+                "  python -m alembic upgrade head\n"
+                "=" * 72 + "\n\n"
+            )
+        raise
 
 
 if context.is_offline_mode():
