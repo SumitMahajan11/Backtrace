@@ -179,6 +179,7 @@ def test_production_accepts_non_placeholder_custom_domains():
         STRIPE_SECRET_KEY="sk_test_123",
         STRIPE_WEBHOOK_SECRET="whsec_123",
         STRIPE_PRICE_ID_PRO="price_123",
+        DATABASE_URL="postgresql://user:pass@ep-neon-123.us-east-2.aws.neon.tech/neondb?sslmode=require",
         DEBUG=False,
     )
     assert s.GITHUB_REDIRECT_URI == valid_uri
@@ -207,6 +208,7 @@ def test_production_accepts_non_placeholder_custom_domains():
         STRIPE_SECRET_KEY="sk_test_123",
         STRIPE_WEBHOOK_SECRET="whsec_123",
         STRIPE_PRICE_ID_PRO="price_123",
+        DATABASE_URL="postgresql://user:pass@ep-neon-123.us-east-2.aws.neon.tech/neondb?sslmode=require",
         DEBUG=False,
     )
     assert s_fallback.GITHUB_REDIRECT_URI == "https://myexample.com/cb"
@@ -224,6 +226,7 @@ def test_production_accepts_render_callback_and_supports_frontend_redirect_alias
         STRIPE_SECRET_KEY="sk_test_123",
         STRIPE_WEBHOOK_SECRET="whsec_123",
         STRIPE_PRICE_ID_PRO="price_123",
+        DATABASE_URL="postgresql://user:pass@ep-neon-123.us-east-2.aws.neon.tech/neondb?sslmode=require",
         DEBUG=False,
     )
     assert s.GITHUB_REDIRECT_URI == render_callback
@@ -238,6 +241,7 @@ def test_production_accepts_render_callback_and_supports_frontend_redirect_alias
         STRIPE_SECRET_KEY="sk_test_123",
         STRIPE_WEBHOOK_SECRET="whsec_123",
         STRIPE_PRICE_ID_PRO="price_123",
+        DATABASE_URL="postgresql://user:pass@ep-neon-123.us-east-2.aws.neon.tech/neondb?sslmode=require",
         DEBUG=False,
     )
     assert s_alias.GITHUB_REDIRECT_URI == render_callback

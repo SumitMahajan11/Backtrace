@@ -206,6 +206,13 @@ class Settings(BaseSettings):
         if self.DEBUG:
             errors.append("DEBUG mode must be disabled (False) in production")
 
+        # 5. Database URL (Production must use a persistent PostgreSQL database, not SQLite or memory)
+        db_url = (self.DATABASE_URL or "").strip().lower()
+        if not db_url or db_url.startswith("sqlite") or ":memory:" in db_url:
+            errors.append(
+                "DATABASE_URL cannot be SQLite or memory database in production. A production PostgreSQL URL is required."
+            )
+
         if errors:
             raise ValueError(
                 "Production configuration validation failed:\n - " + "\n - ".join(errors)

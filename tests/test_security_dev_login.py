@@ -37,6 +37,7 @@ def test_production_environment_gates_dev_login_and_debug_env(monkeypatch):
     monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_live_mock_prod_key_123456789012345")
     monkeypatch.setenv("STRIPE_WEBHOOK_SECRET", "whsec_mock_prod_webhook_secret_1234567890")
     monkeypatch.setenv("STRIPE_PRICE_ID_PRO", "price_mock_prod_price_id_1234567890")
+    monkeypatch.setenv("DATABASE_URL", "postgresql://mock:mock@localhost:5432/mock?sslmode=require")
     monkeypatch.setenv("DEBUG", "False")
 
     get_settings.cache_clear()
@@ -152,14 +153,16 @@ def test_dev_login_returns_404_under_default_settings(tmp_path):
     import sys
 
     code = (
+        "from unittest.mock import patch\n"
         "from fastapi.testclient import TestClient\n"
         "from app.core.config import get_settings\n"
-        "from app.main import app\n"
-        "settings = get_settings()\n"
-        "assert settings.ENVIRONMENT == 'production', f'Expected production, got {settings.ENVIRONMENT}'\n"
-        "with TestClient(app) as client:\n"
-        "    resp = client.get('/auth/dev-login?user_id=1')\n"
-        "    assert resp.status_code == 404\n"
+        "with patch('app.main.init_db'):\n"
+        "    from app.main import app\n"
+        "    settings = get_settings()\n"
+        "    assert settings.ENVIRONMENT == 'production', f'Expected production, got {settings.ENVIRONMENT}'\n"
+        "    with TestClient(app) as client:\n"
+        "        resp = client.get('/auth/dev-login?user_id=1')\n"
+        "        assert resp.status_code == 404\n"
     )
 
     env = dict(os.environ)
@@ -176,6 +179,7 @@ def test_dev_login_returns_404_under_default_settings(tmp_path):
     env.setdefault("STRIPE_SECRET_KEY", "sk_live_mock_prod_key_123456789012345")
     env.setdefault("STRIPE_WEBHOOK_SECRET", "whsec_mock_prod_webhook_secret_1234567890")
     env.setdefault("STRIPE_PRICE_ID_PRO", "price_mock_prod_price_id_1234567890")
+    env["DATABASE_URL"] = "postgresql://mock:mock@localhost:5432/mock?sslmode=require"
     env.setdefault("DEBUG", "False")
 
     res = subprocess.run([sys.executable, "-c", code], cwd=str(tmp_path), env=env, capture_output=True, text=True)
