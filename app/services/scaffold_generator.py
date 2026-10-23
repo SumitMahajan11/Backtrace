@@ -186,6 +186,74 @@ class ScaffoldGenerator:
         return cls._generate_python_scaffold(code, file_path, is_redacted=is_redacted)
 
     @classmethod
+    def generate_try_it_stub(
+        cls,
+        code: str,
+        language: str = "python",
+        file_path: Optional[str] = None,
+    ) -> str:
+        """
+        Generates stub for 'Try it' mode (Part B):
+        - Keeps import lines, def and class signatures.
+        - Replaces function, method, and class bodies with `pass  # TODO`.
+        - For non-Python files, returns first 5 lines plus '// your turn'.
+        Never leaks the full implementation.
+        """
+        if not code or not code.strip():
+            return ""
+
+        if not cls.is_python_file(language=language, file_path=file_path):
+            lines = code.splitlines()
+            first_5 = lines[:5]
+            first_5.append("// your turn")
+            return "\n".join(first_5)
+
+        try:
+            tree = ast.parse(code)
+        except SyntaxError:
+            kept = []
+            for line in code.splitlines():
+                s = line.strip()
+                if s.startswith(("import ", "from ")):
+                    kept.append(line)
+                elif s.startswith(("def ", "async def ", "class ")):
+                    kept.append(line)
+                    indent = len(line) - len(line.lstrip())
+                    kept.append(" " * (indent + 4) + "pass  # TODO")
+            return "\n".join(kept)
+
+        class StubTransformer(ast.NodeTransformer):
+            def visit_FunctionDef(self, node: ast.FunctionDef) -> ast.AST:
+                node.body = [ast.Pass()]
+                return node
+
+            def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> ast.AST:
+                node.body = [ast.Pass()]
+                return node
+
+            def visit_ClassDef(self, node: ast.ClassDef) -> ast.AST:
+                new_body = []
+                for stmt in node.body:
+                    if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                        new_body.append(self.visit(stmt))
+                if not new_body:
+                    new_body = [ast.Pass()]
+                node.body = new_body
+                return node
+
+        filtered_body = []
+        for stmt in tree.body:
+            if isinstance(stmt, (ast.Import, ast.ImportFrom)):
+                filtered_body.append(stmt)
+            elif isinstance(stmt, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+                filtered_body.append(StubTransformer().visit(stmt))
+        tree.body = filtered_body
+
+        out = ast.unparse(tree)
+        out = re.sub(r"(?m)^(\s*)pass$", r"\1pass  # TODO", out)
+        return out
+
+    @classmethod
     def _generate_python_scaffold(
         cls,
         code: str,

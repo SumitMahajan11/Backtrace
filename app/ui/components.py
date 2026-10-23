@@ -3909,21 +3909,14 @@ def report_view(
                     ref_code_rendered = html.escape(SOURCE_NOT_AVAILABLE_MESSAGE)
                 ref_style = "display: block;"
 
-            # Hint button text & state
-            if hint_level == 0:
-                hint_btn_text = "Request Architectural Hint"
-                hint_btn_disabled = ""
-            elif hint_level == 1:
-                hint_btn_text = "Request Next Hint (Hint 2)"
-                hint_btn_disabled = ""
-            else:
-                hint_btn_text = "Hints Unlocked (2/2)"
-                hint_btn_disabled = "disabled"
+            # Hint button text & state (Part C: unified "Hint" label)
+            hint_btn_text = "Hint"
+            hint_btn_disabled = "disabled" if hint_level >= 2 else ""
 
             hint_btn_display = "display: inline-flex;"
             reveal_btn_display = "display: inline-flex;" if is_active_attempt else "display: none;"
             locked_notice_display = "display: none;"
-            reveal_btn_text = "Reference Revealed" if impl_revealed else "Reveal Implementation"
+            reveal_btn_text = "Solution Shown" if impl_revealed else "Show solution"
 
             # Pre-rendered Diff output if attempt has previous submitted code
             diff_initial_display = "display: block;" if (attempt and attempt.submitted_code) else "display: none;"
@@ -4108,6 +4101,7 @@ def report_view(
                     fill_files_data.append({
                         "path": r_file["path"],
                         "filename": r_file["filename"],
+                        "try_it_stub": "",
                         "scaffold_code": r_file["content"],
                         "has_scaffold": False,
                         "blanked_functions": [],
@@ -4125,11 +4119,17 @@ def report_view(
                     file_path=r_file["path"],
                     is_redacted=f_is_redacted,
                 )
+                try_it_stub = ScaffoldGenerator.generate_try_it_stub(
+                    code=r_file["content"],
+                    language="python",
+                    file_path=r_file["path"],
+                )
                 if s_res.get("has_scaffold", False):
                     has_any_scaffold = True
                 fill_files_data.append({
                     "path": r_file["path"],
                     "filename": r_file["filename"],
+                    "try_it_stub": try_it_stub,
                     "scaffold_code": s_res.get("scaffold_code", r_file["content"]),
                     "has_scaffold": s_res.get("has_scaffold", False),
                     "blanked_functions": s_res.get("blanked_functions", []),
@@ -4158,15 +4158,15 @@ def report_view(
 
             btn_run_fill_disabled = ""
             btn_submit_fill_disabled = ""
-            btn_submit_label = "Submit Verification"
-            btn_submit_fill_label = "Submit Verification"
+            btn_submit_label = "Check answer"
+            btn_submit_fill_label = "Check answer"
             run_note_html = ""
             submit_note_html = ""
             submit_fill_note_html = ""
 
             if not sandbox_enabled:
-                btn_run_disabled = 'disabled title="Code execution is turned off on this demo" style="cursor: not-allowed; opacity: 0.5;"'
-                btn_run_fill_disabled = 'disabled title="Code execution is turned off on this demo" style="cursor: not-allowed; opacity: 0.5;"'
+                btn_run_disabled = 'disabled title="Code execution is turned off on this demo" style="display: none;"'
+                btn_run_fill_disabled = 'disabled title="Code execution is turned off on this demo" style="display: none;"'
                 run_note_html = ""
                 submit_fill_note_html = '<div class="demo-submit-note" style="font-family: \'IBM Plex Mono\', monospace; font-size: 0.6875rem; color: var(--text-tertiary); margin-top: 0.25rem;">No points are awarded on this demo.</div>'
 
@@ -4174,18 +4174,20 @@ def report_view(
                     btn_submit_disabled = 'disabled title="Grading this milestone needs code execution, which is off on this demo" style="cursor: not-allowed; opacity: 0.5;"'
                     submit_note_html = '<div class="demo-submit-note" style="font-family: \'IBM Plex Mono\', monospace; font-size: 0.6875rem; color: var(--text-tertiary); margin-top: 0.25rem;">Grading this milestone needs code execution, which is off on this demo.</div>'
                 else:
-                    btn_submit_label = "Check structure"
-                    submit_note_html = '<div class="demo-submit-note" style="font-family: \'IBM Plex Mono\', monospace; font-size: 0.6875rem; color: var(--text-tertiary); margin-top: 0.25rem;">Structure check only. No points are awarded on this demo.</div>'
+                    btn_submit_label = "Check answer"
+                    submit_note_html = '<div class="demo-submit-note" style="font-family: \'IBM Plex Mono\', monospace; font-size: 0.6875rem; color: var(--text-tertiary); margin-top: 0.25rem;">Check structure: Structure check only. No points are awarded on this demo.</div>'
                     if not has_any_real_source:
                         btn_submit_disabled = 'disabled title="Reference source unavailable" style="cursor: not-allowed; opacity: 0.45;"'
 
 
-            # Starter signature from real file content (ScaffoldGenerator convention)
+            # Starter signature from real file content (ScaffoldGenerator convention: Try it stub)
             starter_code = ""
             if fill_files_data and fill_files_data[0].get("has_real_source", True):
-                starter_code = fill_files_data[0].get("scaffold_code", "")
+                starter_code = fill_files_data[0].get("try_it_stub", "")
             active_editor_code = submitted_code if submitted_code else starter_code
             escaped_code = html.escape(active_editor_code)
+
+            hints_unlocked_fill_note = "Hints unlocked &bull; Only blanked functions evaluated" if hint_level > 0 else "Only blanked functions evaluated"
 
             # Starter code fallback notice
             starter_notice_display = "display: flex;" if (fill_files_data and not fill_files_data[0].get("has_scaffold", False) and not submitted_code) else "display: none;"
@@ -4555,7 +4557,7 @@ def report_view(
                                         💡 <span id="btn-hint-text-{m_tier}">{hint_btn_text}</span>
                                     </button>
 
-                                    <!-- Reveal Implementation Action Button (Separate, explicitly distinct action) -->
+                                    <!-- Show Solution Action Button (Part C: tertiary text link) -->
                                     <button type="button" id="btn-reveal-{m_tier}" onclick="openRevealConfirmModal('{job_id}', {m_tier})" class="btn btn-sm btn-ghost" style="{reveal_btn_display} font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--text-tertiary); text-decoration: underline;">
                                         <span id="btn-reveal-text-{m_tier}">{reveal_btn_text}</span>
                                     </button>
@@ -4604,26 +4606,26 @@ def report_view(
                                 </div>
                             </div>
 
-                            <!-- Confirmation Screen for Reveal Implementation -->
+                            <!-- Confirmation Screen for Show Solution (Part C) -->
                             <div id="reveal-confirm-box-{m_tier}" class="reveal-confirm-box" style="display: none; margin-top: 0.85rem; padding: 1rem 1.25rem; background: var(--panel); border: 1px solid var(--crimson); border-radius: 4px; box-shadow: 0 4px 16px rgba(0,0,0,0.2);">
                                 <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
                                     <div style="display: flex; align-items: center; gap: 0.4rem;">
                                         <span class="chip-dot crimson"></span>
                                         <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; font-weight: 600; color: var(--crimson); text-transform: uppercase; letter-spacing: 0.05em;">
-                                            Reference Reveal Gate
+                                            Show Solution Gate
                                         </span>
                                     </div>
                                     <span class="badge badge-crimson" style="font-size: 0.65rem;">PERMANENT ACTION</span>
                                 </div>
                                 <p style="font-size: 0.875rem; color: var(--text-primary); line-height: 1.5; margin-bottom: 1rem;">
-                                    {HintEngine.CONFIRM_REVEAL_COPY}
+                                    Show the solution? This ends your attempt.
                                 </p>
                                 <div style="display: flex; align-items: center; gap: 0.65rem;">
                                     <button type="button" class="btn btn-sm btn-secondary" onclick="cancelRevealConfirm({m_tier})">
                                         Cancel
                                     </button>
                                     <button type="button" id="btn-confirm-reveal-action-{m_tier}" class="btn btn-sm btn-danger" onclick="confirmAndRevealImplementation('{job_id}', {m_tier})">
-                                        Confirm &amp; Reveal Reference Implementation
+                                        Show
                                     </button>
                                 </div>
                             </div>
@@ -4750,13 +4752,13 @@ def report_view(
                                         💡 <span id="btn-hint-fill-text-{m_tier}">{hint_btn_text}</span>
                                     </button>
 
-                                    <!-- Reveal Implementation Action Button -->
+                                    <!-- Show Solution Action Button -->
                                     <button type="button" id="btn-reveal-fill-{m_tier}" onclick="openRevealConfirmModal('{job_id}', {m_tier}, 'fill')" class="btn btn-sm btn-ghost" style="display: inline-flex; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--text-tertiary); text-decoration: underline;">
                                         <span id="btn-reveal-fill-text-{m_tier}">{reveal_btn_text}</span>
                                     </button>
                                 </div>
-                                <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--text-tertiary);">
-                                    Hints unlocked &bull; Only blanked functions evaluated
+                                <div id="hints-unlocked-fill-note-{m_tier}" style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--text-tertiary);">
+                                    {hints_unlocked_fill_note}
                                 </div>
                             </div>
 
@@ -5724,6 +5726,9 @@ def report_view(
             if (btn) btn.disabled = true;
             if (spinner) spinner.style.display = 'inline-flex';
 
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000);
+
             try {{
                 const resp = await fetch('/api/attempts/' + jobId + '/' + tier, {{
                     method: 'POST',
@@ -5734,7 +5739,8 @@ def report_view(
                         submitted_code: submittedCode,
                         mode: 'fill',
                         target_file: targetFile
-                    }})
+                    }}),
+                    signal: controller.signal
                 }});
 
                 if (!resp.ok) {{
@@ -5742,29 +5748,31 @@ def report_view(
                         render503Notice(diffPanel, DEMO_VIDEO_URL);
                         return;
                     }}
-                    const errData = await resp.json().catch(() => ({{}}));
-                    const msg = errData.detail || ('HTTP ' + resp.status + ' error occurred');
                     if (diffPanel) {{
                         diffPanel.style.display = 'block';
                         diffPanel.textContent = '';
                         const errBox = document.createElement('div');
                         errBox.style.cssText = "color: var(--crimson); font-family: 'IBM Plex Mono', monospace; font-size: 0.8125rem;";
-                        errBox.textContent = 'Verification Error: ' + msg;
+                        errBox.textContent = "Couldn't check your answer. Try again.";
                         diffPanel.appendChild(errBox);
                     }}
                     return;
                 }}
 
                 const data = await resp.json();
+                const passed = (data.passed !== undefined) ? Boolean(data.passed) : (data.verification ? Boolean(data.verification.passed || data.verification.structurally_verified) : false);
                 const ver = data.verification || data;
-                const isVerified = (ver.structurally_verified !== undefined) ? ver.structurally_verified : (ver.is_verified || (data.status === 'structurally_verified'));
+                const isVerified = (ver.structurally_verified !== undefined) ? ver.structurally_verified : (ver.is_verified || (data.status === 'structurally_verified') || passed);
                 const diff = ver;
                 const err = ver.error_message || ver.error || ver.grading_error;
                 const gradingMethod = data.grading_method || (ver && ver.grading_method) || 'fill_the_blanks';
 
                 if (diffPanel) {{
                     diffPanel.style.display = 'block';
-                    diffPanel.innerHTML = renderDiffHtmlInJs(diff, isVerified, err, gradingMethod);
+                    const feedbackBanner = passed
+                        ? '<div class="fill-feedback-banner correct" style="margin-bottom: 0.75rem; padding: 0.6rem 0.85rem; background: rgba(20, 184, 166, 0.1); border-left: 3px solid var(--teal); border-radius: 3px; font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.8125rem; font-weight: 600; color: var(--teal); display: flex; align-items: center; gap: 0.4rem;"><span>✓</span> Correct</div>'
+                        : '<div class="fill-feedback-banner incorrect" style="margin-bottom: 0.75rem; padding: 0.6rem 0.85rem; background: rgba(239, 68, 68, 0.1); border-left: 3px solid var(--crimson); border-radius: 3px; font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.8125rem; font-weight: 600; color: var(--crimson); display: flex; align-items: center; gap: 0.4rem;"><span>✗</span> Not quite, try again</div>';
+                    diffPanel.innerHTML = feedbackBanner + renderDiffHtmlInJs(diff, isVerified, err, gradingMethod);
                 }}
 
                 // Render Sandbox Execution Result if returned
@@ -5798,9 +5806,10 @@ def report_view(
                 console.error('Fill submission failed', e);
                 if (diffPanel) {{
                     diffPanel.style.display = 'block';
-                    diffPanel.innerHTML = '<div style="color: var(--crimson); font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.8125rem;">Network Error: ' + escapeHtml(e.message) + '</div>';
+                    diffPanel.innerHTML = '<div style="color: var(--crimson); font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.8125rem;">Couldn\\'t check your answer. Try again.</div>';
                 }}
             }} finally {{
+                clearTimeout(timeoutId);
                 if (btn) btn.disabled = false;
                 if (spinner) spinner.style.display = 'none';
             }}
@@ -5893,12 +5902,12 @@ def report_view(
                     }}
                 }});
 
-                if (level === 1) {{
-                    if (hintBtnText) hintBtnText.textContent = 'Request Next Hint (Hint 2)';
-                    if (hintFillBtnText) hintFillBtnText.textContent = 'Request Next Hint (Hint 2)';
-                }} else if (level >= 2) {{
-                    if (hintBtnText) hintBtnText.textContent = 'Hints Unlocked (2/2)';
-                    if (hintFillBtnText) hintFillBtnText.textContent = 'Hints Unlocked (2/2)';
+                if (hintBtnText) hintBtnText.textContent = 'Hint';
+                if (hintFillBtnText) hintFillBtnText.textContent = 'Hint';
+
+                const fillNote = document.getElementById('hints-unlocked-fill-note-' + tier);
+                if (fillNote) {{
+                    fillNote.innerHTML = 'Hints unlocked &bull; Only blanked functions evaluated';
                 }}
             }} catch(e) {{
                 console.error('Failed to retrieve hint', e);
@@ -5957,10 +5966,10 @@ def report_view(
                 }}
 
                 if (revealBtnText) {{
-                    revealBtnText.textContent = 'Reference Revealed';
+                    revealBtnText.textContent = 'Show solution';
                 }}
                 if (revealFillBtnText) {{
-                    revealFillBtnText.textContent = 'Reference Revealed';
+                    revealFillBtnText.textContent = 'Show solution';
                 }}
             }} catch(e) {{
                 console.error('Failed to reveal implementation', e);
@@ -6125,12 +6134,12 @@ def report_view(
                 targetNameEl.textContent = filePath;
             }}
 
-            // Restore draft for the newly selected file (defaulting to starter signature scaffold if no draft yet)
+            // Restore draft for the newly selected file (defaulting to starter signature stub if no draft yet)
             let newDraft = window.guessFileDrafts[tier][fileIdx];
             if (newDraft === undefined) {{
                 const fileData = (window.fillFilesData && window.fillFilesData[tier] && window.fillFilesData[tier][fileIdx]) ? window.fillFilesData[tier][fileIdx] : null;
-                if (fileData && fileData.scaffold_code && fileData.has_real_source !== false) {{
-                    newDraft = fileData.scaffold_code;
+                if (fileData && fileData.try_it_stub && fileData.has_real_source !== false) {{
+                    newDraft = fileData.try_it_stub;
                 }} else {{
                     newDraft = '';
                 }}

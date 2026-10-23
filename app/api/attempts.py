@@ -327,7 +327,10 @@ def submit_milestone_attempt(
         )
         points_award_data = award_res.to_dict()
 
+    passed = bool(grading_result.get("passed", new_status == "structurally_verified"))
+
     return {
+        "passed": passed,
         "attempt": _serialize_attempt(attempt, current_user.id, job_id, milestone_tier),
         "verification": verification_result,
         "execution": exec_result,
