@@ -207,7 +207,7 @@ def test_postgres_engine_configures_pool_pre_ping_and_pool_recycle(tmp_path):
     env.pop("PYTEST_CURRENT_TEST", None)
     repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     current_pythonpath = env.get("PYTHONPATH", "")
-    env["PYTHONPATH"] = f"{repo_root};{current_pythonpath}" if current_pythonpath else repo_root
+    env["PYTHONPATH"] = f"{repo_root}{os.pathsep}{current_pythonpath}" if current_pythonpath else repo_root
 
     res = subprocess.run([sys.executable, "-c", code], cwd=str(tmp_path), env=env, capture_output=True, text=True)
     assert res.returncode == 0, f"Subprocess failed with code {res.returncode}:\nstdout: {res.stdout}\nstderr: {res.stderr}"

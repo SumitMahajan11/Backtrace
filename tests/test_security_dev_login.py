@@ -169,7 +169,7 @@ def test_dev_login_returns_404_under_default_settings(tmp_path):
     env.pop("ENVIRONMENT", None)
     repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     current_pythonpath = env.get("PYTHONPATH", "")
-    env["PYTHONPATH"] = f"{repo_root};{current_pythonpath}" if current_pythonpath else repo_root
+    env["PYTHONPATH"] = f"{repo_root}{os.pathsep}{current_pythonpath}" if current_pythonpath else repo_root
 
     # Ensure production validations succeed so app can boot
     env.setdefault("GITHUB_CLIENT_ID", "mock_gh_client_id")
