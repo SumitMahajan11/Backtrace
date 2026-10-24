@@ -119,7 +119,7 @@ def test_schema_subscriptions_and_usage_tables(test_db):
         assert "processed_at" in webhook_cols
 
 
-def test_billing_checkout_authenticated(client, test_db):
+def test_billing_checkout_authenticated(client, test_db, billing_on):
     """
     Acceptance Criteria: Authenticated user can create a hosted Stripe Checkout Session.
     Returns checkout URL without touching raw card data (Zero-PCI).
@@ -151,7 +151,7 @@ def test_billing_checkout_authenticated(client, test_db):
         assert kwargs["customer_email"] == "buyer@test.com"
 
 
-def test_billing_portal_authenticated_existing_customer(client, test_db):
+def test_billing_portal_authenticated_existing_customer(client, test_db, billing_on):
     """
     Acceptance Criteria: Subscribed user can access Stripe Customer Portal for self-serve management.
     """
@@ -177,7 +177,7 @@ def test_billing_portal_authenticated_existing_customer(client, test_db):
         mock_create.assert_called_once_with(customer="cus_existing_999", return_url="http://localhost:3000/dashboard")
 
 
-def test_billing_portal_no_customer_rejected(client, test_db):
+def test_billing_portal_no_customer_rejected(client, test_db, billing_on):
     """
     Acceptance Criteria: Non-subscribed user attempting to open Customer Portal receives HTTP 400.
     """
@@ -193,7 +193,7 @@ def test_billing_portal_no_customer_rejected(client, test_db):
     assert "No active Stripe customer record found" in resp.json()["detail"]
 
 
-def test_webhook_invalid_signature_rejected(client, monkeypatch):
+def test_webhook_invalid_signature_rejected(client, monkeypatch, billing_on):
     """
     Acceptance Criteria: Webhook with invalid or missing Stripe-Signature is rejected with HTTP 400.
     """
@@ -212,7 +212,7 @@ def test_webhook_invalid_signature_rejected(client, monkeypatch):
     assert "Invalid Stripe webhook signature" in resp_bad.json()["detail"]
 
 
-def test_webhook_checkout_session_completed_flow(client, test_db, monkeypatch):
+def test_webhook_checkout_session_completed_flow(client, test_db, monkeypatch, billing_on):
     """
     Acceptance Criteria: Real/simulated checkout.session.completed webhook activates user subscription.
     """
@@ -254,7 +254,7 @@ def test_webhook_checkout_session_completed_flow(client, test_db, monkeypatch):
         assert sub.status == "active"
 
 
-def test_webhook_subscription_updated_and_deleted(client, test_db, monkeypatch):
+def test_webhook_subscription_updated_and_deleted(client, test_db, monkeypatch, billing_on):
     """
     Acceptance Criteria: Subscription updates (past_due) and cancellations (deleted) are reflected in DB.
     """
@@ -311,7 +311,7 @@ def test_webhook_subscription_updated_and_deleted(client, test_db, monkeypatch):
         assert sub.status == "canceled"
 
 
-def test_webhook_idempotent_dedup_no_double_apply(client, test_db, monkeypatch):
+def test_webhook_idempotent_dedup_no_double_apply(client, test_db, monkeypatch, billing_on):
     """
     Acceptance Criteria: Sending the same Stripe webhook event ID twice is safely deduplicated
     and does not duplicate state or database entries.
@@ -449,7 +449,7 @@ def test_billing_status_endpoint(client, test_db):
     assert data["is_quota_exceeded"] is False
 
 
-def test_redirect_checkout_fulfillment_synchronous_upgrade(client, test_db, monkeypatch):
+def test_redirect_checkout_fulfillment_synchronous_upgrade(client, test_db, monkeypatch, billing_on):
     """
     Acceptance Criteria: Landing on /dashboard?session_id=... synchronously fulfills the checkout session
     and upgrades the user to Pro immediately without waiting for a webhook.
@@ -477,9 +477,9 @@ def test_redirect_checkout_fulfillment_synchronous_upgrade(client, test_db, monk
             headers={"Authorization": f"Bearer {token}"},
         )
         assert resp.status_code == 200
-        # Should render PRO TIER in HTML response immediately
-        assert "PRO TIER" in resp.text
-        assert "UNLIMITED ANALYSIS JOBS" in resp.text
+        # Should render unlimited analyses in HTML response immediately
+        assert "Unlimited analyses used this month" in resp.text
+        assert "Upgrade to Pro" not in resp.text
 
     # Verify DB subscription state is active and tier is paid
     with SessionLocal() as db_session:

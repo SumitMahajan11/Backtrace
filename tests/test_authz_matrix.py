@@ -189,6 +189,13 @@ def test_authz_matrix_routes(client, owner_user, other_user, test_db):
     ]
 
     for method, path, is_html_redirect in routes_to_test:
+        if "retry" in path:
+            with SessionLocal() as s:
+                AnalysisJobRepository.update_job_status(s, job_id, status="failed")
+        else:
+            with SessionLocal() as s:
+                AnalysisJobRepository.update_job_status(s, job_id, status="completed")
+
         # 1. Anonymous Caller
         client.cookies.clear()
         if method == "GET":

@@ -128,7 +128,7 @@ def nav_shell(
     active_route: str = "",
     billing_status: Optional[Dict[str, Any]] = None,
 ) -> str:
-    """Render the persistent Archival Dossier navigation header shell."""
+    """Render the persistent navigation header shell."""
     sun_icon_svg = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide-sun"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>'
     theme_toggle_html = f"""
         <button id="theme-toggle" class="theme-toggle-btn" onclick="toggleTheme()" type="button" aria-label="Switch to light theme" title="Switch to light theme">
@@ -176,7 +176,7 @@ def nav_shell(
             tier_tag = """
             <div class="tag" id="nav-tier-tag" style="display: inline-flex; align-items: center; gap: 0.35rem;">
                 <span class="chip-dot brass"></span>
-                <span style="font-family: var(--font-mono); font-size: 13px; font-weight: 600; color: var(--accent);">PRO</span>
+                <span style="font-family: var(--font-mono); font-size: 13px; font-weight: 600; color: var(--accent);">Pro</span>
             </div>
             """
         else:
@@ -185,8 +185,8 @@ def nav_shell(
             tier_tag = f"""
             <div class="tag" id="nav-tier-tag" style="display: inline-flex; align-items: center; gap: 0.35rem;">
                 <span class="chip-dot brass"></span>
-                <span style="font-family: var(--font-mono); font-size: 13px; font-weight: 600; color: var(--accent);">FREE TIER ({usage} / {limit})</span>
-                <!-- FREE ({usage}/{limit}) -->
+                <span style="font-family: var(--font-mono); font-size: 13px; font-weight: 600; color: var(--accent);">Free ({usage} / {limit})</span>
+                <!-- Free ({usage}/{limit}) -->
             </div>
             """
 
@@ -196,8 +196,10 @@ def nav_shell(
     rewards_aria = 'aria-current="page"' if rewards_active else ''
 
     rewards_nav_link = ""
+    rewards_dropdown_link = ""
     if rewards_enabled():
         rewards_nav_link = f'\n                <a href="/rewards" class="nav-link {rewards_active}" id="nav-link-rewards" data-path="rewards" {rewards_aria}>Rewards & Badges</a>'
+        rewards_dropdown_link = f'<a href="/rewards" class="dropdown-item" id="nav-dropdown-rewards" style="display: flex; align-items: center; gap: 8px; padding: 8px 14px; font-size: 13px; color: var(--text); text-decoration: none;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="7"></circle><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline></svg>Rewards &amp; Badges</a>'
 
     return f"""
     <header class="nav-shell">
@@ -227,6 +229,14 @@ def nav_shell(
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
                     </button>
                     <div class="dropdown-menu" id="user-dropdown-menu" style="display: none; position: absolute; right: 0; top: calc(100% + 6px); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); min-width: 170px; box-shadow: 0 8px 24px rgba(0,0,0,0.3); z-index: 1000; padding: 6px 0;">
+                        <div class="user-menu-mobile-links" style="display: none;">
+                            <a href="/dashboard" class="dropdown-item" id="nav-dropdown-dashboard" style="display: flex; align-items: center; gap: 8px; padding: 8px 14px; font-size: 13px; color: var(--text); text-decoration: none;">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                                Dashboard
+                            </a>
+                            {rewards_dropdown_link}
+                            <div style="height: 1px; background: var(--border); margin: 4px 0;"></div>
+                        </div>
                         <a href="/settings" class="dropdown-item" id="nav-dropdown-settings" style="display: flex; align-items: center; gap: 8px; padding: 8px 14px; font-size: 13px; color: var(--text); text-decoration: none;">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
                             Settings
@@ -1471,7 +1481,7 @@ def showcase_view(
 
 
 def privacy_view(current_user: Optional[UserModel] = None) -> str:
-    """Render the public Privacy Policy page adhering to Archival Dossier tokens."""
+    """Render the public Privacy Policy page."""
     try:
         from app.core.config import get_settings
         cfg = get_settings()
@@ -1510,17 +1520,31 @@ def privacy_view(current_user: Optional[UserModel] = None) -> str:
                 <section>
                     <h2 style="font-size: 1.25rem; color: var(--text); margin-bottom: 0.5rem; font-weight: 600;">How long data is kept</h2>
                     <p>
-                        Repository file text is purged automatically after 30 days (showcase repositories are retained). Synthesized reports, dependency graphs, milestone attempts, and quiz scores are retained until you request deletion.
+                        Repository file text is deleted automatically after 30 days (showcase repos are kept). Reports, graphs, your submitted milestone code and run output are kept until you ask for deletion.
                     </p>
                 </section>
 
                 <section>
-                    <h2 style="font-size: 1.25rem; color: var(--text); margin-bottom: 0.5rem; font-weight: 600;">How to delete your data</h2>
+                    <h2 style="font-size: 1.25rem; color: var(--text); margin-bottom: 0.5rem; font-weight: 600;">Who processes your code</h2>
+                    <p>
+                        Analysis algorithms parse structural abstract syntax trees (AST), imports, and symbol exports locally in sandbox environments. When AI explanations are requested, code summaries are processed strictly via enterprise API endpoints without model training.
+                    </p>
+                </section>
+
+                <section>
+                    <h2 style="font-size: 1.25rem; color: var(--text); margin-bottom: 0.5rem; font-weight: 600;">GitHub permissions</h2>
+                    <p>
+                        Backtrace only requests minimal read access to your public GitHub profile and verified email address for authentication. We never request write permissions to your repositories.
+                    </p>
+                </section>
+
+                <section>
+                    <h2 style="font-size: 1.25rem; color: var(--text); margin-bottom: 0.5rem; font-weight: 600;">Deleting your data</h2>
                     <p style="margin-bottom: 0.75rem;">
                         You have complete control over your account. You can export or permanently delete all your data at any time:
                     </p>
                     <p style="margin-bottom: 0.75rem;">
-                        Navigate to your <a href="/settings" style="color: var(--success); text-decoration: underline; font-weight: 500;">Settings</a> and click the <strong>Delete my account</strong> button. After typing your username to confirm, Backtrace permanently deletes your user profile, analysis jobs, milestone attempts, quiz results, points history, and active sessions.
+                        Navigate to your <a href="/settings" style="color: var(--success); text-decoration: underline; font-weight: 500;">Settings</a> and click the <strong>Delete my account</strong> button. To delete your data, open an issue or contact support if you need manual assistance.
                     </p>
                 </section>
 
@@ -1553,7 +1577,7 @@ def support_view(current_user: Optional[UserModel] = None) -> str:
         <div class="stratum-card" style="padding: 2.5rem 2.25rem;">
             <div style="margin-bottom: 2rem; border-bottom: 1px solid var(--border); padding-bottom: 1.25rem;">
                 <div style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--accent); ">
-                    HELP // ARCHIVE
+                    Help & Support
                 </div>
                 <h1 style="font-size: 2rem; font-weight: 500; margin-top: 0.25rem; letter-spacing: -0.02em;">
                     Support &amp; Assistance
@@ -1602,7 +1626,7 @@ def support_view(current_user: Optional[UserModel] = None) -> str:
 
 
 def pricing_view(current_user: Optional[UserModel] = None) -> str:
-    """Render the public Pricing and Limits page adhering to Archival Dossier tokens."""
+    """Render the public Pricing and Limits page."""
     from app.services.ingestion import get_max_repo_mb, MAX_REPO_FILE_LIMIT_V1
     enforced_mb = get_max_repo_mb()
     enforced_files = MAX_REPO_FILE_LIMIT_V1
@@ -1686,7 +1710,7 @@ DASHBOARD_INLINE_JS = """
     if (searchInput) {
         searchInput.addEventListener('input', function() {
             var q = this.value.toLowerCase().trim();
-            var rows = document.querySelectorAll('.history-row');
+            var rows = document.querySelectorAll('.history-row, .history-card');
             rows.forEach(function(row) {
                 var name = (row.getAttribute('data-repo-name') || '').toLowerCase();
                 var url = (row.getAttribute('data-repo-url') || '').toLowerCase();
@@ -1763,6 +1787,21 @@ DASHBOARD_INLINE_JS = """
 """
 
 
+def failure_reason(error_message: Optional[str]) -> str:
+    """Map raw job error message to one of three clean user-facing sentences."""
+    if not error_message:
+        return "Something went wrong on our side"
+    err = str(error_message).lower()
+    if any(k in err for k in ["auth", "access", "private", "not found", "404", "403", "permission", "clone", "could not resolve", "fatal: repository", "fatal", "shallow clone", "host", "username", "token", "credential"]):
+        return "We couldn't access this repository (it may be private or the link is wrong)"
+    if any(k in err for k in ["large", "exceeds", "file limit", "cap", "too many files", "size boundary"]):
+        return "The repository is too large"
+    return "Something went wrong on our side"
+
+
+map_failure_reason = failure_reason
+
+
 def dashboard_view(
     current_user: UserModel,
     billing_status: Dict[str, Any],
@@ -1789,7 +1828,7 @@ def dashboard_view(
         next_month_date = datetime(now.year + 1, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
     else:
         next_month_date = datetime(now.year, now.month + 1, 1, 0, 0, 0, tzinfo=timezone.utc)
-    renewal_date_str = next_month_date.strftime("%b %d, %Y").upper()
+    renewal_date_str = next_month_date.strftime("%b %d, %Y")
 
     tier = billing_status.get("tier", "free")
     used = int(billing_status.get("monthly_usage", 0))
@@ -1926,6 +1965,7 @@ def dashboard_view(
 
     # Build job history rows grouped by repo
     rows_html = ""
+    cards_html = ""
     for job in past_jobs:
         job_id = sanitize_text(str(job.id))
         repo_url = sanitize_text(job.repo_url)
@@ -1966,7 +2006,7 @@ def dashboard_view(
             progress_html = '<span style="color: var(--text-muted); font-size: 13px;">—</span>'
 
         status_class = f"badge-{status}" if status in ["completed", "running", "failed", "pending"] else "badge-secondary"
-        status_label = status.upper()
+        status_label = status.capitalize()
 
         if status == "completed":
             primary_btn = f'<a href="/report/{job_id}" class="btn btn-sm btn-primary" style="white-space: nowrap;">Open report</a>'
@@ -1974,7 +2014,7 @@ def dashboard_view(
             primary_btn = f"""
             <form action="/analyses/{job_id}/retry" method="POST" style="margin: 0; display: inline;">
                 <button type="submit" class="btn btn-sm btn-secondary" style="white-space: nowrap; color: var(--danger); border-color: var(--danger);">
-                    Retry Analysis Job
+                    Retry
                 </button>
             </form>
             """
@@ -2025,12 +2065,11 @@ def dashboard_view(
         if status == "failed" and (getattr(job, "error_message", None) or getattr(job, "failed_stage", None)):
             raw_err_str = str(getattr(job, "error_message", "") or "").strip()
             if raw_err_str:
-                safe_err_full = sanitize_text(raw_err_str)
-                safe_err_summary = sanitize_text(truncate_text_clean(raw_err_str, 85))
+                safe_reason = sanitize_text(failure_reason(raw_err_str))
                 repo_error_html = f"""
-                <div class="job-failure-reason" title="{safe_err_full}" style="margin-top: 0.35rem; font-family: var(--font-mono); font-size: 0.8125rem; color: var(--danger); display: flex; align-items: flex-start; gap: 0.35rem; line-height: 1.35; max-width: 420px; cursor: help;">
+                <div class="job-failure-reason" title="{safe_reason}" style="margin-top: 0.35rem; font-family: var(--font-ui); font-size: 0.8125rem; color: var(--danger); display: flex; align-items: flex-start; gap: 0.35rem; line-height: 1.35; max-width: 420px; overflow-wrap: anywhere;">
                     <span style="font-weight: 600; flex-shrink: 0; color: var(--danger);">Failed:</span>
-                    <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{safe_err_summary}</span>
+                    <span>{safe_reason}</span>
                 </div>
                 """
 
@@ -2041,7 +2080,7 @@ def dashboard_view(
                     <span>{repo_display}</span>
                     {runs_html}
                 </div>
-                <div style="font-family: var(--font-mono); font-size: 0.8125rem; color: var(--text-muted); margin-top: 0.2rem;">{repo_url}</div>
+                <div style="font-family: var(--font-mono); font-size: 0.8125rem; color: var(--text-muted); margin-top: 0.2rem; overflow-wrap: anywhere;">{repo_url}</div>
                 {repo_error_html}
             </td>
             <td style="padding: 0.85rem 1rem; border-bottom: 1px solid var(--border);"><span class="badge {status_class}">{status_label}</span></td>
@@ -2057,6 +2096,27 @@ def dashboard_view(
                 </div>
             </td>
         </tr>
+        """
+
+        cards_html += f"""
+        <div class="card stratum-card history-card" data-repo-name="{repo_display.lower()}" data-repo-url="{repo_url.lower()}" style="padding: 1rem; margin-bottom: 0.75rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); width: 100%; min-width: 0; box-sizing: border-box;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem; margin-bottom: 0.5rem;">
+                <div style="font-weight: 500; color: var(--text); overflow-wrap: anywhere; word-break: break-word;">
+                    <span>{repo_display}</span>
+                    {runs_html}
+                </div>
+                <span class="badge {status_class}" style="flex-shrink: 0;">{status_label}</span>
+            </div>
+            <div style="font-family: var(--font-mono); font-size: 0.8125rem; color: var(--text-muted); overflow-wrap: anywhere; word-break: break-word; margin-bottom: 0.5rem;">{repo_url}</div>
+            {repo_error_html}
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.75rem; padding-top: 0.5rem; border-top: 1px solid var(--border); gap: 0.5rem; flex-wrap: wrap;">
+                <div style="font-size: 13px; color: var(--text-muted);">{created_at}</div>
+                <div style="display: flex; align-items: center; gap: 0.5rem; margin-left: auto;">
+                    {primary_btn}
+                    {overflow_menu}
+                </div>
+            </div>
+        </div>
         """
 
     if not past_jobs:
@@ -2079,7 +2139,7 @@ def dashboard_view(
         """
     else:
         history_content = f"""
-        <div class="table-responsive card stratum-card" style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden;">
+        <div class="table-responsive history-table-container card stratum-card" style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden;">
             <table style="width: 100%; border-collapse: collapse;">
                 <thead>
                     <tr style="border-bottom: 1px solid var(--border); background: var(--surface-2);">
@@ -2094,6 +2154,9 @@ def dashboard_view(
                     {rows_html}
                 </tbody>
             </table>
+        </div>
+        <div class="history-cards-container" style="display: none;">
+            {cards_html}
         </div>
         """
 
@@ -2281,7 +2344,7 @@ def failure_reason(error_message: Optional[str]) -> str:
     if not error_message:
         return "Something went wrong on our side"
     err = str(error_message).lower()
-    if any(k in err for k in ["auth", "access", "private", "not found", "404", "403", "permission", "clone", "could not resolve", "fatal: repository", "shallow clone", "host"]):
+    if any(k in err for k in ["auth", "access", "private", "not found", "404", "403", "permission", "clone", "could not resolve", "fatal: repository", "fatal", "shallow clone", "host", "username", "token", "credential"]):
         return "We couldn't access this repository (it may be private or the link is wrong)"
     if any(k in err for k in ["large", "exceeds", "file limit", "cap", "too many files", "size boundary"]):
         return "The repository is too large"
@@ -2540,8 +2603,10 @@ def progress_view(
     stepper_html += '</div>'
 
     # Build 11 Stages list for details toggle
+    narration_src = get_narration_source(job)
     stages_list_html = '<div class="stages-plain-list" id="stages-plain-list" style="display: flex; flex-direction: column; gap: 0.35rem;">'
     for s_key, s_name, s_desc in PROGRESS_STAGES_CLEAN:
+        s_display_name = get_narration_label(narration_src) if (is_completed and s_key == "stage_7" and narration_src == "llm") else s_name
         init_icon = checkmark_svg if is_completed else circle_empty_svg
         icon_color = "var(--success)" if is_completed else "var(--text-muted)"
         stages_list_html += f"""
@@ -2550,7 +2615,7 @@ def progress_view(
                 <span class="details-stage-icon" id="icon-{s_key}" style="color: {icon_color}; display: flex; align-items: center; justify-content: center;">
                     {init_icon}
                 </span>
-                <span style="font-weight: 500; color: var(--text);">{s_name}</span>
+                <span style="font-weight: 500; color: var(--text);">{s_display_name}</span>
             </div>
             <span style="font-size: 0.8125rem; color: var(--text-muted);">{s_desc}</span>
         </div>
@@ -2685,8 +2750,6 @@ def progress_view(
         function addActivityEntry(stageIndex, totalStages, stageName, message, isComplete=false) {{
             const sIdx = Number(stageIndex) || 0;
             const tStages = Number(totalStages) || 0;
-            const _numCheck = `${{Number(stageIndex) || 0}} / ${{Number(totalStages) || 0}}`;
-            const _strCheck = `${{escapeHtml(stageName)}}: ${{escapeHtml(message)}}`;
             const phaseIdx = (typeof stageToPhase !== 'undefined' && stageToPhase[stageName]) || (sIdx <= 2 ? 1 : (sIdx <= 5 ? 2 : (sIdx <= 7 ? 3 : 4)));
             const phaseNames = {{1: "Get the code", 2: "Read the files", 3: "Map how they connect", 4: "Build your guide"}};
             const phaseName = phaseNames[phaseIdx] || escapeHtml(stageName);
@@ -3457,13 +3520,13 @@ def _render_server_diff_html(
 
     # Tier Badge formatting
     if grading_method == "real_tests":
-        tier_tag = '<span class="badge badge-teal" style="font-size: 0.8125rem; ">TIER 1 // REAL REPO TEST SUITE</span>'
+        tier_tag = '<span class="badge badge-teal" style="font-size: 0.8125rem; ">Tier 1: Real reproduction</span>'
     elif grading_method == "expected_output":
-        tier_tag = '<span class="badge badge-amber" style="font-size: 0.8125rem; ">TIER 2 // EXPECTED OUTPUT</span>'
+        tier_tag = '<span class="badge badge-amber" style="font-size: 0.8125rem; ">Tier 2: Expected interface</span>'
     elif grading_method == "fill_the_blanks":
-        tier_tag = '<span class="badge badge-teal" style="font-size: 0.8125rem; ">TIER 3 // FILL THE GAPS (SCOPED EVALUATION)</span>'
+        tier_tag = '<span class="badge badge-teal" style="font-size: 0.8125rem; ">Tier 3: Fill the blanks</span>'
     else:
-        tier_tag = '<span class="badge badge-brass" style="font-size: 0.8125rem; ">TIER 3 // Structure Comparison</span>'
+        tier_tag = '<span class="badge badge-brass" style="font-size: 0.8125rem; ">Tier 3: Structural verification</span>'
 
     if is_verified:
         banner = f"""
@@ -3508,7 +3571,7 @@ def _render_server_diff_html(
             fill_sections_html += f"""
             <details class="matched-symbols-collapse" style="background: var(--surface-2); border: 1px solid var(--teal-border); border-radius: 4px; padding: 0.45rem 0.75rem; margin-bottom: 0.4rem;">
                 <summary style="cursor: pointer; font-family: var(--font-mono); font-size: 0.8125rem; font-weight: 600; color: var(--success); display: flex; align-items: center; justify-content: space-between; user-select: none;">
-                    <span>IMPLEMENTED BLANKS ({fill_summary}):</span>
+                    <span>Implemented blanks ({fill_summary}):</span>
                     <span style="font-size: 0.8125rem; opacity: 0.85; font-weight: normal;">View list ▾</span>
                 </summary>
                 <div style="display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.5rem; padding-top: 0.4rem; border-top: 1px solid var(--hairline-soft);">
@@ -3519,7 +3582,7 @@ def _render_server_diff_html(
         if stub_pills:
             fill_sections_html += f"""
             <div style="background: rgba(244, 63, 94, 0.06); border: 1px solid rgba(244, 63, 94, 0.25); border-radius: 4px; padding: 0.45rem 0.75rem; margin-bottom: 0.4rem;">
-                <div style="font-family: var(--font-mono); font-size: 0.8125rem; color: var(--crimson); font-weight: 600; margin-bottom: 0.35rem;">UNIMPLEMENTED / STUB BLANKS:</div>
+                <div style="font-family: var(--font-mono); font-size: 0.8125rem; color: var(--crimson); font-weight: 600; margin-bottom: 0.35rem;">Unimplemented / stub blanks:</div>
                 <div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">{stub_pills}</div>
             </div>
             """
@@ -3562,7 +3625,7 @@ def _render_server_diff_html(
         sections_html += f"""
         <details class="matched-symbols-collapse" style="background: var(--surface-2); border: 1px solid var(--teal-border); border-radius: 4px; padding: 0.45rem 0.75rem; margin-bottom: 0.4rem;">
             <summary style="cursor: pointer; font-family: var(--font-mono); font-size: 0.8125rem; font-weight: 600; color: var(--success); display: flex; align-items: center; justify-content: space-between; user-select: none;">
-                <span>PRESENT &amp; MATCHED SYMBOLS ({matched_summary_str}):</span>
+                <span>Present &amp; matched symbols ({matched_summary_str}):</span>
                 <span style="font-size: 0.8125rem; opacity: 0.85; font-weight: normal;">View list ▾</span>
             </summary>
             <div style="display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.5rem; padding-top: 0.4rem; border-top: 1px solid var(--hairline-soft);">
@@ -3573,14 +3636,14 @@ def _render_server_diff_html(
     if missing_pills:
         sections_html += f"""
         <div style="background: rgba(244, 63, 94, 0.06); border: 1px solid rgba(244, 63, 94, 0.25); border-radius: 4px; padding: 0.45rem 0.75rem; margin-bottom: 0.4rem;">
-            <div style="font-family: var(--font-mono); font-size: 0.8125rem; color: var(--crimson); font-weight: 600; margin-bottom: 0.35rem;">MISSING EXPECTED SYMBOLS ({len(missing_syms)}):</div>
+            <div style="font-family: var(--font-mono); font-size: 0.8125rem; color: var(--crimson); font-weight: 600; margin-bottom: 0.35rem;">Missing expected symbols ({len(missing_syms)}):</div>
             <div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">{missing_pills}</div>
         </div>
         """
     if extra_pills:
         sections_html += f"""
         <div style="background: var(--surface-2); border: 1px solid var(--border); border-radius: 4px; padding: 0.45rem 0.75rem; margin-bottom: 0.4rem;">
-            <div style="font-family: var(--font-mono); font-size: 0.8125rem; color: var(--text-muted); font-weight: 600; margin-bottom: 0.35rem;">EXTRA / AUXILIARY SYMBOLS ({len(extra_syms)}):</div>
+            <div style="font-family: var(--font-mono); font-size: 0.8125rem; color: var(--text-muted); font-weight: 600; margin-bottom: 0.35rem;">Extra / auxiliary symbols ({len(extra_syms)}):</div>
             <div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">{extra_pills}</div>
         </div>
         """
@@ -3630,7 +3693,7 @@ def _render_server_console_html(attempt: Optional[Any]) -> str:
             <span class="badge {exit_badge_cls}" style="font-size: 0.8125rem;">{exit_badge_text}</span>
             {time_badge}
         </div>
-        <span style="font-family: var(--font-mono); font-size: 0.8125rem; color: var(--text-muted);">UNMETERED PLAYGROUND</span>
+        <span style="font-family: var(--font-mono); font-size: 0.8125rem; color: var(--text-muted);">Unmetered playground</span>
     </div>
     <pre style="background: #0d0e12; padding: 0.75rem; border-radius: 3px; border: 1px solid var(--hairline-soft); font-family: var(--font-mono); font-size: 0.8125rem; line-height: 1.45; overflow-x: auto; margin: 0;"><code>{content}</code></pre>
     """
@@ -4179,8 +4242,8 @@ def render_milestone_body_fragment(
             btn_submit_disabled = 'disabled title="Grading this milestone needs code execution, which is off on this demo" style="cursor: not-allowed; opacity: 0.5;"'
             submit_note_html = '<div class="demo-submit-note" style="font-family: var(--font-mono); font-size: 0.8125rem; color: var(--text-muted); margin-top: 0.25rem;">Grading this milestone needs code execution, which is off on this demo.</div>'
         else:
-            btn_submit_label = "Check answer"
-            submit_note_html = '<div class="demo-submit-note" style="font-family: var(--font-mono); font-size: 0.8125rem; color: var(--text-muted); margin-top: 0.25rem;">Check structure: Structure check only. No points are awarded on this demo.</div>'
+            btn_submit_label = "Check structure"
+            submit_note_html = '<div class="demo-submit-note" style="font-family: var(--font-mono); font-size: 0.8125rem; color: var(--text-muted); margin-top: 0.25rem;">Structure check only. No points are awarded on this demo.</div>'
 
     # Diff and console output
     diff_initial_display = "display: block;" if (attempt and attempt.submitted_code) else "display: none;"
@@ -4207,7 +4270,7 @@ def render_milestone_body_fragment(
         symbols_rendered = ", ".join(m_exports[:10])
         symbols_html = f"""
         <div style="margin-top: 0.65rem; font-size: 0.8125rem; font-family: var(--font-ui); color: var(--text-muted);">
-            <span style="color: var(--text-muted); font-weight: 600;">KEY SYMBOLS:</span> {sanitize_text(symbols_rendered)}
+            <span style="color: var(--text-muted); font-weight: 600;">Key symbols:</span> {sanitize_text(symbols_rendered)}
         </div>
         """
 
@@ -4566,7 +4629,7 @@ def render_milestone_body_fragment(
                     </button>
                 </div>
                 <div style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--text-muted);">
-                    PRACTICE MODE
+                    Practice mode
                 </div>
             </div>
 
@@ -4934,7 +4997,7 @@ def report_view(
     lazy_milestones: bool = False,
 ) -> str:
     """
-    Render the Archival Dossier Report View.
+    Render the Report View.
     Structured into modular visual sections with interactive SVG dependency graph diagram,
     milestone sequence spine, in-app code editor workspace, and live structural verification.
     """
@@ -5056,7 +5119,7 @@ def report_view(
         else:
             app_entry_points.append(ep)
 
-    # Step 1: TL;DR block fields (derived from analysis data only)
+    # Step 1: Summary block fields (derived from analysis data only)
     readme_raw = None
     if file_contents:
         for fpath, ftext in file_contents.items():
@@ -5191,7 +5254,7 @@ def report_view(
         <div class="card-header">
             <div>
                 <div style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--accent); ">
-                    Section 01 // Codebase Overview
+                    Section 01: Codebase Overview
                 </div>
                 <h2 style="font-size: 1.45rem; font-weight: 500; margin-top: 0.15rem;">Codebase Architecture Overview</h2>
             </div>
@@ -5201,11 +5264,11 @@ def report_view(
             </div>
         </div>
 
-        <!-- Step 1: TL;DR Block (Top of Overview) -->
+        <!-- Step 1: Summary Block (Top of Overview) -->
         <div class="stratum-card tldr-block" id="overview-tldr-block" style="background: var(--panel-raised); border: 1px solid var(--border); border-radius: 6px; padding: 1.25rem 1.5rem; margin-top: 1.25rem; margin-bottom: 0.5rem;">
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.85rem; border-bottom: 1px solid var(--hairline-soft); padding-bottom: 0.5rem;">
-                <span style="font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600; color: var(--accent); ">Project Summary // TL;DR</span>
-                <span class="chip" style="font-size: 0.8125rem;">ANALYSIS DATA ONLY</span>
+                <span style="font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600; color: var(--accent); ">Summary</span>
+                <span class="chip" style="font-size: 0.8125rem;">Analysis data only</span>
             </div>
             <div style="display: flex; flex-direction: column; gap: 0.85rem;">
                 <div>
@@ -5233,7 +5296,7 @@ def report_view(
             </div>
         </div>
 
-        <!-- Step 4: One-line note under TL;DR -->
+        <!-- Step 4: One-line note under Summary -->
         <div class="overview-order-note" style="margin-top: 0.5rem; margin-bottom: 1.25rem; font-size: 0.825rem; color: var(--text-muted); line-height: 1.4;">
             <span>Order is estimated from imports.</span>
             <span style="display: none;">Verified Architecture Summary &bull; STANDALONE FILES: {isolated_count} &bull; CIRCULAR DEPENDENCIES: {cyclic_count}</span>
@@ -5262,9 +5325,12 @@ def report_view(
             <div class="kpi-card" data-metric="CONFIDENCE SCORE">
                 <div class="kpi-label">Confidence</div>
                 <div class="kpi-value" style="color: {overall_conf_color}; font-size: 1.5rem;">{conf_summary.high_pct}%</div>
-                <div style="display: none;">
-                    {f"HIGH ({conf_summary.high_pct}%)" if conf_summary.high_pct >= 50 else f"Share of files with low confidence: {conf_summary.low_pct}%"}
-                    {"" if conf_summary_raw else "estimated from graph nodes"}
+                <div class="kpi-sub" style="font-size: 0.8125rem; color: var(--text-muted);">
+                    {conf_summary.low_count} files low confidence
+                    <span style="display: none;">
+                        {f"HIGH ({conf_summary.high_pct}%)" if conf_summary.high_pct >= 50 else f"Share of files with low confidence: {conf_summary.low_pct}%"}
+                        {"" if conf_summary_raw else "estimated from graph nodes"}
+                    </span>
                 </div>
             </div>
         </div>
@@ -5275,9 +5341,9 @@ def report_view(
             <div id="overview-entry-points-list" style="background: var(--surface-2); border: 1px solid var(--border); border-radius: 4px; padding: 1.15rem;">
                 <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
                     <span style="font-family: var(--font-mono); font-size: 0.8125rem; font-weight: 600; color: var(--text-muted); ">
-                        ENTRY POINTS ({len(app_entry_points)})
+                        Entry points ({len(app_entry_points)})
                     </span>
-                    <span class="chip" style="font-size: 0.8125rem;">APPLICATION TARGETS</span>
+                    <span class="chip" style="font-size: 0.8125rem;">Application targets</span>
                 </div>
                 <div style="display: flex; flex-direction: column; gap: 0.35rem;">
                     {app_chips_html}
@@ -5291,7 +5357,7 @@ def report_view(
                     <span style="font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600; color: var(--text-muted); ">
                         Subsystems ({len(domain_dist)})
                     </span>
-                    <span class="chip" style="font-size: 0.8125rem;">DOMAINS</span>
+                    <span class="chip" style="font-size: 0.8125rem;">Domains</span>
                 </div>
                 <div class="{subsystem_container_cls}">
                     {domain_bars_html}
@@ -5578,7 +5644,7 @@ def report_view(
             <div class="card-header">
                 <div>
                     <div style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--accent); ">
-                        Section 02 // Dependency Roadmap
+                        Section 02: Dependency Roadmap
                     </div>
                     <h2 style="font-size: 1.45rem; font-weight: 500; margin-top: 0.15rem;">Architecture &amp; Dependency Graph</h2>
                 </div>
@@ -6052,7 +6118,7 @@ def report_view(
                 symbols_rendered = ", ".join(m_exports[:10])
                 symbols_html = f"""
                 <div style="margin-top: 0.65rem; font-size: 0.8125rem; font-family: var(--font-ui); color: var(--text-muted);">
-                    <span style="color: var(--text-muted); font-weight: 600;">KEY SYMBOLS:</span> {sanitize_text(symbols_rendered)}
+                    <span style="color: var(--text-muted); font-weight: 600;">Key symbols:</span> {sanitize_text(symbols_rendered)}
                 </div>
                 """
 
@@ -6271,8 +6337,8 @@ def report_view(
                     btn_submit_disabled = 'disabled title="Grading this milestone needs code execution, which is off on this demo" style="cursor: not-allowed; opacity: 0.5;"'
                     submit_note_html = '<div class="demo-submit-note" style="font-family: var(--font-mono); font-size: 0.8125rem; color: var(--text-muted); margin-top: 0.25rem;">Grading this milestone needs code execution, which is off on this demo.</div>'
                 else:
-                    btn_submit_label = "Check answer"
-                    submit_note_html = '<div class="demo-submit-note" style="font-family: var(--font-mono); font-size: 0.8125rem; color: var(--text-muted); margin-top: 0.25rem;">Check structure: Structure check only. No points are awarded on this demo.</div>'
+                    btn_submit_label = "Check structure"
+                    submit_note_html = '<div class="demo-submit-note" style="font-family: var(--font-mono); font-size: 0.8125rem; color: var(--text-muted); margin-top: 0.25rem;">Structure check only. No points are awarded on this demo.</div>'
                     if not has_any_real_source:
                         btn_submit_disabled = 'disabled title="Reference source unavailable" style="cursor: not-allowed; opacity: 0.45;"'
 
@@ -6423,6 +6489,54 @@ def report_view(
                     att_details = gd
             m_quiz_card_html = _render_milestone_quiz_card(job_id, m_tier, m_quiz_items, grading_details=att_details)
 
+            if is_showcase:
+                panes_html += f"""
+            <div class="milestone-pane{' active' if is_pane_open else ''}" id="milestone-pane-{m_tier}" style="display: {pane_display};" data-tier="{m_tier}">
+                <!-- Header -->
+                <div class="milestone-pane-header" style="background: var(--surface-2); border: 1px solid var(--border); border-radius: 4px; padding: 1.25rem 1.55rem; margin-bottom: 1.25rem; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 0.5rem;">
+                        <div>
+                            <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                                <span style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--accent); font-weight: 600; ">{track_label.upper()} {display_id}</span>
+                                <span style="color: var(--border);">/</span>
+                                <h3 style="font-size: 1.25rem; font-weight: 600; color: var(--text); margin: 0; font-family: var(--font-ui);">{m_title}</h3>
+                            </div>
+                            {f'<div class="milestone-role" style="font-size: 0.8125rem; font-style: italic; color: var(--text-muted); margin-top: 0.2rem;">{m_role}</div>' if m_role else ''}
+                        </div>
+                        <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+                            {status_badge_html}
+                            {conf_badge_html}
+                        </div>
+                    </div>
+
+                    <!-- One-sentence Goal -->
+                    {f'<div class="milestone-goal-box" style="margin: 0.75rem 0 0.5rem 0; padding: 0.65rem 0.9rem; background: var(--panel-raised); border-left: 3px solid var(--success); border-radius: 3px; font-size: 0.825rem; color: var(--text-muted); line-height: 1.5;"><strong style="color: var(--text); font-family: var(--font-ui); font-size: 0.8125rem; margin-right: 0.35rem;">Goal:</strong> {m_brief_obj}</div>' if m_brief_obj else ''}
+
+                    {f'<div style="font-size: 0.8125rem; color: var(--text-muted); font-family: var(--font-ui); margin-top: 0.4rem;"><span style="color: var(--text-muted); font-weight: 600;">Composition:</span> {m_comp}</div>' if m_comp else ''}
+                    {symbols_html}
+                    {citations_html}
+                    {notes_html}
+                </div>
+
+                <!-- Showcase Architecture Implementation (Read-only) -->
+                <div class="milestone-editor-wrapper" id="milestone-editor-card-{m_tier}" style="background: var(--surface-2); border: 1px solid var(--border); border-radius: 4px; padding: 1.25rem 1.55rem; margin-bottom: 1.25rem; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
+                    <div id="workspace-read-{m_tier}" class="milestone-mode-workspace read-mode" style="display: block;">
+                        <div style="font-family: \'IBM Plex Sans\', sans-serif; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.4rem;">
+                            <span style="color: var(--success); font-weight: 600;">ℹ</span> Architecture Implementation
+                        </div>
+                        {read_file_picker_container_html}
+                        <div class="read-file-panes-container" style="border-radius: 4px; overflow: hidden;">
+                            {read_file_panes_html}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Final Step: Check your understanding Quiz -->
+                {m_quiz_card_html}
+            </div>
+            """
+                continue
+
             panes_html += f"""
             <div class="milestone-pane{' active' if is_pane_open else ''}" id="milestone-pane-{m_tier}" style="display: {pane_display};" data-tier="{m_tier}">
                 <!-- Header -->
@@ -6471,7 +6585,7 @@ def report_view(
                             </button>
                         </div>
                         <div style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--text-muted);">
-                            PRACTICE MODE
+                            Practice mode
                         </div>
                     </div>
 
@@ -6708,7 +6822,7 @@ def report_view(
             <div class="card-header" style="margin-bottom: 1.25rem;">
                 <div>
                     <div style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--accent); ">
-                        Section 03 // Guided Architectural Milestones
+                        Section 03: Guided Architectural Milestones
                     </div>
                     <h2 style="font-size: 1.45rem; font-weight: 500; margin-top: 0.15rem;">Guided Flow Walkthrough</h2>
                 </div>
@@ -6734,7 +6848,7 @@ def report_view(
             <div class="card-header">
                 <div>
                     <div style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--accent); ">
-                        Section 03 // Guided Architectural Milestones
+                        Section 03: Guided Architectural Milestones
                     </div>
                     <h2 style="font-size: 1.45rem; font-weight: 500; margin-top: 0.15rem;">Guided Flow Walkthrough</h2>
                 </div>
@@ -6765,7 +6879,7 @@ def report_view(
             <div class="card-header">
                 <div>
                     <div style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--accent); ">
-                        Section 04 // Interactive Validation
+                        Section 04: Interactive Validation
                     </div>
                     <h2 style="font-size: 1.45rem; font-weight: 500; margin-top: 0.15rem;">Codebase Architecture Comprehension Quiz &bull; All Milestone Quizzes</h2>
                 </div>
@@ -6789,7 +6903,7 @@ def report_view(
             <div class="card-header">
                 <div>
                     <div style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--accent); ">
-                        Section 04 // Interactive Validation
+                        Section 04: Interactive Validation
                     </div>
                     <h2 style="font-size: 1.45rem; font-weight: 500; margin-top: 0.15rem;">Codebase Architecture Comprehension Quiz &bull; All Milestone Quizzes</h2>
                 </div>
@@ -6811,7 +6925,7 @@ def report_view(
             <div class="card-header">
                 <div>
                     <div style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--accent); ">
-                        Section 04 // Interactive Validation
+                        Section 04: Interactive Validation
                     </div>
                     <h2 style="font-size: 1.45rem; font-weight: 500; margin-top: 0.15rem;">Codebase Architecture Comprehension Quiz &bull; All Milestone Quizzes</h2>
                 </div>
@@ -6821,21 +6935,9 @@ def report_view(
         """
 
     # -------------------------------------------------------------
-    # 5. Full Raw Markdown Transcript (Collapsible Archive)
+    # 5. Full Raw Markdown Transcript - removed in redesign (available via Export as Markdown)
     # -------------------------------------------------------------
-    raw_markdown_drawer = f"""
-    <div class="stratum-card" id="section-raw-markdown" style="margin-bottom: 2rem;">
-        <details>
-            <summary style="font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600; color: var(--text-muted); cursor: pointer; user-select: none; display: flex; align-items: center; justify-content: space-between;">
-                <span>&gt; Complete Raw Synthesis Markdown Transcript</span>
-                <span class="chip" style="font-size: 0.8125rem;">GITHUB FLAVORED MARKDOWN</span>
-            </summary>
-            <div class="markdown-body" style="margin-top: 1.25rem; padding-top: 1.25rem; border-top: 1px solid var(--border);">
-                {safe_markdown_html}
-            </div>
-        </details>
-    </div>
-    """
+    raw_markdown_drawer = ""
 
     # Extra Interactive Scripts & Graph Logic
     graph_nodes_json = _safe_script_json_dumps(nodes)
@@ -7195,13 +7297,13 @@ def report_view(
         }}
 
         function renderDiffHtmlInJs(result, isVerified, errorMsg, gradingMethod) {{
-            let tierTag = '<span class="badge badge-brass" style="font-size: 0.8125rem; ">TIER 3 // Structure Comparison</span>';
+            let tierTag = '<span class="badge badge-brass" style="font-size: 0.8125rem; ">Tier 3: Structural verification</span>';
             if (gradingMethod === 'real_tests') {{
-                tierTag = '<span class="badge badge-teal" style="font-size: 0.8125rem; ">TIER 1 // REAL REPO TEST SUITE</span>';
+                tierTag = '<span class="badge badge-teal" style="font-size: 0.8125rem; ">Tier 1: Real reproduction</span>';
             }} else if (gradingMethod === 'expected_output') {{
-                tierTag = '<span class="badge badge-amber" style="font-size: 0.8125rem; ">TIER 2 // EXPECTED OUTPUT</span>';
+                tierTag = '<span class="badge badge-amber" style="font-size: 0.8125rem; ">Tier 2: Expected interface</span>';
             }} else if (gradingMethod === 'fill_the_blanks') {{
-                tierTag = '<span class="badge badge-teal" style="font-size: 0.8125rem; ">TIER 3 // FILL THE GAPS (SCOPED EVALUATION)</span>';
+                tierTag = '<span class="badge badge-teal" style="font-size: 0.8125rem; ">Tier 3: Fill the blanks</span>';
             }}
 
             let banner = '';
@@ -7244,14 +7346,14 @@ def report_view(
                     const fillSummary = implementedCount + '/' + blankedCount + ' functions completed' + (isAllDone ? ' ✓' : '');
                     fillSectionsHtml += '<details class="matched-symbols-collapse" style="background: var(--surface-2); border: 1px solid var(--teal-border); border-radius: 4px; padding: 0.45rem 0.75rem; margin-bottom: 0.4rem;">' +
                         '<summary style="cursor: pointer; font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600; color: var(--success); display: flex; align-items: center; justify-content: space-between; user-select: none;">' +
-                            '<span>IMPLEMENTED BLANKS (' + fillSummary + '):</span>' +
+                            '<span>Implemented blanks (' + fillSummary + '):</span>' +
                             '<span style="font-size: 0.8125rem; opacity: 0.85; font-weight: normal;">View list ▾</span>' +
                         '</summary>' +
                         '<div style="display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.5rem; padding-top: 0.4rem; border-top: 1px solid var(--hairline-soft);">' + implementedPills + '</div>' +
                     '</details>';
                 }}
                 if (stubPills) {{
-                    fillSectionsHtml += '<div style="background: rgba(244, 63, 94, 0.06); border: 1px solid rgba(244, 63, 94, 0.25); border-radius: 4px; padding: 0.45rem 0.75rem; margin-bottom: 0.4rem;"><div style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--crimson); font-weight: 600; margin-bottom: 0.35rem;">UNIMPLEMENTED / STUB BLANKS:</div><div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">' + stubPills + '</div></div>';
+                    fillSectionsHtml += '<div style="background: rgba(244, 63, 94, 0.06); border: 1px solid rgba(244, 63, 94, 0.25); border-radius: 4px; padding: 0.45rem 0.75rem; margin-bottom: 0.4rem;"><div style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--crimson); font-weight: 600; margin-bottom: 0.35rem;">Unimplemented / stub blanks:</div><div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">' + stubPills + '</div></div>';
                 }}
 
                 return banner + errHtml + '<div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem;">' + fillSectionsHtml + '</div>';
@@ -7295,17 +7397,17 @@ def report_view(
             if (presentPills) {{
                 sectionsHtml += '<details class="matched-symbols-collapse" style="background: var(--surface-2); border: 1px solid var(--teal-border); border-radius: 4px; padding: 0.45rem 0.75rem; margin-bottom: 0.4rem;">' +
                     '<summary style="cursor: pointer; font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600; color: var(--success); display: flex; align-items: center; justify-content: space-between; user-select: none;">' +
-                        '<span>PRESENT &amp; MATCHED SYMBOLS (' + matchSummary + '):</span>' +
+                        '<span>Present &amp; matched symbols (' + matchSummary + '):</span>' +
                         '<span style="font-size: 0.8125rem; opacity: 0.85; font-weight: normal;">View list ▾</span>' +
                     '</summary>' +
                     '<div style="display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.5rem; padding-top: 0.4rem; border-top: 1px solid var(--hairline-soft);">' + presentPills + '</div>' +
                 '</details>';
             }}
             if (missingPills) {{
-                sectionsHtml += '<div style="background: rgba(244, 63, 94, 0.06); border: 1px solid rgba(244, 63, 94, 0.25); border-radius: 4px; padding: 0.45rem 0.75rem; margin-bottom: 0.4rem;"><div style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--crimson); font-weight: 600; margin-bottom: 0.35rem;">MISSING EXPECTED SYMBOLS (' + missing.length + '):</div><div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">' + missingPills + '</div></div>';
+                sectionsHtml += '<div style="background: rgba(244, 63, 94, 0.06); border: 1px solid rgba(244, 63, 94, 0.25); border-radius: 4px; padding: 0.45rem 0.75rem; margin-bottom: 0.4rem;"><div style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--crimson); font-weight: 600; margin-bottom: 0.35rem;">Missing expected symbols (' + missing.length + '):</div><div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">' + missingPills + '</div></div>';
             }}
             if (extraPills) {{
-                sectionsHtml += '<div style="background: var(--surface-2); border: 1px solid var(--border); border-radius: 4px; padding: 0.45rem 0.75rem; margin-bottom: 0.4rem;"><div style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--text-muted); font-weight: 600; margin-bottom: 0.35rem;">EXTRA / AUXILIARY SYMBOLS (' + extra.length + '):</div><div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">' + extraPills + '</div></div>';
+                sectionsHtml += '<div style="background: var(--surface-2); border: 1px solid var(--border); border-radius: 4px; padding: 0.45rem 0.75rem; margin-bottom: 0.4rem;"><div style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--text-muted); font-weight: 600; margin-bottom: 0.35rem;">Extra / auxiliary symbols (' + extra.length + '):</div><div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">' + extraPills + '</div></div>';
             }}
 
             return banner + errHtml + '<div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem;">' + sectionsHtml + '</div>';
@@ -7341,7 +7443,7 @@ def report_view(
                     '<span class="badge ' + exitBadgeClass + '" style="font-size: 0.8125rem;">' + exitBadgeText + '</span>' +
                     (execMs ? '<span class="tag" style="font-size: 0.8125rem;">' + execMs + '</span>' : '') +
                 '</div>' +
-                '<span style="font-family: var(--font-mono); font-size: 0.8125rem; color: var(--text-muted);">UNMETERED PLAYGROUND</span>' +
+                '<span style="font-family: var(--font-mono); font-size: 0.8125rem; color: var(--text-muted);">Unmetered playground</span>' +
             '</div>' +
             '<pre style="background: #0d0e12; padding: 0.75rem; border-radius: 3px; border: 1px solid var(--hairline-soft); font-family: var(--font-mono); font-size: 0.8125rem; line-height: 1.45; overflow-x: auto; margin: 0;"><code>' + content + '</code></pre>';
         }}
@@ -7723,11 +7825,11 @@ def report_view(
             }}
 
             if (level === 0) {{
-                if (titleEl) titleEl.textContent = 'Hint Confirmation // Hint 1';
+                if (titleEl) titleEl.textContent = 'Hint 1: Confirmation';
                 if (textEl) textEl.textContent = HINT_CONFIRM_COPY_1;
                 if (actionBtn) actionBtn.textContent = 'Yes, Reveal Conceptual Hint';
             }} else {{
-                if (titleEl) titleEl.textContent = 'Target Symbol Gate // Hint 2';
+                if (titleEl) titleEl.textContent = 'Hint 2: Target Symbol Gate';
                 if (textEl) textEl.textContent = HINT_CONFIRM_COPY_2;
                 if (actionBtn) actionBtn.textContent = 'Yes, Reveal Missing Target Symbols';
             }}
@@ -8722,6 +8824,9 @@ def report_view(
                     if (t === tabKey) {{
                         btn.classList.add('active');
                         btn.setAttribute('aria-selected', 'true');
+                        try {{
+                            btn.scrollIntoView({{ behavior: 'smooth', block: 'nearest', inline: 'center' }});
+                        }} catch (e) {{}}
                     }} else {{
                         btn.classList.remove('active');
                         btn.setAttribute('aria-selected', 'false');
@@ -9079,11 +9184,11 @@ def report_view(
                     Codebase Intelligence Report &bull; Structural Syntax Tree &amp; Dependency Reconstruction
                 </div>
                 <div style="display: flex; align-items: center; gap: 0.75rem; font-family: var(--font-mono); font-size: 0.8125rem; color: var(--text-muted); margin-top: 0.35rem; flex-wrap: wrap;">
-                    <span>TARGET: <a href="{repo_url}" target="_blank" rel="noopener noreferrer" style="color: var(--text-muted);">{repo_url}</a></span>
+                    <span>Target: <a href="{repo_url}" target="_blank" rel="noopener noreferrer" style="color: var(--text-muted);">{repo_url}</a></span>
                     <span>&bull;</span>
-                    <span>SYNTHESIZED: {created_at}</span>
+                    <span>Synthesized: {created_at}</span>
                     <span>&bull;</span>
-                    <span>DURATION: {duration}</span>
+                    <span>Duration: {duration}</span>
                 </div>
             </div>
             <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
@@ -9108,29 +9213,30 @@ def report_view(
         </div>
 
         <!-- Tabbed Report Navigation Bar -->
-        <div class="report-tabs-nav" role="tablist" aria-label="Architecture Report Sections">
-            <button type="button" class="report-tab-btn active" id="tab-btn-overview" onclick="switchReportTab('overview')" role="tab" aria-selected="true" aria-controls="tab-pane-overview">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 0.45rem;"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
-                Overview
-            </button>
-            <button type="button" class="report-tab-btn" id="tab-btn-graph" onclick="switchReportTab('graph')" role="tab" aria-selected="false" aria-controls="tab-pane-graph">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 0.45rem;"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
-                Dependency Graph
-            </button>
-            <button type="button" class="report-tab-btn" id="tab-btn-milestones" onclick="switchReportTab('milestones')" role="tab" aria-selected="false" aria-controls="tab-pane-milestones">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 0.45rem;"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
-                Milestones
-            </button>
-            <button type="button" class="report-tab-btn" id="tab-btn-quiz" onclick="switchReportTab('quiz')" role="tab" aria-selected="false" aria-controls="tab-pane-quiz">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 0.45rem;"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
-                Quiz
-            </button>
+        <div class="report-tabs-wrapper">
+            <div class="report-tabs-nav" role="tablist" aria-label="Architecture Report Sections">
+                <button type="button" class="report-tab-btn active" id="tab-btn-overview" onclick="switchReportTab('overview')" role="tab" aria-selected="true" aria-controls="tab-pane-overview">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 0.45rem;"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                    Overview
+                </button>
+                <button type="button" class="report-tab-btn" id="tab-btn-graph" onclick="switchReportTab('graph')" role="tab" aria-selected="false" aria-controls="tab-pane-graph">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 0.45rem;"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
+                    Dependency Graph
+                </button>
+                <button type="button" class="report-tab-btn" id="tab-btn-milestones" onclick="switchReportTab('milestones')" role="tab" aria-selected="false" aria-controls="tab-pane-milestones">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 0.45rem;"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+                    Milestones
+                </button>
+                <button type="button" class="report-tab-btn" id="tab-btn-quiz" onclick="switchReportTab('quiz')" role="tab" aria-selected="false" aria-controls="tab-pane-quiz">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 0.45rem;"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                    Quiz
+                </button>
+            </div>
         </div>
 
         <!-- Tab 1: Overview Section -->
         <div class="report-tab-pane" id="tab-pane-overview" role="tabpanel" aria-labelledby="tab-btn-overview">
             {overview_section_html}
-            {raw_markdown_drawer}
         </div>
 
         <!-- Tab 2: Visual Dependency Graph Section -->
@@ -9171,7 +9277,7 @@ def settings_view(
     billing_error: bool = False,
 ) -> str:
     """
-    Renders the Settings & Billing view with Archival Dossier aesthetic.
+    Renders the Settings & Billing view.
     Adheres strictly to the bento-split layout with zero fabricated metrics or hardcoded prices.
     """
     is_paid = billing_status.get("tier") == "paid"
@@ -9234,7 +9340,7 @@ def settings_view(
     </div>
     '''
 
-    tier_badge = '<span class="badge badge-completed">PRO TIER</span>' if is_paid else '<span class="badge badge-free">FREE TIER</span>'
+    tier_badge = '<span class="badge badge-completed">Pro</span>' if is_paid else '<span class="badge badge-free">Free</span>'
 
     # Right column plan card details
     if is_paid:
@@ -9248,14 +9354,14 @@ def settings_view(
             <div style="background: var(--panel-inset); padding: 1.25rem; border-radius: 4px; border: 1px solid var(--border); margin-bottom: 1.25rem;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
                     <span style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--text-muted); ">Active Subscription</span>
-                    <span style="font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600; color: var(--success);">UNLIMITED ANALYSIS JOBS</span>
+                    <span style="font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600; color: var(--success);">Unlimited analysis jobs</span>
                 </div>
                 <div class="meter" style="margin-bottom: 0.75rem;">
                     <div class="meter-fill high" style="width: 100%;"></div>
                 </div>
                 <div style="display: flex; justify-content: space-between; font-family: var(--font-ui); font-size: 0.8125rem; color: var(--text-muted);">
-                    <span>BILLING CYCLE:</span>
-                    <span>PERIOD ENDS {renewal_str}</span>
+                    <span>Billing cycle:</span>
+                    <span>Period ends {renewal_str}</span>
                 </div>
             </div>
 
@@ -9279,14 +9385,14 @@ def settings_view(
                 <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem;">
                     <div>
                         <div style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--accent); font-weight: 600;">
-                            TEST FILES
+                            Pro plan
                         </div>
                         <div style="display: flex; align-items: baseline; gap: 0.4rem; margin-top: 0.35rem;">
                             <span style="font-family: var(--font-ui); font-size: 2.25rem; font-weight: 500; color: var(--text);">{pro_price_display}</span>
                             {f'<span style="font-family: var(--font-mono); font-size: 13px; color: var(--text-muted);">/ {pricing_details.get("interval", "month")}</span>' if "/ " not in pro_price_display else ''}
                         </div>
                     </div>
-                    <span class="badge" style="background: var(--brass-soft); color: var(--accent); border-color: var(--brass-border);">RECOMMENDED</span>
+                    <span class="badge" style="background: var(--brass-soft); color: var(--accent); border-color: var(--brass-border);">Recommended</span>
                 </div>
 
                 <div style="display: flex; flex-direction: column; gap: 0.6rem; margin-bottom: 1.5rem; font-size: 0.85rem; color: var(--text-muted); line-height: 1.4;">
@@ -9313,13 +9419,13 @@ def settings_view(
             <div style="background: var(--panel-inset); padding: 1.25rem; border-radius: 4px; border: 1px solid var(--border);">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
                     <span style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--text-muted); ">Billing Cycle Allocation</span>
-                    <span style="font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600; color: var(--accent);">{monthly_usage} / {monthly_quota} CONSUMED ({pct}%)</span>
+                    <span style="font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600; color: var(--accent);">{monthly_usage} / {monthly_quota} consumed ({pct}%)</span>
                 </div>
                 <div class="meter" style="margin-bottom: 0.75rem;">
                     <div class="meter-fill {meter_class}" style="width: {pct}%;"></div>
                 </div>
                 <div style="display: flex; justify-content: space-between; font-family: var(--font-ui); font-size: 0.8125rem; color: var(--text-muted);">
-                    <span>AUTOMATIC RESET:</span>
+                    <span>Resets on</span>
                     <span>{renewal_str}</span>
                 </div>
             </div>
@@ -9329,13 +9435,13 @@ def settings_view(
         """
 
     content = f"""
-    <!-- Settings Top Archival Header -->
+    <!-- Settings Top Header -->
     <div style="display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 1.5rem; margin-bottom: 2rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--border);">
         <div>
             <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem;">
                 <span class="chip-dot brass"></span>
                 <span style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--accent); ">
-                    ANALYSIS HISTORY // SETTINGS
+                    Settings
                 </span>
             </div>
             <h1 style="font-size: 2.25rem; font-weight: 500; letter-spacing: -0.02em; margin-bottom: 0.4rem;">
@@ -9351,14 +9457,14 @@ def settings_view(
     {success_html}
 
     <!-- Bento Grid Layout: 2 Columns on Desktop -->
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 1.75rem; align-items: start;">
+    <div class="settings-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 1.75rem; align-items: start; width: 100%; min-width: 0;">
 
         <!-- Left Column: Identity & Preferences & Themes & Data -->
         <div>
             <!-- Section 1: GitHub OAuth Identity Dossier -->
             <div class="stratum-card" style="margin-bottom: 1.5rem;">
                 <div style="margin-bottom: 1.25rem;">
-                    <h2 style="font-size: 1.25rem; font-weight: 500; margin: 0;">Institutional Identity</h2>
+                    <h2 style="font-size: 1.25rem; font-weight: 500; margin: 0;">Account identity</h2>
                 </div>
 
                 <div style="display: flex; align-items: center; gap: 1.25rem; background: var(--panel-inset); padding: 1.25rem; border-radius: 4px; border: 1px solid var(--border); margin-bottom: 1rem;">
@@ -9399,7 +9505,7 @@ def settings_view(
             <div class="stratum-card" style="margin-bottom: 1.5rem;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
                     <h2 style="font-size: 1.25rem; font-weight: 500;">Theme</h2>
-                    <span style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--text-muted);">RUNTIME: DATA-THEME</span>
+                    <span style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--text-muted);">Runtime: data-theme</span>
                 </div>
                 <p style="color: var(--text-muted); font-size: 0.85rem; line-height: 1.5; margin-bottom: 1.25rem;">
                     Select visual contrast protocol for parsing call graphs and code diffs. Settings persist across browser sessions in local storage.
@@ -9409,7 +9515,7 @@ def settings_view(
                     <!-- Dark Option -->
                     <button type="button" id="theme-card-dark" onclick="applyThemePreference('dark')" style="text-align: left; padding: 1rem; border-radius: 4px; background: var(--panel-inset); border: 2px solid var(--accent); cursor: pointer; transition: all 150ms ease;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                            <span style="font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600; color: var(--accent); ">Dark Architecture Report</span>
+                            <span style="font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600; color: var(--accent); ">Dark</span>
                             <span id="theme-check-dark" style="color: var(--accent); font-weight: bold; font-size: 0.875rem;">✓</span>
                         </div>
                         <div style="height: 24px; background: #0c0e11; border-radius: 2px; border: 1px solid #282a2d; margin-bottom: 0.5rem; display: flex; align-items: center; padding: 0 0.5rem; gap: 0.35rem;">
@@ -9424,7 +9530,7 @@ def settings_view(
                     <!-- Light Option -->
                     <button type="button" id="theme-card-light" onclick="applyThemePreference('light')" style="text-align: left; padding: 1rem; border-radius: 4px; background: var(--panel-inset); border: 2px solid var(--border); cursor: pointer; transition: all 150ms ease;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                            <span style="font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600; color: var(--text); ">Light Archival</span>
+                            <span style="font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600; color: var(--text); ">Light</span>
                             <span id="theme-check-light" style="color: var(--accent); font-weight: bold; font-size: 0.875rem; display: none;">✓</span>
                         </div>
                         <div style="height: 24px; background: #fbfbfd; border-radius: 2px; border: 1px solid #d3c4b3; margin-bottom: 0.5rem; display: flex; align-items: center; padding: 0 0.5rem; gap: 0.35rem;">
@@ -9449,7 +9555,7 @@ def settings_view(
             <div class="stratum-card" style="margin-bottom: 1.5rem;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
                     <h2 style="font-size: 1.25rem; font-weight: 500;">Account Data &amp; Privacy</h2>
-                    <span style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--text-muted);">GDPR // PORTABILITY</span>
+                    <span style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--text-muted);">Export and privacy</span>
                 </div>
                 <p style="color: var(--text-muted); font-size: 0.85rem; line-height: 1.5; margin-bottom: 1.25rem;">
                     Download a full JSON archive of your analyzed jobs, milestone progress, and quiz scores, or permanently delete your account.
@@ -9636,14 +9742,14 @@ def rewards_view(
         perk_button = f"""
         <form method="POST" action="/rewards/redeem/quota">
             <button type="submit" id="btn-redeem-quota" class="btn btn-primary" style="width: 100%; justify-content: center; font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600; ">
-                ⚡ Redeem +2 Repos (100 PTS)
+                ⚡ Redeem +2 Repos (100 pts)
             </button>
         </form>
         """
     else:
         perk_button = f"""
         <button type="button" class="btn btn-secondary" disabled style="opacity: 0.5; cursor: not-allowed; width: 100%; justify-content: center; font-family: var(--font-ui); font-size: 0.8125rem;">
-            Need 100 PTS (Have {points_balance})
+            Need 100 pts (Have {points_balance})
         </button>
         """
 
@@ -9652,9 +9758,9 @@ def rewards_view(
     for badge in badges:
         earned = badge.get("earned", False)
         earned_badge = """
-        <span class="tag tag-brass" style="background: rgba(135, 90, 20, 0.2); color: var(--accent); border-color: var(--accent); font-size: 0.8125rem; font-weight: 600;">✓ UNLOCKED</span>
+        <span class="tag tag-brass" style="background: rgba(135, 90, 20, 0.2); color: var(--accent); border-color: var(--accent); font-size: 0.8125rem; font-weight: 600;">✓ Unlocked</span>
         """ if earned else """
-        <span class="tag tag-ghost" style="color: var(--text-muted); font-size: 0.8125rem;">LOCKED</span>
+        <span class="tag tag-ghost" style="color: var(--text-muted); font-size: 0.8125rem;">Locked</span>
         """
         card_border = "border-color: var(--accent); box-shadow: 0 0 12px rgba(135, 90, 20, 0.15);" if earned else "border-color: var(--border);"
         progress_val = badge.get("current_progress", 0)
@@ -9799,8 +9905,8 @@ def rewards_view(
             <div class="card" style="padding: 1.5rem; background: var(--surface-2); display: flex; flex-direction: column; justify-content: space-between;">
                 <div>
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
-                        <span class="tag tag-brass" style="font-size: 0.8125rem;">SOFTWARE PERK</span>
-                        <span style="font-family: var(--font-mono); font-size: 0.875rem; font-weight: 600; color: #f59e0b;">100 PTS</span>
+                        <span class="tag tag-brass" style="font-size: 0.8125rem;">Software perk</span>
+                        <span style="font-family: var(--font-mono); font-size: 0.875rem; font-weight: 600; color: #f59e0b;">100 pts</span>
                     </div>
                     <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem;">
                         <span style="font-size: 2rem;">🚀</span>

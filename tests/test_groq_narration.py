@@ -400,7 +400,8 @@ def test_honest_narration_all_milestones_llm(sample_scored_result):
     res = engine.generate_narration(sample_scored_result, llm_provider=all_llm_provider)
     assert res.source == "llm"
     assert get_narration_label(res.source) == "LLM Step-by-Step Narration"
-    assert len(res.steps) == 3
+    assert len(res.steps) == 2
+    assert len(res.test_track) == 1
     # Verify no step fell back
     for s in res.steps:
         assert s.pedagogical_explanation.startswith("**Role:**")

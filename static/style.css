@@ -91,6 +91,15 @@
   color-scheme: light;
 }
 
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+[data-repo-name], .repo-name, .brand-title, .header-repo-name, .file-path, code, h1, h2, h3, h4, .history-card {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 /* Base & Typography */
 body {
   background-color: var(--bg);
@@ -291,19 +300,121 @@ code, pre, .mono, .file-path, table td.number {
   .form-actions-row .btn-primary {
     width: 100%;
   }
+
+  .nav-shell {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    padding: 0.75rem 1rem !important;
+    width: 100% !important;
+  }
+  .nav-links {
+    display: none !important;
+  }
+  #nav-tier-tag {
+    display: none !important;
+  }
+  .user-dropdown-btn .username {
+    display: none !important;
+  }
+  .user-menu-mobile-links {
+    display: block !important;
+  }
 }
 
-/* Overview Redesign Responsive Rules */
-.overview-stat-cards {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 0.75rem;
+/* History Table & Mobile Cards */
+.history-cards-container {
+  display: none;
 }
 
 @media (max-width: 640px) {
-  .overview-stat-cards {
-    grid-template-columns: repeat(2, 1fr) !important;
+  .history-table-container, .table-responsive {
+    display: none !important;
   }
+  .history-cards-container {
+    display: flex !important;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+}
+
+/* Report Tabs with Horizontal Scroll Snap & Right Edge Fade */
+.report-tabs-wrapper {
+  position: relative;
+  overflow: hidden;
+  margin-bottom: 1.75rem;
+  width: 100%;
+}
+.report-tabs-wrapper::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 36px;
+  background: linear-gradient(to right, transparent, var(--bg));
+  pointer-events: none;
+  z-index: 2;
+}
+.report-tabs-nav {
+  display: flex;
+  gap: 0.5rem;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 0.25rem;
+  scrollbar-width: none;
+}
+.report-tabs-nav::-webkit-scrollbar {
+  display: none;
+}
+.report-tab-btn {
+  scroll-snap-align: start;
+  flex-shrink: 0;
+}
+
+/* Stat Grids: auto-fit minmax(140px, 1fr) so no box is orphaned */
+.overview-stat-cards, .stat-grid, .stats-grid, .kpi-grid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)) !important;
+  gap: 0.75rem !important;
+}
+
+/* Settings Cards & Grid */
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  gap: 1.75rem;
+  align-items: start;
+  width: 100%;
+  min-width: 0;
+}
+.settings-card, .stratum-card, .card {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* Side by Side Buttons Get Equal Width (flex: 1) */
+.btn-row, .btn-group, .actions-row, .button-row, .modal-actions, .dialog-actions, .theme-options-grid {
+  display: flex;
+  gap: 0.75rem;
+  width: 100%;
+}
+.btn-row > *,
+.btn-group > *,
+.actions-row > *,
+.button-row > *,
+.modal-actions > *,
+.dialog-actions > *,
+.theme-options-grid > * {
+  flex: 1 1 0;
+  min-width: 0;
+  text-align: center;
+  justify-content: center;
 }
 
 @media (max-width: 768px) {

@@ -73,3 +73,25 @@ def reset_piston_health_state():
     yield
     piston_health_monitor._is_healthy = _discovered_piston_health
     execution_rate_limiter.reset_all()
+
+
+@pytest.fixture
+def billing_on(monkeypatch):
+    """Enable Stripe billing and set mock credentials for billing test runs."""
+    monkeypatch.setenv("STRIPE_BILLING_ENABLED", "true")
+    monkeypatch.setenv("PRO_PRICE_DISPLAY", "$19/mo")
+    monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_mock_secret_key_12345")
+    monkeypatch.setenv("STRIPE_WEBHOOK_SECRET", "whsec_mock_webhook_secret_12345")
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
+
+
+@pytest.fixture
+def rewards_on(monkeypatch):
+    """Enable rewards subsystem for rewards test runs."""
+    monkeypatch.setenv("REWARDS_ENABLED", "true")
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
+

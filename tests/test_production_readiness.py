@@ -8,7 +8,7 @@ from app.core.config import Settings
 from app.services.billing_service import BillingService, BillingServiceError
 
 
-def test_production_config_fails_when_secrets_missing():
+def test_production_config_fails_when_secrets_missing(billing_on):
     """Validates that production environment mode raises ValidationError if any secret is missing."""
     with pytest.raises(ValidationError) as exc_info:
         Settings(
@@ -160,7 +160,7 @@ def test_production_config_rejects_sqlite_database_url():
     assert prod.DATABASE_URL.startswith("postgresql://")
 
 
-def test_stripe_webhook_rejects_invalid_cryptographic_signature():
+def test_stripe_webhook_rejects_invalid_cryptographic_signature(billing_on):
     """
     Validates that BillingService webhook verification strictly rejects invalid signatures.
     Note: Distinguishes from test_billing_and_quota.py by verifying that the direct service layer

@@ -379,9 +379,9 @@ def test_badges_unlock_criteria(db_session):
 
 def test_leaderboard_and_sticky_user_rank(db_session):
     """Verify leaderboard ranks users and pins current user rank accurately."""
-    u1 = UserModel(github_id=9901, github_username="alpha_top", email="alpha@example.com")
-    u2 = UserModel(github_id=9902, github_username="beta_mid", email="beta@example.com")
-    u3 = UserModel(github_id=9903, github_username="gamma_low", email="gamma@example.com")
+    u1 = UserModel(github_id=9901, github_username="alpha_top", email="alpha@example.com", show_on_leaderboard=True)
+    u2 = UserModel(github_id=9902, github_username="beta_mid", email="beta@example.com", show_on_leaderboard=True)
+    u3 = UserModel(github_id=9903, github_username="gamma_low", email="gamma@example.com", show_on_leaderboard=True)
     db_session.add_all([u1, u2, u3])
     db_session.commit()
 
@@ -398,7 +398,7 @@ def test_leaderboard_and_sticky_user_rank(db_session):
     assert lb_for_u2["leaderboard"][1]["username"] == "beta_mid"
 
 
-def test_rewards_frontend_pages_and_actions(db_session, test_users):
+def test_rewards_frontend_pages_and_actions(db_session, test_users, rewards_on):
     """Test GET /rewards page render and POST /rewards/redeem/quota form action."""
     free_user, _ = test_users
 

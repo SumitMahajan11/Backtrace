@@ -395,7 +395,7 @@ def test_submit_button_structural_vs_execution_modes(client, create_user, test_d
 
     # UI check with SANDBOX_ENABLED=false
     monkeypatch.setenv("SANDBOX_ENABLED", "false")
-    resp = client.get(f"/report/{job_id}")
+    resp = client.get(f"/report/{job_id}?preload=1")
     assert resp.status_code == 200
     html = resp.text
 

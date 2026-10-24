@@ -96,19 +96,19 @@ def test_settings_free_user_view(client, create_user, test_db, monkeypatch):
     # 1. Identity
     assert "@settings_user1" in html
     assert "settings_user1@example.com" in html
-    assert "Institutional Identity" in html
+    assert "Account identity" in html
     assert "Profile information and notification email are synced directly from GitHub OAuth" in html
 
     # 2. Themes
     assert "Theme" in html
-    assert "Dark Architecture Report" in html
-    assert "Light Archival" in html
+    assert "Dark" in html
+    assert "Light" in html
     assert "Detect my system" in html
 
     # 3. Quota & Plan
-    assert "FREE TIER" in html
-    assert "0 / 5 CONSUMED" in html
-    assert "AUTOMATIC RESET:" in html
+    assert "Free" in html
+    assert "0 / 5 consumed" in html
+    assert "Resets on" in html
 
     # 4. Price Display ($9 / month, NOT hardcoded $29)
     assert "$9 / month" in html
@@ -143,8 +143,8 @@ def test_settings_paid_user_view(client, create_user, test_db):
     assert resp.status_code == 200
     html = resp.text
 
-    assert "PRO TIER" in html
-    assert "UNLIMITED ANALYSIS JOBS" in html
+    assert "Pro" in html
+    assert "Unlimited analysis jobs" in html
     assert "Manage Subscription &amp; Invoices" in html
     assert "/api/billing/portal" in html
 

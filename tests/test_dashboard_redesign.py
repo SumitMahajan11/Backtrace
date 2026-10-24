@@ -698,9 +698,9 @@ def test_dashboard_distinct_timestamps_in_same_minute(client, create_user, test_
     assert "12:30:10 UTC" in html
     assert "12:30:45 UTC" in html
 
-    # Failed error line must be displayed
+    # Failed error line must be displayed with mapped safe reason
     assert "Failed:" in html
-    assert "Failed while parsing code syntax trees." in html
+    assert "Something went wrong on our side" in html
 
 
 def test_progress_view_activity_log_and_collapsed_technical_log(client, create_user, test_db):
@@ -766,3 +766,41 @@ def test_dashboard_xss_protection_repo_and_error_message(client, create_user, te
     assert "<img src=x onerror" not in html
     assert "<svg onload" not in html
     assert " onmouseover=" not in html
+
+
+def test_dashboard_no_raw_error_text_reaches_page(client, create_user, test_db):
+    """
+    Part A test: Apply failure_reason(error_message) to the dashboard history row,
+    including the title="" attribute. No raw error text may reach any page.
+    A job with error_message "Fatal: could not read Username for 'https://github.com' token=abc"
+    renders a dashboard with none of "Fatal", "Username", "token" in the HTML.
+    """
+    user = create_user(github_id=888010, username="error_san_user")
+    SessionLocal, _ = test_db
+    token = create_access_token(user_id=user.id, github_id=user.github_id, github_username=user.github_username)
+    client.cookies.set("access_token", token)
+
+    raw_err = "Fatal: could not read Username for 'https://github.com' token=abc"
+
+    with SessionLocal() as session:
+        job = AnalysisJobRepository.create_job(
+            session=session,
+            user_id=user.id,
+            repo_url="https://github.com/test/secret-repo",
+            repo_name="secret-repo",
+            status="failed",
+        )
+        job.error_message = raw_err
+        session.commit()
+
+    resp = client.get("/dashboard")
+    assert resp.status_code == 200
+    html = resp.text
+
+    # None of "Fatal", "Username", "token" may appear in the HTML
+    assert "Fatal" not in html
+    assert "Username" not in html
+    assert "token" not in html
+
+    # Instead, the mapped safe failure reason appears
+    assert "couldn&#x27;t access this repository" in html or "couldn't access this repository" in html

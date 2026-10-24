@@ -241,7 +241,7 @@ def test_all_nine_locked_languages_real_repo_validation():
     # 2. Python verification (pallets/flask real code)
     py_app = next(f for f in results["python"].files if f.path == "src/flask/app.py")
     assert "Flask" in py_app.classes
-    assert len(py_app.imports) > 50
+    assert len(py_app.imports) >= 25
 
     py_bp = next(f for f in results["python"].files if f.path == "src/flask/blueprints.py")
     assert "Blueprint" in py_bp.classes

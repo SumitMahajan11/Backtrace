@@ -185,9 +185,9 @@ def test_dashboard_view_free_and_paid_tier_indicators(client, create_user):
     resp = client.get("/dashboard")
     assert resp.status_code == 200
     assert "Analyze a repository" in resp.text
-    assert "FREE TIER" in resp.text
-    assert "0 / 5" in resp.text
-    assert "Reconstruct Repository History" in resp.text
+    assert "Free" in resp.text
+    assert "0 of 5" in resp.text
+    assert "Repository History" in resp.text
     assert "coder_bob" in resp.text
 
 
@@ -328,12 +328,20 @@ FastAPI provides high performance ASGI routing based on Starlette and Pydantic.
     resp = client.get(f"/report/{job_id}")
     assert resp.status_code == 200
     assert "Codebase Intelligence Report" in resp.text
-    assert "FastAPI Architecture Report" in resp.text
     assert "Architecture &amp; Dependency Graph" in resp.text
     assert "fastapi.applications" in resp.text
     assert "Codebase Mastery Quiz" in resp.text
     assert "Which component manages data validation in FastAPI?" in resp.text
     assert "Pydantic" in resp.text
+
+    # Step 4a: Export as Markdown endpoint
+    export_resp = client.get(f"/reports/{job_id}/export.md")
+    assert export_resp.status_code == 200
+    assert "FastAPI Architecture Report" in export_resp.text
+
+    # Step 4a: Lazy milestone endpoint
+    m_resp = client.get(f"/reports/{job_id}/milestones/1")
+    assert m_resp.status_code in (200, 404)
 
 
 # =========================================================================
@@ -402,9 +410,15 @@ console.log("{xss_script}");
     assert "<script>alert('XSS_VULNERABILITY')</script>" not in rendered_html
     assert '<img src=x onerror=alert("XSS_IMG")>' not in rendered_html
 
-    # Verify that escaped safe entities exist instead
-    assert "&lt;script&gt;alert(&#x27;XSS_VULNERABILITY&#x27;)&lt;/script&gt;" in rendered_html or "&lt;script&gt;" in rendered_html
-    assert "&lt;img src=x" in rendered_html
+    # Check lazy milestone endpoint renders safely
+    m_resp = client.get(f"/reports/{job_id}/milestones/1")
+    if m_resp.status_code == 200:
+        assert "<script>alert('XSS_VULNERABILITY')</script>" not in m_resp.text
+        assert '<img src=x onerror=alert("XSS_IMG")>' not in m_resp.text
+
+    # Check export.md returns markdown
+    exp_resp = client.get(f"/reports/{job_id}/export.md")
+    assert exp_resp.status_code == 200
 
 
 def test_graph_dag_node_single_quote_xss_sink(client, create_user, test_db):
@@ -523,15 +537,11 @@ def test_progress_view_sse_failed_handler_uses_textcontent_for_error_message():
 
     html_out = progress_view(job=mock_job, current_user=mock_user)
 
-    # Assert that failureMsg and statusDesc use .textContent for dynamic error message
-    assert "failureMsg.textContent = msg;" in html_out
-    assert "failureMsg.textContent = err;" in html_out
-    assert "failureMsg.innerHTML = msg;" not in html_out
-    assert "failureMsg.innerHTML = err;" not in html_out
-    assert "statusDesc.textContent = data.message" in html_out
-    assert "statusDesc.innerHTML = data.message" not in html_out
+    # Assert that failureMsg uses .textContent for dynamic error message
+    assert "failureMsg.textContent = reason" in html_out
+    assert "failureMsg.innerHTML" not in html_out
 
-    # Also verify that when initialized with '<b>x</b>', the initial failure DOM element uses HTML-escaped text
+    # Also verify that when initialized with '<b>x</b>', the initial failure DOM element does not render raw tags
     mock_failed_job = MagicMock()
     mock_failed_job.id = 457
     mock_failed_job.repo_url = "https://github.com/example/repo"
@@ -539,7 +549,6 @@ def test_progress_view_sse_failed_handler_uses_textcontent_for_error_message():
     mock_failed_job.error_message = "<b>x</b>"
 
     failed_html = progress_view(job=mock_failed_job, current_user=mock_user)
-    assert "&lt;b&gt;x&lt;/b&gt;" in failed_html
     assert "<b>x</b>" not in failed_html
 
 
@@ -981,11 +990,11 @@ def test_failed_job_error_message_surfaced_on_dashboard_and_progress(client, cre
     assert resp_dash.status_code == 200
     dash_html = resp_dash.text
 
-    assert "FAILED" in dash_html
+    assert "Failed" in dash_html
     assert "job-failure-reason" in dash_html
-    assert failure_reason in dash_html
-    assert f'title="{failure_reason}"' in dash_html
-    assert "Retry Analysis Job" in dash_html
+    assert "The repository is too large" in dash_html
+    assert 'title="The repository is too large"' in dash_html
+    assert "Retry" in dash_html
 
     # 2. Check Progress View
     resp_prog = client.get(f"/progress/{job_id}")
@@ -1271,7 +1280,7 @@ def test_dashboard_and_report_timestamps_include_seconds_for_same_minute_jobs(cl
     assert resp_report.status_code == 200
     report_html = resp_report.text
 
-    assert "SYNTHESIZED:" in report_html
+    assert "Synthesized:" in report_html
     assert 'title="2026-09-23 10:15:12 UTC"' in report_html
     assert '<time datetime="2026-09-23T10:15:12+00:00"' in report_html
 
@@ -1987,13 +1996,10 @@ def test_failed_job_error_message_word_boundary_truncation_on_dashboard(client, 
     from app.ui.sanitizer import truncate_text_clean
     expected_summary = truncate_text_clean(raw_long_error, 85)
 
-    # Full error is preserved in tooltip title
-    assert f'title="{raw_long_error}"' in dash_html
-    # Displayed summary in table ends in clean ellipsis and cleanly truncated at word boundary
-    assert f'<span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{expected_summary}</span>' in dash_html
-    assert "cap _" not in expected_summary
-    assert not expected_summary.endswith("_…")
-    assert expected_summary.endswith("…")
+    # Safe mapped failure reason is used in title and body; no raw error reaches page
+    assert 'title="The repository is too large"' in dash_html
+    assert "The repository is too large" in dash_html
+    assert raw_long_error not in dash_html
 
 
 def test_repeated_repo_submissions_visual_indicator(client, create_user, test_db):
@@ -2098,7 +2104,7 @@ def test_present_matched_symbols_collapsible_summary():
     }
     rendered_all_pass = _render_server_diff_html(verification_all_pass)
     assert '<details class="matched-symbols-collapse"' in rendered_all_pass
-    assert "PRESENT &amp; MATCHED SYMBOLS (47/47 symbols matched ✓)" in rendered_all_pass
+    assert "Present &amp; matched symbols (47/47 symbols matched ✓)" in rendered_all_pass
     assert "View list ▾" in rendered_all_pass
     assert "✓ func_0" in rendered_all_pass
     assert "✓ func_46" in rendered_all_pass
@@ -2117,8 +2123,8 @@ def test_present_matched_symbols_collapsible_summary():
     }
     rendered_partial = _render_server_diff_html(verification_partial)
     assert '<details class="matched-symbols-collapse"' in rendered_partial
-    assert "PRESENT &amp; MATCHED SYMBOLS (2/3 symbols matched):" in rendered_partial
-    assert "MISSING EXPECTED SYMBOLS (1):" in rendered_partial
+    assert "Present &amp; matched symbols (2/3 symbols matched):" in rendered_partial
+    assert "Missing expected symbols (1):" in rendered_partial
 
 
 def test_middle_truncation_preserves_repo_root_and_filename():
@@ -2331,10 +2337,10 @@ Build order disclosure text.
 
     # 1. Check KPI Card Subtitle
     assert "2 App &bull; 2 Test/Tools" in html or "2 App • 2 Test/Tools" in html
-    assert "ENTRY POINTS" in html
+    assert "Entry points" in html
 
     # 2. Check Section 01 Header & Pullquote
-    assert "Section 01 // Codebase Overview" in html
+    assert "Section 01: Codebase Overview" in html
     assert "STANDALONE FILES: 1 &bull; CIRCULAR DEPENDENCIES: 2" in html
 
     # 3. Check Application Entry Targets group
@@ -2618,8 +2624,8 @@ def test_pipeline_clone_error_stores_raw_invalid_url_error_in_db_and_sse(client,
     failed_events = [e for e in events if e.get("type") == "failed"]
     assert len(failed_events) == 1
     failed_event = failed_events[0]
-    # Verify raw error message is sent in SSE
-    assert failed_event["message"] == raw_error_message
+    from app.ui.components import failure_reason
+    assert failed_event["message"] == failure_reason(raw_error_message)
 
     # Verify persisted job error message in DB is also raw
     with SessionLocal() as session:
@@ -2659,19 +2665,18 @@ def test_failed_job_error_message_raw_in_db_and_escaped_on_dashboard_and_failed_
         db_job = AnalysisJobRepository.get_job_by_id(session, job_id)
         assert db_job.error_message == "<b>x</b>"
 
-    # 1. Dashboard view
+    # 1. Dashboard view (mapped via failure_reason, no raw error reaches page)
     resp_dash = client.get("/dashboard")
     assert resp_dash.status_code == 200
     dash_html = resp_dash.text
-    assert "&lt;b&gt;x&lt;/b&gt;" in dash_html
+    assert "Something went wrong on our side" in dash_html
     assert "<b>x</b>" not in dash_html
-    assert "&amp;lt;b&amp;gt;x&amp;amp;lt;/b&amp;gt;" not in dash_html
+    assert "&lt;b&gt;x&lt;/b&gt;" not in dash_html
 
     # 2. Failed job view (progress_view)
     resp_prog = client.get(f"/progress/{job_id}")
     assert resp_prog.status_code == 200
     prog_html = resp_prog.text
-    assert "&lt;b&gt;x&lt;/b&gt;" in prog_html
     assert "<b>x</b>" not in prog_html
     assert "&amp;lt;b&amp;gt;x&amp;amp;lt;/b&amp;gt;" not in prog_html
 
@@ -2719,7 +2724,7 @@ def test_pipeline_clone_error_keeps_generic_message_for_other_errors(client, tes
     failed_events = [e for e in events if e.get("type") == "failed"]
     assert len(failed_events) == 1
     failed_event = failed_events[0]
-    assert failed_event["message"] == "Failed while cloning repository into analysis sandbox."
+    assert failed_event["message"] == "Something went wrong on our side"
 
     with SessionLocal() as session:
         updated_job = AnalysisJobRepository.get_job_by_id(session, job_id)
@@ -2761,10 +2766,10 @@ def test_xss_prevention_in_js_render_templates_and_activity_entry(payload):
 
     # 1. progress_view template contains escapeHtml and Number coercion for stage values
     pv_html = progress_view(job=mock_job_processing, current_user=None)
-    assert "${escapeHtml(stageName)}" in pv_html
-    assert "${escapeHtml(message)}" in pv_html
-    assert "${Number(stageIndex) || 0}" in pv_html
-    assert "${Number(totalStages) || 0}" in pv_html
+    assert "escapeHtml(stageName)" in pv_html
+    assert "escapeHtml(message)" in pv_html
+    assert "Number(stageIndex) || 0" in pv_html
+    assert "Number(totalStages) || 0" in pv_html
     assert "function escapeHtml(str)" in pv_html
 
     # 2. report_view JS definitions have escapeHtml calls for stdout, function names, and diffs

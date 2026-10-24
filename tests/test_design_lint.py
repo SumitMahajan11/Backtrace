@@ -6,6 +6,7 @@ Ensures no design violations exist in app/ui/components.py and static/style.css:
 3. No 'IBM Plex Mono' and no 'Newsreader' (except the .brand-title rule).
 4. No legacy tokens: var(--brass), var(--teal), var(--text-primary),
    var(--text-secondary), var(--text-tertiary), var(--hairline), var(--panel).
+5. No visible string of 5+ uppercase letters in a row in template text (acronyms allowed).
 """
 
 from pathlib import Path
@@ -54,6 +55,66 @@ def get_font_size_violations(content: str):
 
 def get_uppercase_violations(content: str):
     return re.findall(r"text-transform:\s*uppercase", content, re.IGNORECASE)
+
+
+ALLOWED_UPPERCASE_ACRONYMS = {
+    "API",
+    "URL",
+    "JSON",
+    "CSV",
+    "HTML",
+    "CSS",
+    "GITHUB",
+    "README",
+    "OAUTH",
+    "FASTAPI",
+    "SQLITE",
+    "PYTHON",
+    "SHA256",
+    "STDOUT",
+    "STDERR",
+    "HTTPS",
+    "HTTP",
+    "UUID",
+    "UTC",
+    "ISO",
+    "AST",
+    "DOM",
+    "REST",
+    "SSR",
+    "XSS",
+    "CSRF",
+    "CORS",
+    "WASM",
+    "LLM",
+    "AI",
+    "CI",
+    "CD",
+    "KPI",
+    "CTA",
+    "SLA",
+    "GDPR",
+    "CLI",
+    "UI",
+    "UX",
+}
+
+
+def get_visible_uppercase_word_violations(content: str):
+    """Fails on visible string of 5+ uppercase letters in a row in template text
+    (e.g., inside HTML tag body: <tag>TEXT</tag>), allowing common acronyms.
+    """
+    violations = []
+    tag_matches = re.finditer(r"<([a-zA-Z0-9]+)[^>]*>([^<]+)</\1>", content)
+    for m in tag_matches:
+        seg = m.group(2)
+        if "{" in seg or ";" in seg or "var " in seg or "const " in seg:
+            continue
+        words = re.findall(r"\b([A-Z]{5,})\b", seg)
+        for w in words:
+            if w not in ALLOWED_UPPERCASE_ACRONYMS:
+                violations.append((w, seg.strip()))
+    return violations
 
 
 def get_font_literal_violations(content: str):
@@ -141,4 +202,20 @@ def test_no_legacy_tokens():
             details.append(f"{path.name}: {v}")
     assert total_violations == 0, (
         f"Found {total_violations} legacy token violations:\n" + "\n".join(details)
+    )
+
+
+def test_no_visible_uppercase_strings_in_templates():
+    files = _read_target_files()
+    total_violations = 0
+    details = []
+    for path, content in files.items():
+        v = get_visible_uppercase_word_violations(content)
+        count = len(v)
+        total_violations += count
+        if count > 0:
+            details.append(f"{path.name}: {count} violations ({v[:5]})")
+    assert total_violations == 0, (
+        f"Found {total_violations} visible 5+ uppercase strings in template text:\n"
+        + "\n".join(details)
     )

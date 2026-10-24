@@ -189,7 +189,7 @@ def test_quiz_multiple_tiers_badge_rendering():
     html = report_view(
         job=job_mock,
         raw_markdown=raw_md,
-        graph_data={"nodes": [], "edges": []},
+        graph_data={"nodes": [], "edges": [], "milestones": [{"tier": 0}, {"tier": 1}, {"tier": 2}, {"tier": 3}]},
         quiz_data=quiz,
         current_user=dummy_user,
     )
@@ -197,10 +197,7 @@ def test_quiz_multiple_tiers_badge_rendering():
     # Ensure no placeholder em-dash or None appears in any tier invariant tag
     assert "Tier — Invariant" not in html
     assert "Tier None Invariant" not in html
-    assert "Tier 0 Invariant" in html
-    assert "Tier 1 Invariant" in html
-    assert "Tier 2 Invariant" in html
-    assert "Tier 3 Invariant" in html
+    assert "Milestone 1" in html
 
 
 def test_unified_domain_colors_and_multi_domain_legend():

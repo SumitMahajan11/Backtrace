@@ -108,7 +108,7 @@ def test_calibrated_confidence_disclosure_with_history(sample_scored_result):
 
     assert "6 Scored Files" in disclosure
     assert "33.33% High Confidence" in disclosure
-    assert "verified Git commit timestamps" in disclosure
+    assert "were ordered based on git history" in disclosure
     assert "16.67% Medium Confidence" in disclosure
     assert "domain precedence rules" in disclosure
     assert "2 Files in Cycles" in disclosure
@@ -151,12 +151,13 @@ def test_deterministic_narration_fallback(sample_scored_result):
     engine = NarrationEngine()
     result = engine.generate_narration(sample_scored_result, llm_provider=None)
 
-    assert len(result.steps) == 3
+    assert len(result.steps) == 2
+    assert len(result.test_track) == 1
     # Step 1 (Tier 0)
     step1 = result.steps[0]
     assert step1.step_number == 1
     assert step1.tier_index == 0
-    assert "Foundation" in step1.title
+    assert "config.py" in step1.title or "Foundation" in step1.title
     assert step1.dominant_confidence == "high"
     assert "src/config.py" in step1.files
     assert "src/constants.py" in step1.files
@@ -170,11 +171,9 @@ def test_deterministic_narration_fallback(sample_scored_result):
     assert step2.dominant_confidence == "low"
     assert "circular dependency cluster" in step2.pedagogical_explanation
 
-    # Step 3 (Tier 2) - Tests
-    step3 = result.steps[2]
-    assert step3.step_number == 3
-    assert step3.tier_index == 2
-    assert "tests/test_api.py" in step3.files
+    # Test Track
+    test_step = result.test_track[0]
+    assert "tests/test_api.py" in test_step.files
 
     # Standalone files
     assert "docs/index.md" in result.isolated_files_summary
@@ -195,7 +194,8 @@ def test_llm_provider_execution(sample_scored_result):
     assert "Senior Software Architect" in called_prompts[0][0]
     assert "Total Scored Files: 6" in called_prompts[0][1]
     assert "Custom LLM Architectural Narrative" in result.overview
-    assert len(result.steps) == 3
+    assert len(result.steps) == 2
+    assert len(result.test_track) == 1
 
 
 def test_llm_provider_exception_fallback(sample_scored_result):
@@ -220,7 +220,7 @@ def test_anti_hallucination_co_tiered_siblings_not_falsely_coupled(sample_scored
     # Check that it does not claim config depends on constants or vice-versa
     assert "depends on `src/constants.py`" not in step0.pedagogical_explanation
     assert "depends on `src/config.py`" not in step0.pedagogical_explanation
-    assert "2/2 files verified via Git history" in step0.pedagogical_explanation
+    assert "2/2 files based on git history" in step0.pedagogical_explanation
 
 
 def test_cyclic_cluster_explicit_non_ordinal_framing(sample_scored_result):
