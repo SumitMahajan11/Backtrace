@@ -381,6 +381,27 @@ code, pre, .mono, .file-path, table td.number {
   gap: 0.75rem !important;
 }
 
+@media (max-width: 480px) {
+  .progress-ready-stats-grid {
+    grid-template-columns: 1fr !important;
+    gap: 0.5rem !important;
+  }
+  .progress-ready-stats-grid .stat-card {
+    display: flex !important;
+    flex-direction: row !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    padding: 0.75rem 1rem !important;
+  }
+  .progress-ready-stats-grid .stat-card > div:first-child {
+    margin: 0 !important;
+  }
+  .progress-ready-stats-grid .stat-card > div:last-child {
+    margin: 0 !important;
+    font-size: 1.25rem !important;
+  }
+}
+
 /* Settings Cards & Grid */
 .settings-grid {
   display: grid;

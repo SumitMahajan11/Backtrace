@@ -3038,6 +3038,27 @@ def progress_view(
         }}
     }}
 
+    @media (max-width: 480px) {{
+        .progress-ready-stats-grid {{
+            grid-template-columns: 1fr !important;
+            gap: 0.5rem !important;
+        }}
+        .progress-ready-stats-grid .stat-card {{
+            display: flex !important;
+            flex-direction: row !important;
+            justify-content: space-between !important;
+            align-items: center !important;
+            padding: 0.75rem 1rem !important;
+        }}
+        .progress-ready-stats-grid .stat-card > div:first-child {{
+            margin: 0 !important;
+        }}
+        .progress-ready-stats-grid .stat-card > div:last-child {{
+            margin: 0 !important;
+            font-size: 1.25rem !important;
+        }}
+    }}
+
     .progress-bar-track {{
         height: 6px;
         background: var(--surface-2);
@@ -3151,7 +3172,7 @@ def progress_view(
                 <p style="font-size: 0.8125rem; color: var(--text-muted); margin: 0.15rem 0 0 0;">Repository analysis completed successfully.</p>
             </div>
         </div>
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+        <div class="progress-ready-stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
             <div class="stat-card" style="background: var(--surface-2); padding: 1rem; border-radius: 6px; border: 1px solid var(--border);">
                 <div style="font-size: 0.8125rem; color: var(--text-muted); ">Files analyzed</div>
                 <div id="ready-files-count" style="font-size: 1.5rem; font-weight: 700; color: var(--text); margin-top: 0.25rem;">{files_analyzed}</div>
