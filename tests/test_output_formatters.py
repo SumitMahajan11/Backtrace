@@ -123,16 +123,16 @@ def test_quiz_multiple_tiers_badge_rendering():
         cyclic_cluster_file_count=2,
         isolated_file_count=0,
     )
-    m0 = SynthesizedMilestone(
-        tier=0,
+    m1 = SynthesizedMilestone(
+        tier=1,
         title="Database Models",
         summary="Foundational models.",
         dominant_domain="database",
         files=["src/models.py"],
         confidence="high",
     )
-    m1 = SynthesizedMilestone(
-        tier=1,
+    m2 = SynthesizedMilestone(
+        tier=2,
         title="Core Subsystem (Cyclic)",
         summary="Cyclic core subsystem.",
         dominant_domain="core",
@@ -140,16 +140,16 @@ def test_quiz_multiple_tiers_badge_rendering():
         confidence="low",
         is_cyclic=True,
     )
-    m2 = SynthesizedMilestone(
-        tier=2,
+    m3 = SynthesizedMilestone(
+        tier=3,
         title="Service Layer",
         summary="Business service logic.",
         dominant_domain="core",
         files=["src/service.py"],
         confidence="medium",
     )
-    m3 = SynthesizedMilestone(
-        tier=3,
+    m4 = SynthesizedMilestone(
+        tier=4,
         title="API Server",
         summary="Top level API server.",
         dominant_domain="api",
@@ -160,7 +160,7 @@ def test_quiz_multiple_tiers_badge_rendering():
         repo_name="multitier-repo",
         architecture_overview=ov,
         confidence_disclosure="Multi-tier verification.",
-        milestones=[m0, m1, m2, m3],
+        milestones=[m1, m2, m3, m4],
         total_milestones=4,
         synthesis_timestamp="2026-09-24T12:00:00Z",
     )
@@ -173,7 +173,7 @@ def test_quiz_multiple_tiers_badge_rendering():
     for q in quiz["questions"]:
         assert "tier" in q
         assert isinstance(q["tier"], int)
-        assert q["tier"] in [0, 1, 2, 3]
+        assert q["tier"] in [1, 2, 3, 4]
 
     # Render via UI report_view and verify badges
     dummy_user = UserModel(id=1, github_id=12345, github_username="tester", email="tester@example.com")
@@ -202,10 +202,10 @@ def test_quiz_multiple_tiers_badge_rendering():
             "nodes": [],
             "edges": [],
             "milestones": [
-                {"tier": 0, "title": "Database Models"},
-                {"tier": 1, "title": "Core Subsystem (Cyclic)"},
-                {"tier": 2, "title": "Service Layer"},
-                {"tier": 3, "title": "API Server"},
+                {"tier": 1, "title": "Database Models"},
+                {"tier": 2, "title": "Core Subsystem (Cyclic)"},
+                {"tier": 3, "title": "Service Layer"},
+                {"tier": 4, "title": "API Server"},
             ],
         },
         quiz_data=quiz,
@@ -215,14 +215,22 @@ def test_quiz_multiple_tiers_badge_rendering():
     # Ensure no placeholder em-dash or None appears in any tier invariant tag
     assert "Tier — Invariant" not in html
     assert "Tier None Invariant" not in html
-    assert "Milestone 1" in html
-    assert "Milestone 2" in html
-    assert "Milestone 3" in html
-    assert "Milestone 4" in html
-    assert "Database Models" in html
-    assert "Core Subsystem (Cyclic)" in html
-    assert "Service Layer" in html
-    assert "API Server" in html
+    assert "Milestone 0" not in html
+
+    import re
+    panes = {
+        1: "Database Models",
+        2: "Core Subsystem (Cyclic)",
+        3: "Service Layer",
+        4: "API Server",
+    }
+    for tier, title in panes.items():
+        assert f'id="milestone-pane-{tier}"' in html
+        # Find the content of this milestone pane block
+        pane_pattern = rf'id="milestone-pane-{tier}"[\s\S]*?(?=<div class="milestone-pane"|<!-- End Milestones -->|$)'
+        m = re.search(pane_pattern, html)
+        assert m is not None, f"milestone-pane-{tier} block not found"
+        assert title in m.group(0), f"Title {title!r} not found inside milestone-pane-{tier} block"
 
 
 def test_unified_domain_colors_and_multi_domain_legend():
