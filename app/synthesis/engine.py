@@ -194,7 +194,8 @@ class SynthesisEngine:
         domain_breakdown_counts = {d: len(flist) for d, flist in step.domain_groups.items()}
 
         return SynthesizedMilestone(
-            tier=step.tier_index,
+            tier=display_number,
+            tier_index=step.tier_index,
             title=step.title,
             summary=step.pedagogical_explanation,
             dominant_domain=step.dominant_domain,

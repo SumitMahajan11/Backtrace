@@ -84,7 +84,8 @@ def test_synthesis_engine_report_generation():
     assert report.architecture_overview.primary_language == "python"
     assert "src/core.py" in report.architecture_overview.entry_point_files
     assert report.total_milestones >= 3
-    assert report.milestones[0].tier == 0
+    assert report.milestones[0].tier == 1
+    assert report.milestones[0].tier_index == 0
     assert "helper_fn" in report.milestones[0].key_symbols_and_exports
 
 

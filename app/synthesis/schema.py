@@ -19,6 +19,7 @@ class SynthesizedMilestone(BaseModel):
     confidence_breakdown: Dict[str, int] = Field(default_factory=dict)
     is_cyclic: bool = False
     is_isolated: bool = False
+    tier_index: int = 0
 
     # Enriched contextual fields from Layer 5 RAG and Layer 4 Architecture
     architectural_role: str = ""

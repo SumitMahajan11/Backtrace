@@ -53,8 +53,10 @@ def test_real_flask_synthesis_and_narration():
     # Entrypoints must reflect actual parsed files
     assert any("cli.py" in ep or "__main__.py" in ep for ep in ov.entry_point_files)
 
-    # Tier 0 must identify foundation leaf primitives with zero internal dependencies
-    m0 = next(m for m in report.milestones if m.tier == 0)
+    # First milestone (tier=1, tier_index=0) must identify foundation leaf primitives with zero internal dependencies
+    m0 = next(m for m in report.milestones if m.tier == 1)
+    assert m0.tier == 1
+    assert m0.tier_index == 0
     assert "signals.py" in m0.files[0] or "typing.py" in m0.files[0]
     assert "zero internal dependencies" in m0.summary.lower()
 
