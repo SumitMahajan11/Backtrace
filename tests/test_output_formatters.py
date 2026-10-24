@@ -185,11 +185,29 @@ def test_quiz_multiple_tiers_badge_rendering():
         "execution_time_seconds": 2.5,
         "run_id": "run_42",
     }
-    raw_md = "# Architectural Reverse-Engineering Report: `multitier-repo`\n## 1. Executive Architecture Overview\n## 2. Build Order & Confidence Scoring\n## 3. Step-by-Step Architectural Milestones\n"
+    raw_md = (
+        "# Architectural Reverse-Engineering Report: `multitier-repo`\n"
+        "## 1. Executive Architecture Overview\n"
+        "## 2. Build Order & Confidence Scoring\n"
+        "## 3. Step-by-Step Architectural Milestones\n"
+        "### Milestone 1: Database Models\nFoundational models.\n"
+        "### Milestone 2: Core Subsystem (Cyclic)\nCyclic core subsystem.\n"
+        "### Milestone 3: Service Layer\nBusiness service logic.\n"
+        "### Milestone 4: API Server\nTop level API server.\n"
+    )
     html = report_view(
         job=job_mock,
         raw_markdown=raw_md,
-        graph_data={"nodes": [], "edges": [], "milestones": [{"tier": 0}, {"tier": 1}, {"tier": 2}, {"tier": 3}]},
+        graph_data={
+            "nodes": [],
+            "edges": [],
+            "milestones": [
+                {"tier": 0, "title": "Database Models"},
+                {"tier": 1, "title": "Core Subsystem (Cyclic)"},
+                {"tier": 2, "title": "Service Layer"},
+                {"tier": 3, "title": "API Server"},
+            ],
+        },
         quiz_data=quiz,
         current_user=dummy_user,
     )
@@ -198,6 +216,13 @@ def test_quiz_multiple_tiers_badge_rendering():
     assert "Tier — Invariant" not in html
     assert "Tier None Invariant" not in html
     assert "Milestone 1" in html
+    assert "Milestone 2" in html
+    assert "Milestone 3" in html
+    assert "Milestone 4" in html
+    assert "Database Models" in html
+    assert "Core Subsystem (Cyclic)" in html
+    assert "Service Layer" in html
+    assert "API Server" in html
 
 
 def test_unified_domain_colors_and_multi_domain_legend():

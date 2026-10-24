@@ -16,7 +16,8 @@ _LARGE_REGEX = re.compile(
 
 # 2. Access issues checked second
 _ACCESS_REGEX = re.compile(
-    r"\b(?:auth|authenticate|authentication|access|private|not found|404|403|permission|permissions|could not resolve|host|username|token|credentials?)\b",
+    r"\b(?:auth|authenticate|authentication|access denied|permission|permissions|could not resolve|username|token|credentials?|private|not found|404|403)\b|"
+    r"clon(?:e|ing)\s+.*?(?:failed|denied)|repository\s+.*?not\s+found|could\s+not\s+read\s+username",
     re.IGNORECASE,
 )
 

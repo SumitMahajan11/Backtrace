@@ -61,8 +61,8 @@ def test_confidence_summary_10_files():
     )
 
     # Card titled "Confidence" shows the high % (20%)
-    assert "Confidence" in html_out
-    assert "20%</div>" in html_out
+    assert '<div class="kpi-label">Confidence</div>' in html_out
+    assert f">{summary.high_pct}%</div>" in html_out
 
     # A separate line shows "X files low confidence" using a count (5 files low confidence), not a percent
     assert "5 files low confidence" in html_out

@@ -157,7 +157,7 @@ def test_deterministic_narration_fallback(sample_scored_result):
     step1 = result.steps[0]
     assert step1.step_number == 1
     assert step1.tier_index == 0
-    assert "config.py" in step1.title or "Foundation" in step1.title
+    assert step1.title == "Understand config.py"
     assert step1.dominant_confidence == "high"
     assert "src/config.py" in step1.files
     assert "src/constants.py" in step1.files

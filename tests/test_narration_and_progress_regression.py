@@ -349,7 +349,7 @@ def test_progress_sse_failed_job_terminal_event(client, test_user, test_db):
             status="failed",
         )
         job.failed_stage = "stage_1"
-        job.error_message = "Git clone failed: Repository not found (404)"
+        job.error_message = "Git clone sandbox error"
         session.commit()
         job_id = job.id
 
@@ -364,7 +364,7 @@ def test_progress_sse_failed_job_terminal_event(client, test_user, test_db):
     # Strictly must be 'failed', NEVER 'completed'
     assert event_data["type"] == "failed"
     assert event_data["failed_stage"] == "stage_1"
-    assert event_data["message"] == "We couldn't access this repository (it may be private or the link is wrong)"
+    assert event_data["message"] == "Something went wrong on our side"
 
 
 # 12. Analysis status polling endpoint
