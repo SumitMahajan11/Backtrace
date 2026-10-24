@@ -21,6 +21,7 @@ from app.services.piston_health import piston_health_monitor
 from app.services.scaffold_generator import ScaffoldGenerator
 from app.services.structural_verifier import StructuralVerifier
 from app.core.config import billing_enabled, rewards_enabled
+from app.core.failure_reason import failure_reason, map_failure_reason
 from app.ui.sanitizer import sanitize_text, render_safe_markdown, truncate_text_clean, render_user_markdown
 from app.sequence.confidence_scoring import confidence_summary, ConfidenceSummary
 
@@ -1787,19 +1788,6 @@ DASHBOARD_INLINE_JS = """
 """
 
 
-def failure_reason(error_message: Optional[str]) -> str:
-    """Map raw job error message to one of three clean user-facing sentences."""
-    if not error_message:
-        return "Something went wrong on our side"
-    err = str(error_message).lower()
-    if any(k in err for k in ["auth", "access", "private", "not found", "404", "403", "permission", "clone", "could not resolve", "fatal: repository", "fatal", "shallow clone", "host", "username", "token", "credential"]):
-        return "We couldn't access this repository (it may be private or the link is wrong)"
-    if any(k in err for k in ["large", "exceeds", "file limit", "cap", "too many files", "size boundary"]):
-        return "The repository is too large"
-    return "Something went wrong on our side"
-
-
-map_failure_reason = failure_reason
 
 
 def dashboard_view(
@@ -2339,18 +2327,6 @@ def map_stage_to_phase(stage: str) -> Dict[str, Any]:
             return dict(val)
     return {"phase_index": 1, "phase_name": "Get the code"}
 
-def failure_reason(error_message: Optional[str]) -> str:
-    """Map raw job error message to one of three clean user-facing sentences."""
-    if not error_message:
-        return "Something went wrong on our side"
-    err = str(error_message).lower()
-    if any(k in err for k in ["auth", "access", "private", "not found", "404", "403", "permission", "clone", "could not resolve", "fatal: repository", "fatal", "shallow clone", "host", "username", "token", "credential"]):
-        return "We couldn't access this repository (it may be private or the link is wrong)"
-    if any(k in err for k in ["large", "exceeds", "file limit", "cap", "too many files", "size boundary"]):
-        return "The repository is too large"
-    return "Something went wrong on our side"
-
-map_failure_reason = failure_reason
 
 def extract_owner_and_repo(job: Any) -> Tuple[str, str]:
     """Extract clean (owner, repo) pair for Title: Analyzing {owner}/{repo}."""
