@@ -5,7 +5,8 @@ import json
 import logging
 import os
 import re
-from typing import Callable, Dict, List, Optional, Set, Tuple
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 from app.sequence.schema import (
     BuildStepNarrative,
     NodeMetadata,
@@ -14,6 +15,46 @@ from app.sequence.schema import (
     ScoredOrderingResult,
     SequenceNarrationResult,
 )
+
+
+def _is_test_file(path: str) -> bool:
+    """Checks if a file path is a test file (under tests/ or named test_*.py, *_test.py, conftest.py)."""
+    norm = path.replace("\\", "/").strip("/")
+    parts = norm.split("/")
+    filename = parts[-1]
+    if "tests" in parts or parts[0] == "tests" or "/tests/" in f"/{norm}/":
+        return True
+    if filename.startswith("test_") and filename.endswith(".py"):
+        return True
+    if filename.endswith("_test.py"):
+        return True
+    if filename == "conftest.py":
+        return True
+    return False
+
+
+def _derive_folder_or_file_name(file_paths: List[str]) -> str:
+    """Derives a concise folder or file name representing a group of milestone files."""
+    if not file_paths:
+        return "core"
+    norm_paths = [p.replace("\\", "/").strip("/") for p in file_paths]
+    if len(norm_paths) == 1:
+        return Path(norm_paths[0]).name
+
+    try:
+        common = os.path.commonpath(norm_paths).replace("\\", "/")
+    except Exception:
+        common = ""
+
+    if common and common not in (".", "", "/", "src", "app", "./src", "./app"):
+        folder = Path(common).name
+        if folder:
+            return folder
+
+    substantive = [p for p in norm_paths if not Path(p).name.startswith("__init__")]
+    chosen = substantive[0] if substantive else norm_paths[0]
+    return Path(chosen).name
+
 
 
 STAGE_D_SYSTEM_PROMPT = """You are a Senior Software Architect and Master Technical Educator.
@@ -226,22 +267,34 @@ class NarrationEngine:
             "| :--- | :---: | :---: | :---: | :---: | :--- |",
         ]
 
-        sorted_tiers = sorted(k for k in tier_to_files.keys() if k >= 0)
-        tier_high, tier_med, tier_low = 0, 0, 0
-
-        for step_num, tier_idx in enumerate(sorted_tiers, start=1):
+        # Separate into core tiers and test track tiers
+        core_tiers: List[Tuple[int, List[ScoredFileEntry]]] = []
+        test_tiers: List[Tuple[int, List[ScoredFileEntry]]] = []
+        for tier_idx in sorted(k for k in tier_to_files.keys() if k >= 0):
             files = tier_to_files[tier_idx]
-            confs = Counter(f.confidence for f in files)
-            h, m, l = confs.get("high", 0), confs.get("medium", 0), confs.get("low", 0)
-            tier_high += h
-            tier_med += m
-            tier_low += l
-            is_cyclic = any(f.path in scored_result.cyclic_files for f in files)
-            cyclic_lbl = " (Cyclic)" if is_cyclic else ""
+            core_f = [f for f in files if not _is_test_file(f.path)]
+            test_f = [f for f in files if _is_test_file(f.path)]
+            if core_f:
+                core_tiers.append((tier_idx, core_f))
+            if test_f:
+                test_tiers.append((tier_idx, test_f))
 
-            # Dominant domain
+        # Ensure main.py appears in the core track before any test milestone
+        iso_files = list(tier_to_files.get(-1, []))
+        main_iso = [f for f in iso_files if f.path == "main.py" or f.path.endswith("/main.py")]
+        if main_iso:
+            core_tiers.append((-1, main_iso))
+            iso_files = [f for f in iso_files if f not in main_iso]
+
+        tier_high, tier_med, tier_low = 0, 0, 0
+        total_milestone_files = 0
+
+        # Helper to compute domain
+        def _get_top_domain(flist: List[ScoredFileEntry], fallback_domain: Optional[str] = None) -> str:
+            if fallback_domain:
+                return fallback_domain
             dom_counts = Counter()
-            for f in files:
+            for f in flist:
                 meta = refined_result.node_metadata.get(f.path) if refined_result else None
                 dom = meta.domain if meta and meta.domain else None
                 if not dom or dom == "uncategorized":
@@ -257,17 +310,41 @@ class NarrationEngine:
                     else:
                         dom = "core"
                 dom_counts[str(dom)] += 1
-            top_dom = dom_counts.most_common(1)[0][0] if dom_counts else "core"
-            table_rows.append(f"| Milestone {step_num} (Tier {tier_idx}{cyclic_lbl}) | {h} | {m} | {l} | {len(files)} | {top_dom.capitalize()} |")
+            return dom_counts.most_common(1)[0][0] if dom_counts else "core"
 
-        iso_files = tier_to_files.get(-1, [])
+        # 1. Core milestones (1..N)
+        for step_num, (tier_idx, files) in enumerate(core_tiers, start=1):
+            confs = Counter(f.confidence for f in files)
+            h, m, l = confs.get("high", 0), confs.get("medium", 0), confs.get("low", 0)
+            tier_high += h
+            tier_med += m
+            tier_low += l
+            total_milestone_files += len(files)
+            is_cyclic = any(f.path in scored_result.cyclic_files for f in files)
+            cyclic_lbl = " (Cyclic)" if is_cyclic else ""
+            top_dom = _get_top_domain(files)
+            table_rows.append(f"| Milestone {step_num}{cyclic_lbl} | {h} | {m} | {l} | {len(files)} | {top_dom.capitalize()} |")
+
+        # 2. Test track milestones (T1..Tn) ordered after all core milestones
+        for test_idx, (tier_idx, files) in enumerate(test_tiers, start=1):
+            confs = Counter(f.confidence for f in files)
+            h, m, l = confs.get("high", 0), confs.get("medium", 0), confs.get("low", 0)
+            tier_high += h
+            tier_med += m
+            tier_low += l
+            total_milestone_files += len(files)
+            is_cyclic = any(f.path in scored_result.cyclic_files for f in files)
+            cyclic_lbl = " (Cyclic)" if is_cyclic else ""
+            top_dom = _get_top_domain(files, fallback_domain="tests")
+            table_rows.append(f"| Test files T{test_idx}{cyclic_lbl} | {h} | {m} | {l} | {len(files)} | {top_dom.capitalize()} |")
+
         iso_h = sum(1 for f in iso_files if f.confidence == "high")
         iso_m = sum(1 for f in iso_files if f.confidence == "medium")
         iso_l = sum(1 for f in iso_files if f.confidence == "low")
 
-        table_rows.append(f"| **Tier Subtotal** | **{tier_high}** | **{tier_med}** | **{tier_low}** | **{len(scored_result.files) - len(iso_files)}** | - |")
+        table_rows.append(f"| **Subtotal** | **{tier_high}** | **{tier_med}** | **{tier_low}** | **{total_milestone_files}** | - |")
         if iso_files:
-            table_rows.append(f"| Isolated Files (Tier -1) | {iso_h} | {iso_m} | {iso_l} | {len(iso_files)} | Standalone |")
+            table_rows.append(f"| Isolated Files | {iso_h} | {iso_m} | {iso_l} | {len(iso_files)} | Standalone |")
 
         tot_h = tier_high + iso_h
         tot_m = tier_med + iso_m
@@ -375,19 +452,42 @@ class NarrationEngine:
         for f in scored_result.files:
             tier_to_files[f.tier_index].append(f)
 
-        sorted_tier_indices = sorted(k for k in tier_to_files.keys() if k >= 0)
-        total_tiers = len(sorted_tier_indices)
+        # Separate tiers into core milestones and test track milestones
+        core_tiers: List[Tuple[int, List[ScoredFileEntry]]] = []
+        test_tiers: List[Tuple[int, List[ScoredFileEntry]]] = []
+        for tier_idx in sorted(k for k in tier_to_files.keys() if k >= 0):
+            files = tier_to_files[tier_idx]
+            core_f = [f for f in files if not _is_test_file(f.path)]
+            test_f = [f for f in files if _is_test_file(f.path)]
+            if core_f:
+                core_tiers.append((tier_idx, core_f))
+            if test_f:
+                test_tiers.append((tier_idx, test_f))
+
+        # Part A requirement 5: main.py (an entry point) must appear in the core track before any test milestone
+        iso_files = list(tier_to_files.get(-1, []))
+        main_iso = [f for f in iso_files if f.path == "main.py" or f.path.endswith("/main.py")]
+        if main_iso:
+            core_tiers.append((-1, main_iso))
+            iso_files = [f for f in iso_files if f not in main_iso]
+
+        total_tiers = len(core_tiers) + len(test_tiers)
 
         overview = (
             f"This learning sequence guides you through building and understanding the repository in "
-            f"**{total_tiers} logical milestones**, progressing from foundational interfaces with zero internal prerequisites "
+            f"**{len(core_tiers)} core milestones**"
+            + (f" and **{len(test_tiers)} test milestones**" if test_tiers else "")
+            + f", progressing from foundational interfaces with zero internal prerequisites "
             f"to higher-level application components, endpoints, and test suites."
         )
 
         steps: List[BuildStepNarrative] = []
+        test_track: List[BuildStepNarrative] = []
+        seen_titles: Dict[str, int] = {}
+        has_history = bool(scored_result.repo_confidence_summary and scored_result.repo_confidence_summary.history_available)
 
-        for step_num, tier_idx in enumerate(sorted_tier_indices, start=1):
-            files_in_tier = tier_to_files[tier_idx]
+        # 1. Build Core Milestones (numbered 1..N)
+        for step_num, (tier_idx, files_in_tier) in enumerate(core_tiers, start=1):
             file_paths = [f.path for f in files_in_tier]
             is_cyclic = any(f.path in scored_result.cyclic_files for f in files_in_tier)
 
@@ -424,8 +524,7 @@ class NarrationEngine:
             dominant_domain = top_dom if (top_count / max(len(files_in_tier), 1)) >= 0.5 else "mixed"
 
             # Derive pedagogical title and explanation
-            has_history = bool(scored_result.repo_confidence_summary and scored_result.repo_confidence_summary.history_available)
-            title = self._derive_step_title(tier_idx, total_tiers, files_in_tier, is_cyclic, domain_groups, dominant_domain)
+            title = self._derive_step_title(files_in_tier, seen_titles)
             explanation = self._derive_step_explanation(
                 tier_idx, total_tiers, files_in_tier, is_cyclic, domain_groups, dominant_domain, has_history=has_history
             )
@@ -443,11 +542,51 @@ class NarrationEngine:
                     confidence_breakdown=conf_breakdown,
                     pedagogical_explanation=explanation,
                     key_symbols_or_concepts=[],
+                    track="core",
+                    track_label="Milestone",
+                    display_id=str(step_num),
+                )
+            )
+
+        # 2. Build Test Track Milestones (numbered T1..Tn, ordered after all core milestones)
+        for test_idx, (tier_idx, files_in_tier) in enumerate(test_tiers, start=1):
+            file_paths = [f.path for f in files_in_tier]
+            is_cyclic = any(f.path in scored_result.cyclic_files for f in files_in_tier)
+
+            domain_groups: Dict[str, List[str]] = defaultdict(list)
+            for f in files_in_tier:
+                domain_groups["tests"].append(f.path)
+
+            conf_counts = Counter(f.confidence for f in files_in_tier)
+            dominant_conf = conf_counts.most_common(1)[0][0] if conf_counts else "low"
+            conf_breakdown = dict(conf_counts)
+
+            title = self._derive_step_title(files_in_tier, seen_titles)
+            explanation = self._derive_step_explanation(
+                tier_idx, total_tiers, files_in_tier, is_cyclic, domain_groups, "tests", has_history=has_history
+            )
+
+            test_track.append(
+                BuildStepNarrative(
+                    step_number=test_idx,
+                    title=title,
+                    tier_index=tier_idx,
+                    files=file_paths,
+                    domain_groups=dict(domain_groups),
+                    dominant_domain="tests",
+                    is_cyclic_cluster=is_cyclic,
+                    dominant_confidence=dominant_conf,
+                    confidence_breakdown=conf_breakdown,
+                    pedagogical_explanation=explanation,
+                    key_symbols_or_concepts=[],
+                    track="test_track",
+                    track_label="Test files",
+                    display_id=f"T{test_idx}",
                 )
             )
 
         # Isolated files summary
-        isolated_paths = [f.path for f in tier_to_files.get(-1, [])]
+        isolated_paths = [f.path for f in iso_files]
         if isolated_paths:
             iso_summary = (
                 f"**{len(isolated_paths)} Standalone Files**: "
@@ -461,6 +600,7 @@ class NarrationEngine:
             overview=overview,
             confidence_disclosure=disclosure,
             steps=steps,
+            test_track=test_track,
             isolated_files_summary=iso_summary,
             prompt_used=prompt_used,
             source="template",
@@ -496,36 +636,40 @@ class NarrationEngine:
 
     def _derive_step_title(
         self,
-        tier_idx: int,
-        total_tiers: int,
-        files: List[ScoredFileEntry],
-        is_cyclic: bool,
-        domain_groups: Dict[str, List[str]],
-        dominant_domain: str,
+        files: Any,
+        seen_titles: Optional[Dict[str, int]] = None,
+        *args,
+        **kwargs,
     ) -> str:
-        """Derives a human-friendly pedagogical title for a milestone based on dominant domain and cyclic status."""
-        if is_cyclic:
-            return f"Core Subsystem Cluster (Tier {tier_idx})"
-
-        if tier_idx == 0:
-            return "Foundation Primitives & Base Contracts (Tier 0)"
-
-        if dominant_domain == "tests":
-            if len(domain_groups) > 1:
-                return f"Test Verification Suites & Subsystem Fixtures (Tier {tier_idx})"
-            return f"Test Suite & Verification Layer (Tier {tier_idx})"
-        elif dominant_domain in ("core", "backend"):
-            if len(domain_groups) > 1:
-                return f"Core Framework Extensions & Multi-Domain Modules (Tier {tier_idx})"
-            return f"Core Framework Extensions & Handlers (Tier {tier_idx})"
-        elif dominant_domain == "examples":
-            if len(domain_groups) > 1:
-                return f"Application Demos & Example Suites (Tier {tier_idx})"
-            return f"Application Demos & Examples (Tier {tier_idx})"
-        elif tier_idx == total_tiers - 1:
-            return f"Top-Level Composition & Entrypoints (Tier {tier_idx})"
+        """Derives a unique pedagogical title in the format 'Understand {folder_or_file_name}', appending ' (part 2)' on collision."""
+        if isinstance(files, int) and args:
+            files_list = args[1] if len(args) > 1 else []
+        elif isinstance(files, list):
+            files_list = files
         else:
-            return f"Modular Subsystems & Utilities (Tier {tier_idx})"
+            files_list = []
+
+        paths = []
+        for item in files_list:
+            if hasattr(item, "path"):
+                paths.append(item.path)
+            elif isinstance(item, str):
+                paths.append(item)
+
+        name = _derive_folder_or_file_name(paths)
+        candidate = f"Understand {name}"
+        if seen_titles is None:
+            seen_titles = getattr(self, "_seen_titles", None)
+            if seen_titles is None:
+                seen_titles = {}
+                self._seen_titles = seen_titles
+
+        count = seen_titles.get(candidate, 0) + 1
+        seen_titles[candidate] = count
+        if count == 1:
+            return candidate
+        else:
+            return f"{candidate} (part {count})"
 
     def _derive_step_explanation(
         self,
@@ -601,10 +745,10 @@ class NarrationEngine:
                 role_intro = (
                     f"This milestone is predominantly a test verification layer ({tests_count}/{file_count} files) "
                     f"alongside {other_count} additional module(s) ({other_samples}). These files validate subsystem contracts, "
-                    f"integration behaviors, and error handling for features implemented in earlier tiers."
+                    f"integration behaviors, and error handling for features implemented in earlier milestones."
                 )
             else:
-                consume_phrase = "This file consumes the modules built in earlier tiers" if file_count == 1 else f"These {file_count} files consume the modules built in earlier tiers"
+                consume_phrase = "This file consumes the modules built in earlier milestones" if file_count == 1 else f"These {file_count} files consume the modules built in earlier milestones"
                 role_intro = (
                     f"Implement the test suite files ({sample_files}). {consume_phrase} "
                     f"to validate subsystem contracts, error handling, and behavioral regressions."
@@ -626,13 +770,13 @@ class NarrationEngine:
                 role_intro = (
                     f"This milestone is predominantly an application examples/tutorials layer ({examples_count}/{file_count} files) "
                     f"alongside {other_count} additional module(s) ({other_samples}). These files demonstrate practical usage patterns, "
-                    f"integrations, and sample setups built upon earlier tiers."
+                    f"integrations, and sample setups built upon earlier milestones."
                 )
             else:
                 demo_phrase = "This file demonstrates practical" if file_count == 1 else f"These {file_count} files demonstrate practical"
                 role_intro = (
                     f"Implement reference application examples ({sample_files}). {demo_phrase} "
-                    f"usage patterns and application setups built upon earlier tiers."
+                    f"usage patterns and application setups built upon earlier milestones."
                 )
             return (
                 f"**Role:** {role_intro}{domain_section}\n"
@@ -645,7 +789,7 @@ class NarrationEngine:
                 f"**Confidence & Provenance:** {provenance_str}."
             )
         else:
-            tier_phrase = "This file builds upon the foundational contracts established in previous tiers" if file_count == 1 else f"These {file_count} files build upon the foundational contracts established in previous tiers"
+            tier_phrase = "This file builds upon the foundational contracts established in previous milestones" if file_count == 1 else f"These {file_count} files build upon the foundational contracts established in previous milestones"
             return (
                 f"**Role:** Implement {sample_files}. {tier_phrase}, "
                 f"introducing intermediate utilities, service handlers, and domain components.{domain_section}\n"
@@ -815,6 +959,7 @@ class NarrationEngine:
             overview=overview,
             confidence_disclosure=disclosure,
             steps=merged_steps,
+            test_track=fallback.test_track,
             isolated_files_summary=fallback.isolated_files_summary,
             prompt_used=prompt_used,
             source=final_source,

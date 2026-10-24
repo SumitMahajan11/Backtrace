@@ -19,7 +19,7 @@ class SynthesizedMilestone(BaseModel):
     confidence_breakdown: Dict[str, int] = Field(default_factory=dict)
     is_cyclic: bool = False
     is_isolated: bool = False
-    
+
     # Enriched contextual fields from Layer 5 RAG and Layer 4 Architecture
     architectural_role: str = ""
     key_symbols_and_exports: List[str] = Field(default_factory=list)
@@ -29,6 +29,9 @@ class SynthesizedMilestone(BaseModel):
     dependent_tiers: List[int] = Field(default_factory=list)
     pedagogical_hints: List[str] = Field(default_factory=list)
     implementation_gotchas: List[str] = Field(default_factory=list)
+    track: str = "core"  # "core" | "test_track"
+    track_label: str = "Milestone"  # "Milestone" | "Test files"
+    display_id: str = ""  # "1", "2", ..., "T1", "T2", ...
 
 
 class ArchitectureOverview(BaseModel):
@@ -49,6 +52,7 @@ class SynthesizedRepositoryReport(BaseModel):
     architecture_overview: ArchitectureOverview
     confidence_disclosure: str
     milestones: List[SynthesizedMilestone] = Field(default_factory=list)
+    test_track: List[SynthesizedMilestone] = Field(default_factory=list)
     total_milestones: int
     synthesis_timestamp: str
     file_symbols: Dict[str, List[str]] = Field(default_factory=dict)

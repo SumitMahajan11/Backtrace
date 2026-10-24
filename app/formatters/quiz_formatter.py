@@ -3,89 +3,128 @@
 Generates pedagogical quizzes and comprehension checkpoints derived from repository architecture.
 """
 
-from typing import Dict, List, Any
-from app.synthesis.schema import SynthesizedRepositoryReport
+import random
+from typing import Any, Dict, List
+from app.synthesis.schema import SynthesizedMilestone, SynthesizedRepositoryReport
 
 
-class QuizQuestion(dict):
-    """Structured question model for interactive learning mode."""
+GENERIC_ARCHITECTURAL_DISTRACTORS = [
+    "Coordinates background asynchronous worker queues and task retry handlers.",
+    "Provides automated continuous integration configurations and container build scripts.",
+    "Implements client-side telemetry collection and user session analytics.",
+    "Defines database migration schemas and foreign-key constraints.",
+    "Implements external payment gateway webhooks and signature validation.",
+    "Manages distributed caching layers and key expiration policies.",
+]
+
+
+def _derive_component_name(files: List[str]) -> str:
+    """Extracts a concise component or module name from a milestone's files."""
+    if not files:
+        return "core"
+    norm_paths = [p.replace("\\", "/").strip("/") for p in files]
+    if len(norm_paths) == 1:
+        filename = norm_paths[0].split("/")[-1]
+        return filename.rsplit(".", 1)[0]
+    first_parts = norm_paths[0].split("/")
+    if len(first_parts) > 1:
+        return first_parts[-2]
+    filename = first_parts[-1]
+    return filename.rsplit(".", 1)[0]
+
+
+def _derive_milestone_option_text(m: SynthesizedMilestone) -> str:
+    """Derives a distinct pedagogical option description from a milestone's real content."""
+    comp = _derive_component_name(m.files)
+    symbols_part = ""
+    if m.key_symbols_and_exports:
+        top_symbols = m.key_symbols_and_exports[:2]
+        symbols_part = f" (e.g. {', '.join(top_symbols)})"
+
+    if getattr(m, "track", "core") == "test_track" or m.dominant_domain == "tests":
+        return f"Provides automated test suites and validation assertions for {comp}{symbols_part}."
+    elif m.is_cyclic:
+        return f"Implements mutually coupled core domain logic coordinating {comp}{symbols_part}."
+    elif m.is_isolated:
+        return f"Serves as standalone auxiliary utility support for {comp}{symbols_part}."
+    elif m.tier == 1 and getattr(m, "track", "core") == "core":
+        return f"Defines foundational leaf primitives with zero internal prerequisites for {comp}{symbols_part}."
+    else:
+        role = m.architectural_role or f"{m.dominant_domain.capitalize()} Services"
+        return f"Implements {role.lower()} within the {m.dominant_domain} layer for {comp}{symbols_part}."
 
 
 class QuizFormatter:
     """Generates structured educational checkpoint quizzes from synthesized repository reports."""
 
     def generate_quiz(self, report: SynthesizedRepositoryReport) -> Dict[str, Any]:
-        """Creates a collection of multiple-choice and reflection questions for learners."""
+        """Creates a collection of multiple-choice questions for learners."""
         questions: List[Dict[str, Any]] = []
-        ov = report.architecture_overview
+        all_milestones: List[SynthesizedMilestone] = list(report.milestones or []) + list(
+            getattr(report, "test_track", []) or []
+        )
 
-        # Question 1: Foundational Architecture
-        if report.milestones:
-            m0 = report.milestones[0]
-            m0_count = len(m0.files)
-            leaf_text = "This file is a leaf primitive" if m0_count == 1 else f"These {m0_count} files are leaf primitives"
-            questions.append({
-                "id": "q_foundational",
-                "tier": m0.tier,
-                "question": f"Why should a developer begin reverse-engineering `{report.repo_name}` at Milestone {m0.tier} ({m0.title})?",
-                "options": [
-                    f"{leaf_text} with 0 internal dependencies.",
-                    "These files contain the top-level CLI entry point." if m0_count > 1 else "This file contains the top-level CLI entry point.",
-                    "These files contain end-to-end integration tests." if m0_count > 1 else "This file contains end-to-end integration tests.",
-                    "These files were the most recently edited in git history." if m0_count > 1 else "This file was the most recently edited in git history.",
-                ],
-                "correct_option_index": 0,
-                "explanation": f"Milestone 0 represents starting foundational files (files with no internal dependencies) that can be understood in isolation without prior knowledge of the rest of the codebase.",
-            })
+        if not all_milestones:
+            return {
+                "repo_name": report.repo_name,
+                "total_questions": 0,
+                "questions": [],
+            }
 
-        # Question 2: Cyclic Core handling
-        cyclic_milestone = next((m for m in report.milestones if m.is_cyclic), None)
-        if cyclic_milestone:
-            questions.append({
-                "id": "q_cyclic_core",
-                "tier": cyclic_milestone.tier,
-                "question": f"Milestone {cyclic_milestone.tier} contains a mutual dependency cycle ({len(cyclic_milestone.files)} files). How should this cluster be approached?",
-                "options": [
-                    "Read them sequentially in alphabetical order because order is strict.",
-                    "Read them as a coupled system / cohesive unit, since their interfaces are co-dependent.",
-                    "Skip them completely because cycles are always invalid code bugs.",
-                    "Read only the largest file and ignore the others.",
-                ],
-                "correct_option_index": 1,
-                "explanation": "These files depend on each other in a loop, so there's no single correct order — an estimate is used instead. They are best understood together as a subsystem.",
-            })
+        # Derive unique real-content descriptions for each milestone
+        raw_descriptions = [_derive_milestone_option_text(m) for m in all_milestones]
+        seen_descriptions: Dict[str, int] = {}
+        unique_descriptions: List[str] = []
+        for idx, (m, desc) in enumerate(zip(all_milestones, raw_descriptions)):
+            if desc in seen_descriptions:
+                count = seen_descriptions[desc] + 1
+                seen_descriptions[desc] = count
+                disp = m.display_id or str(idx + 1)
+                unique_descriptions.append(f"{desc[:-1]} ({m.track_label} {disp} module).")
+            else:
+                seen_descriptions[desc] = 1
+                unique_descriptions.append(desc)
 
-        # Intermediate / Higher Tier Architecture questions
-        base_tier = report.milestones[0].tier if report.milestones else 0
-        non_base_milestones = [m for m in report.milestones if m.tier != base_tier and not m.is_cyclic]
-        for m_target in non_base_milestones:
-            questions.append({
-                "id": f"q_tier_{m_target.tier}_role",
-                "tier": m_target.tier,
-                "question": f"What is the architectural role of Milestone {m_target.tier} ({m_target.title})?",
-                "options": [
-                    f"It implements the {m_target.dominant_domain} layer that builds upon and depends on lower-tier foundational modules.",
-                    "It defines low-level leaf utilities with zero internal imports.",
-                    "It is completely isolated and detached from all other repository components.",
-                    "It acts exclusively as a temporary build artifact cache.",
-                ],
-                "correct_option_index": 0,
-                "explanation": f"Milestone {m_target.tier} serves the {m_target.dominant_domain} layer, consuming the abstractions provided by lower tiers.",
-            })
+        num_milestones = len(all_milestones)
 
-        # Question 4: Domain Distribution
-        dom_names = list(ov.domain_file_counts.keys())
-        if dom_names:
-            dominant = max(ov.domain_file_counts.items(), key=lambda x: x[1])
-            dom_milestone = next((m for m in report.milestones if m.dominant_domain == dominant[0]), report.milestones[0] if report.milestones else None)
-            dom_tier = dom_milestone.tier if dom_milestone else 0
+        for i, m in enumerate(all_milestones):
+            track_label = getattr(m, "track_label", None) or ("Test files" if getattr(m, "track", "core") == "test_track" else "Milestone")
+            display_id = getattr(m, "display_id", None) or str(m.tier or (i + 1))
+            q_id = f"q_{m.track}_{display_id}"
+
+            correct_option = unique_descriptions[i]
+
+            # Select 3 distractors from OTHER milestones' real content
+            if num_milestones >= 4:
+                distractor_indices = [(i + 1 + offset) % num_milestones for offset in range(3)]
+                distractors = [unique_descriptions[j] for j in distractor_indices]
+            else:
+                distractors = [unique_descriptions[j] for j in range(num_milestones) if j != i]
+                needed = 3 - len(distractors)
+                for offset in range(needed):
+                    fallback = GENERIC_ARCHITECTURAL_DISTRACTORS[(i * 2 + offset) % len(GENERIC_ARCHITECTURAL_DISTRACTORS)]
+                    distractors.append(fallback)
+
+            raw_options = [(correct_option, True)] + [(d, False) for d in distractors]
+
+            # Shuffle option order with a stable seed based on question id
+            rng = random.Random(q_id)
+            shuffled_options = list(raw_options)
+            rng.shuffle(shuffled_options)
+
+            options_text = [text for text, _ in shuffled_options]
+            correct_option_index = next(idx for idx, (_, is_correct) in enumerate(shuffled_options) if is_correct)
+
+            # Question text does NOT contain the milestone title, correct file name, or answer string
+            question_text = f"What is the primary architectural responsibility of {track_label} {display_id}?"
+
             questions.append({
-                "id": "q_domain_profile",
-                "tier": dom_tier,
-                "question": f"Which domain represents the largest portion of files in `{report.repo_name}`?",
-                "options": [f"`{d}`" for d in dom_names[:4]],
-                "correct_option_index": 0 if dom_names[0] == dominant[0] else dom_names[:4].index(dominant[0]) if dominant[0] in dom_names[:4] else 0,
-                "explanation": f"`{dominant[0]}` accounts for {dominant[1]} out of {ov.total_files} analyzed files in the codebase.",
+                "id": q_id,
+                "tier": m.tier,
+                "question": question_text,
+                "options": options_text,
+                "correct_option_index": correct_option_index,
+                "explanation": f"{track_label} {display_id} {correct_option[0].lower() + correct_option[1:]}",
             })
 
         return {

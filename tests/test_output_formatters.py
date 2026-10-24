@@ -75,7 +75,7 @@ def test_markdown_formatter_renders_full_document(sample_report):
 
 def test_graph_formatter_json_and_mermaid(sample_report):
     formatter = GraphExportFormatter()
-    
+
     # JSON DAG
     json_dag = formatter.format_json_dag(sample_report)
     assert json_dag["repo_name"] == "demo-repo"
@@ -102,8 +102,9 @@ def test_quiz_formatter_generates_educational_questions(sample_report):
 
     assert quiz["repo_name"] == "demo-repo"
     assert quiz["total_questions"] >= 2
-    assert any("Foundational Utilities" in q["question"] for q in quiz["questions"])
+    assert not any("Foundational Utilities" in q["question"] for q in quiz["questions"])
     for q in quiz["questions"]:
+        assert len(q["options"]) == 4
         assert "tier" in q
         assert isinstance(q["tier"], int)
 
@@ -263,5 +264,3 @@ Calibration note.
     # 2. Verify all 6 domains appear in the Dependency Graph Legend
     for dom in ["CORE", "BACKEND", "FRONTEND", "DATABASE", "CONFIG", "TESTS"]:
         assert f">{dom}</span>" in html
-
-

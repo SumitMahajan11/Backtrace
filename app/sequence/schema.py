@@ -102,8 +102,9 @@ class BuildStepNarrative(BaseModel):
     confidence_breakdown: Dict[str, int] = Field(default_factory=dict)  # e.g. {"high": 25, "medium": 5, "low": 8}
     pedagogical_explanation: str
     key_symbols_or_concepts: List[str] = Field(default_factory=list)
-
-
+    track: str = "core"  # "core" | "test_track"
+    track_label: str = "Milestone"  # "Milestone" | "Test files"
+    display_id: str = ""  # "1", "2", ..., "T1", "T2", ...
 
 
 class SequenceNarrationResult(BaseModel):
@@ -111,7 +112,7 @@ class SequenceNarrationResult(BaseModel):
     overview: str
     confidence_disclosure: str
     steps: List[BuildStepNarrative] = Field(default_factory=list)
+    test_track: List[BuildStepNarrative] = Field(default_factory=list)
     isolated_files_summary: str
     prompt_used: Optional[str] = None
     source: str = "template"  # "llm" or "template"
-

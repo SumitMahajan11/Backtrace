@@ -46,8 +46,9 @@ class MarkdownReportFormatter:
 
         # 4. Milestone-by-Milestone Walkthrough
         lines.append("## 3. Step-by-Step Architectural Milestones")
-        for m in report.milestones:
-            # Render dominant confidence alongside explicit breakdown dictionary to prevent re-flattening
+
+        def _render_milestone_markdown(m, prefix: str):
+            disp = m.display_id if m.display_id else (f"T{m.tier}" if prefix == "Test files" else str(m.tier))
             breakdown_str = ""
             if m.confidence_breakdown:
                 parts = [f"{k.capitalize()}: {v}" for k, v in sorted(m.confidence_breakdown.items()) if v > 0]
@@ -59,14 +60,14 @@ class MarkdownReportFormatter:
             elif m.is_isolated:
                 badge += " *[ISOLATED COMPONENT]*"
 
-            lines.append(f"### Milestone {m.tier}: {m.title}")
+            lines.append(f"### {prefix} {disp}: {m.title}")
             lines.append(f"{badge} -- *{m.architectural_role}*\n")
             lines.append(f"**Overview:** {m.summary}\n")
 
             # Domain Breakdown if multi-domain
             if len(m.domain_breakdown) > 1:
-                breakdown_str = ", ".join(f"{d.capitalize()}: {c}" for d, c in sorted(m.domain_breakdown.items(), key=lambda x: -x[1]))
-                lines.append(f"**Domain Composition:** {breakdown_str}\n")
+                b_str = ", ".join(f"{d.capitalize()}: {c}" for d, c in sorted(m.domain_breakdown.items(), key=lambda x: -x[1]))
+                lines.append(f"**Domain Composition:** {b_str}\n")
 
             # File List
             lines.append(f"**Included Files ({len(m.files)}):**")
@@ -76,7 +77,9 @@ class MarkdownReportFormatter:
 
             # Exports / Symbols
             if m.key_symbols_and_exports:
-                lines.append(f"**Key Exported Symbols:** `{', '.join(m.key_symbols_and_exports)}`\n")
+                filtered_symbols = [s for s in m.key_symbols_and_exports if not s.startswith("_")]
+                if filtered_symbols:
+                    lines.append(f"**Key Exported Symbols:** `{', '.join(filtered_symbols)}`\n")
 
             # Deep-dive citations
             if m.deep_dive_citations:
@@ -100,5 +103,11 @@ class MarkdownReportFormatter:
                 lines.append("")
 
             lines.append("---")
+
+        for m in report.milestones:
+            _render_milestone_markdown(m, prefix="Milestone")
+
+        for m in getattr(report, "test_track", []):
+            _render_milestone_markdown(m, prefix="Test files")
 
         return "\n".join(lines)

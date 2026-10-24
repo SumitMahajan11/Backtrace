@@ -102,11 +102,66 @@ class HybridRAGEngine:
                 )
             )
 
+
         formatted_context = "\n---\n".join(formatted_context_blocks)
+        merged_citations = merge_overlapping_citations(citations)
 
         return RAGQueryResult(
             query=query_text,
             retrieved_chunks=retrieved_chunks,
             formatted_context=formatted_context,
-            citations=citations,
+            citations=merged_citations,
         )
+
+
+def merge_overlapping_citations(citations: List[CitationSource]) -> List[CitationSource]:
+    """Merge overlapping or adjacent citation ranges into one range per function (symbol_name per file)."""
+    if not citations:
+        return []
+
+    from collections import defaultdict
+    grouped = defaultdict(list)
+    order = []
+    for c in citations:
+        key = (c.file_path, c.symbol_name)
+        if key not in grouped:
+            order.append(key)
+        grouped[key].append(c)
+
+    merged: List[CitationSource] = []
+    for key in order:
+        group = grouped[key]
+        file_path, symbol_name = key
+        sorted_chunks = sorted(group, key=lambda x: (x.start_line, x.end_line))
+        cur_start = sorted_chunks[0].start_line
+        cur_end = sorted_chunks[0].end_line
+
+        for next_chunk in sorted_chunks[1:]:
+            if next_chunk.start_line <= cur_end + 1:
+                cur_end = max(cur_end, next_chunk.end_line)
+            else:
+                sym_info = f" ({symbol_name})" if symbol_name else ""
+                merged.append(
+                    CitationSource(
+                        file_path=file_path,
+                        start_line=cur_start,
+                        end_line=cur_end,
+                        symbol_name=symbol_name,
+                        line_range_str=f"{file_path}:L{cur_start}-L{cur_end}{sym_info}",
+                    )
+                )
+                cur_start = next_chunk.start_line
+                cur_end = next_chunk.end_line
+
+        sym_info = f" ({symbol_name})" if symbol_name else ""
+        merged.append(
+            CitationSource(
+                file_path=file_path,
+                start_line=cur_start,
+                end_line=cur_end,
+                symbol_name=symbol_name,
+                line_range_str=f"{file_path}:L{cur_start}-L{cur_end}{sym_info}",
+            )
+        )
+
+    return merged
