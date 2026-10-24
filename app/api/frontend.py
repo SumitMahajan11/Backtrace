@@ -1326,8 +1326,12 @@ async def analysis_progress_events(
                     "stage_10": "Failed while recording execution metrics and telemetry.",
                 }
                 from app.models.ingestion import InvalidURLError
-                if isinstance(exc, InvalidURLError):
-                    clean_err = str(exc)
+                from app.core.failure_reason import failure_reason, ACCESS_ERROR
+                orig_err = str(exc)
+                if failure_reason(orig_err) == ACCESS_ERROR:
+                    clean_err = orig_err
+                elif isinstance(exc, InvalidURLError):
+                    clean_err = orig_err
                 else:
                     clean_err = stage_messages.get(current_stage_key, f"An unexpected error occurred during analysis.")
                 from app.db.session import SessionLocal
