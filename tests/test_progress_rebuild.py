@@ -159,17 +159,17 @@ def test_cancel_route_form_submission_redirects_and_renders_cancelled_card(clien
 
 
 # -----------------------------------------------------------------------------
-# Test 3: Failed job page contains none of: "docket", "tenant", "Traceback"
+# Test 3: Failed job page contains none of: "docket", "tenant", "Traceback", "token=abc"
 # -----------------------------------------------------------------------------
 def test_failed_job_page_contains_no_docket_tenant_traceback(client, create_user, test_db):
-    """Failed job page renders mapped user-friendly error and contains none of: docket, tenant, Traceback."""
+    """Failed job page renders mapped user-friendly error and contains none of: docket, tenant, Traceback, token=abc."""
     SessionLocal, _ = test_db
     user = create_user(github_id=98703, username="failed_user")
 
     raw_internal_error = (
         "Traceback (most recent call last):\n"
         "  File '/app/security/tenant_validator.py', line 45, in validate_tenant\n"
-        "    raise TenantSecurityException('docket security check failed: clone unauthorized 403')\n"
+        "    raise TenantSecurityException('docket security check failed: clone unauthorized 403 token=abc')\n"
         "fatal: could not resolve host or repository is private"
     )
 
@@ -201,6 +201,7 @@ def test_failed_job_page_contains_no_docket_tenant_traceback(client, create_user
     assert "docket" not in lower_html
     assert "tenant" not in lower_html
     assert "traceback" not in lower_html
+    assert "token=abc" not in lower_html
 
 
 # -----------------------------------------------------------------------------
@@ -279,3 +280,92 @@ def test_cancel_route_idor_protection(client, create_user, test_db):
     resp = client.post(f"/jobs/{job_id}/cancel")
     assert resp.status_code == 403
     assert "Access forbidden" in resp.text
+
+
+# -----------------------------------------------------------------------------
+# Test 6: Cancel mid-run with patched slow stage keeps cancelled status and refunds exactly 1 quota
+# -----------------------------------------------------------------------------
+def test_cancel_mid_run_with_slow_stage_keeps_cancelled_status_and_refunds(client, create_user, test_db):
+    """Cancel mid-run with a patched slow stage: final status stays 'cancelled' and usage changes by exactly -1."""
+    import threading
+
+    SessionLocal, _ = test_db
+    user = create_user(github_id=98707, username="slow_runner")
+
+    with SessionLocal() as session:
+        # User consumes 1 quota slot
+        BillingRepository.record_usage_event(session, user_id=user.id, event_type="repo_analysis")
+        session.commit()
+        usage_before = BillingRepository.get_monthly_usage_count(session, user.id)
+        assert usage_before == 1
+
+        job = AnalysisJobRepository.create_job(
+            session=session,
+            user_id=user.id,
+            repo_url="https://github.com/org/slow-repo",
+            status="running",
+        )
+        job_id = job.id
+
+    token = create_access_token(user_id=user.id, github_id=user.github_id, github_username=user.github_username)
+    client.cookies.set("access_token", token)
+
+    # Simulate worker running in background thread with a slow stage that cooperatively checks cancellation
+    stage_entered = threading.Event()
+    finish_worker = threading.Event()
+
+    def worker_target():
+        # First cooperative check before slow stage
+        with SessionLocal() as s1:
+            j = AnalysisJobRepository.get_job_by_id(s1, job_id)
+            if j and j.status == "cancelled":
+                return
+        stage_entered.set()
+        # Wait until cancel has been called or timeout
+        finish_worker.wait(timeout=5.0)
+
+        # Cooperative check after slow stage
+        with SessionLocal() as s2:
+            j = AnalysisJobRepository.get_job_by_id(s2, job_id)
+            if j and j.status == "cancelled":
+                return
+
+        # Even if a slow worker attempts to update status or save result:
+        with SessionLocal() as s3:
+            AnalysisJobRepository.update_job_status(s3, job_id, status="completed")
+            AnalysisJobRepository.save_job_result(
+                s3, job_id, markdown_output="# Done", graph_output_json="{}", quiz_output_json="{}", execution_time_seconds=1.0
+            )
+
+    worker_thread = threading.Thread(target=worker_target, daemon=True)
+    worker_thread.start()
+
+    # Wait for worker to enter stage
+    assert stage_entered.wait(timeout=3.0)
+
+    # Cancel the job while worker is in the middle of slow stage
+    resp = client.post(f"/jobs/{job_id}/cancel", headers={"accept": "application/json"})
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "cancelled"
+
+    # Now let the worker resume and try to finish
+    finish_worker.set()
+    worker_thread.join(timeout=3.0)
+
+    with SessionLocal() as session:
+        final_job = AnalysisJobRepository.get_job_by_id(session, job_id)
+        assert final_job.status == "cancelled"
+
+        # Attempt explicit post-cancel writes from finished worker to verify DB guards
+        AnalysisJobRepository.update_job_status(session, job_id, status="completed")
+        AnalysisJobRepository.save_job_result(
+            session, job_id, markdown_output="# Done", graph_output_json="{}", quiz_output_json="{}", execution_time_seconds=1.0
+        )
+        session.commit()
+
+        final_job_after = AnalysisJobRepository.get_job_by_id(session, job_id)
+        assert final_job_after.status == "cancelled"
+
+        usage_after = BillingRepository.get_monthly_usage_count(session, user.id)
+        # Usage changed by exactly -1 (from 1 down to 0)
+        assert usage_after - usage_before == -1

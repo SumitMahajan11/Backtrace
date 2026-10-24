@@ -212,7 +212,15 @@ class AnalysisJobRepository:
         """Updates job status, markdown output, graph, quiz results, resolved SHA, failed stage, and execution duration."""
         job = AnalysisJobRepository.get_job_by_id(session, job_id)
         if job:
-            prev_status = job.status
+            try:
+                session.refresh(job)
+            except Exception:
+                pass
+            prev_status = str(job.status or "").lower()
+            if prev_status == "cancelled" and str(status or "").lower() != "cancelled":
+                # Cancelled status is terminal; do not overwrite with completed or failed, and do not refund again
+                return job
+
             job.status = status
             if resolved_sha is not None:
                 job.resolved_sha = resolved_sha
@@ -231,7 +239,7 @@ class AnalysisJobRepository:
             job.updated_at = utc_now()
 
             # Refund quota on transition from pending/running to failed/cancelled in the same transaction
-            valid_prev = str(prev_status or "").lower() in ("pending", "running", "processing", "queued")
+            valid_prev = prev_status in ("pending", "running", "processing", "queued")
             target_status = str(status or "").lower()
             if valid_prev and target_status in ("failed", "cancelled"):
                 from app.storage.billing_repository import BillingRepository
@@ -254,6 +262,13 @@ class AnalysisJobRepository:
         """Persists the complete analysis outputs upon successful pipeline completion."""
         job = AnalysisJobRepository.get_job_by_id(session, job_id)
         if job:
+            try:
+                session.refresh(job)
+            except Exception:
+                pass
+            if str(job.status or "").lower() == "cancelled":
+                # Do not overwrite cancelled status
+                return job
             job.status = "completed"
             if resolved_sha is not None:
                 job.resolved_sha = resolved_sha

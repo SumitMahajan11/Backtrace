@@ -43,6 +43,11 @@ from app.utils.logging import get_logger, set_run_id
 logger = get_logger("orchestrator", layer="orchestration")
 
 
+class PipelineCancelled(Exception):
+    """Raised when an in-progress pipeline job is cooperatively cancelled by user."""
+    pass
+
+
 class PipelineOrchestrator:
     """Master orchestrator executing the Backtrace reverse engineering pipeline."""
 
@@ -108,11 +113,15 @@ class PipelineOrchestrator:
             if progress_callback:
                 try:
                     progress_callback(ev)
+                except PipelineCancelled:
+                    raise
                 except Exception:
                     pass
             if heartbeat_callback:
                 try:
                     heartbeat_callback()
+                except PipelineCancelled:
+                    raise
                 except Exception:
                     pass
 
@@ -285,6 +294,9 @@ class PipelineOrchestrator:
                 narration_source=final_narration_src,
             )
 
+        except PipelineCancelled:
+            logger.info("Pipeline execution cancelled cooperatively by user.", extra={"run_id": active_run_id})
+            raise
         except Exception as e:
             logger.error(
                 f"Pipeline execution failed during stage '{current_stage.value}': {e}",

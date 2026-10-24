@@ -364,7 +364,7 @@ def test_progress_sse_failed_job_terminal_event(client, test_user, test_db):
     # Strictly must be 'failed', NEVER 'completed'
     assert event_data["type"] == "failed"
     assert event_data["failed_stage"] == "stage_1"
-    assert "Git clone" in event_data["message"]
+    assert event_data["message"] == "We couldn't access this repository (it may be private or the link is wrong)"
 
 
 # 12. Analysis status polling endpoint

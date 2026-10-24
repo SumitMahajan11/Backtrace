@@ -2276,16 +2276,18 @@ def map_stage_to_phase(stage: str) -> Dict[str, Any]:
             return dict(val)
     return {"phase_index": 1, "phase_name": "Get the code"}
 
-def map_failure_reason(error_msg: Optional[str]) -> str:
+def failure_reason(error_message: Optional[str]) -> str:
     """Map raw job error message to one of three clean user-facing sentences."""
-    if not error_msg:
+    if not error_message:
         return "Something went wrong on our side"
-    err = str(error_msg).lower()
+    err = str(error_message).lower()
     if any(k in err for k in ["auth", "access", "private", "not found", "404", "403", "permission", "clone", "could not resolve", "fatal: repository", "shallow clone", "host"]):
         return "We couldn't access this repository (it may be private or the link is wrong)"
     if any(k in err for k in ["large", "exceeds", "file limit", "cap", "too many files", "size boundary"]):
         return "The repository is too large"
     return "Something went wrong on our side"
+
+map_failure_reason = failure_reason
 
 def extract_owner_and_repo(job: Any) -> Tuple[str, str]:
     """Extract clean (owner, repo) pair for Title: Analyzing {owner}/{repo}."""
@@ -2421,13 +2423,6 @@ def progress_view(
     secs_init = int(execution_time_seconds % 60)
     formatted_init_time = f"{mins_init}:{secs_init:02d}"
 
-    # For leak defense: if raw error contains sensitive tokens ("docket", "tenant", "traceback"),
-    # do NOT leak it anywhere into the DOM.
-    # Otherwise, provide an escaped container for legacy/XSS tests.
-    leak_tokens = ("docket", "tenant", "traceback")
-    contains_leak = any(t in str(raw_job_error).lower() for t in leak_tokens) if raw_job_error else False
-    escaped_error_detail = sanitize_text(str(raw_job_error)) if (raw_job_error and not contains_leak) else ""
-
     # Extract real numbers for completed state
     files_analyzed = 0
     modules_count = 0
@@ -2474,8 +2469,8 @@ def progress_view(
     failed_card_display = "block" if is_failed else "none"
     cancelled_card_display = "block" if is_cancelled else "none"
 
-    # Map plain failure reason
-    mapped_error_reason = map_failure_reason(raw_job_error)
+    # Map plain failure reason - raw error message never appears in DOM
+    mapped_error_reason = failure_reason(raw_job_error)
 
     # Initial sentence & bar
     initial_sentence = "Downloading the repository…" if is_running else ("Analysis complete." if is_completed else ("Analysis failed." if is_failed else "Analysis cancelled."))
@@ -2499,6 +2494,10 @@ def progress_view(
     checkmark_svg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>'
     spinner_svg = '<svg class="stepper-spinner" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2v4m0 12v4m-10-10h4m12 0h4m-3.17-6.83l-2.83 2.83m-8 8l-2.83 2.83m0-13.66l2.83 2.83m8 8l2.83 2.83"></path></svg>'
     circle_empty_svg = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"></circle></svg>'
+    fail_svg = '<svg class="stepper-fail" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>'
+
+    raw_failed_stage = getattr(job, "failed_stage", None) if hasattr(job, "failed_stage") else (job.get("failed_stage") if isinstance(job, dict) else None)
+    failed_phase = map_stage_to_phase(raw_failed_stage)["phase_index"] if raw_failed_stage else 1
 
     # Build Stepper HTML (4 phases)
     stepper_html = '<div class="progress-stepper" id="stepper-container">'
@@ -2513,6 +2512,16 @@ def progress_view(
             if p_idx == 1:
                 step_state = "active"
                 circle_content = spinner_svg
+            else:
+                step_state = "upcoming"
+                circle_content = f"<span>{p_idx}</span>"
+        elif is_failed or is_cancelled:
+            if p_idx < failed_phase:
+                step_state = "done"
+                circle_content = checkmark_svg
+            elif p_idx == failed_phase:
+                step_state = "failed"
+                circle_content = fail_svg
             else:
                 step_state = "upcoming"
                 circle_content = f"<span>{p_idx}</span>"
@@ -2548,19 +2557,6 @@ def progress_view(
         """
     stages_list_html += '</div>'
 
-    # Build "Found so far" initial boxes
-    initial_found_boxes = ""
-    has_initial_found = False
-    if is_completed and files_analyzed > 0:
-        has_initial_found = True
-        initial_found_boxes += f"""
-        <div class="stat-pill"><span class="stat-pill-label">Files</span><span class="stat-pill-value">{files_analyzed}</span></div>
-        <div class="stat-pill"><span class="stat-pill-label">Modules mapped</span><span class="stat-pill-value">{modules_count}</span></div>
-        <div class="stat-pill"><span class="stat-pill-label">Entry points</span><span class="stat-pill-value">{entry_points_count}</span></div>
-        """
-
-    found_so_far_display = "block" if has_initial_found else "none"
-
     extra_scripts = f"""
     <script>
         const jobId = "{job_id}";
@@ -2571,6 +2567,7 @@ def progress_view(
         const checkmarkSvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>';
         const spinnerSvg = '<svg class="stepper-spinner" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2v4m0 12v4m-10-10h4m12 0h4m-3.17-6.83l-2.83 2.83m-8 8l-2.83 2.83m0-13.66l2.83 2.83m8 8l2.83 2.83"></path></svg>';
         const circleEmptySvg = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"></circle></svg>';
+        const failSvg = '<svg class="stepper-fail" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
 
         function escapeHtml(str) {{
             if (!str) return '';
@@ -2582,18 +2579,6 @@ def progress_view(
                 .replace(/'/g, '&#039;');
         }}
 
-        function mapFailureReason(msg) {{
-            if (!msg) return "Something went wrong on our side";
-            const s = String(msg).toLowerCase();
-            if (s.includes("auth") || s.includes("access") || s.includes("private") || s.includes("404") || s.includes("403") || s.includes("permission") || s.includes("clone") || s.includes("host") || s.includes("could not resolve")) {{
-                return "We couldn't access this repository (it may be private or the link is wrong)";
-            }}
-            if (s.includes("large") || s.includes("exceeds") || s.includes("file limit") || s.includes("cap") || s.includes("too many files")) {{
-                return "The repository is too large";
-            }}
-            return "Something went wrong on our side";
-        }}
-
         const stageToPhase = {{
             "stage_0": 1, "stage_1": 1,
             "stage_2": 2, "stage_3": 2, "stage_4": 2,
@@ -2601,7 +2586,7 @@ def progress_view(
             "stage_7": 4, "stage_8": 4, "stage_9": 4, "stage_10": 4
         }};
 
-        function updateStepper(activePhaseIndex, isAllDone) {{
+        function updateStepper(activePhaseIndex, isAllDone, isFailed=false) {{
             for (let i = 1; i <= 4; i++) {{
                 const step = document.getElementById("stepper-phase-" + i);
                 const circle = document.getElementById("stepper-circle-" + i);
@@ -2609,6 +2594,9 @@ def progress_view(
                 if (isAllDone || i < activePhaseIndex) {{
                     step.className = "stepper-step done";
                     circle.innerHTML = checkmarkSvg;
+                }} else if (i === activePhaseIndex && isFailed) {{
+                    step.className = "stepper-step failed";
+                    circle.innerHTML = failSvg;
                 }} else if (i === activePhaseIndex && !isAllDone) {{
                     step.className = "stepper-step active";
                     circle.innerHTML = spinnerSvg;
@@ -2627,9 +2615,6 @@ def progress_view(
                 return "Discovering project structure…";
             }}
             if (stageKey === "stage_3") {{
-                if (data && data.files_done && data.files_total) {{
-                    return `Reading files: ${{Number(data.files_done) || 0}} of ${{Number(data.files_total) || 0}}`;
-                }}
                 return "Reading files…";
             }}
             if (stageKey === "stage_4") {{
@@ -2676,57 +2661,6 @@ def progress_view(
             timerInterval = setInterval(updateElapsedTimer, 1000);
         }}
 
-        const foundValues = {{
-            language: null,
-            files: null,
-            entry_points: null,
-            modules_mapped: null,
-        }};
-
-        function updateFoundSoFar(data) {{
-            if (data.language && !foundValues.language) {{
-                foundValues.language = data.language;
-            }}
-            if ((data.files || data.files_total || data.files_analyzed) && !foundValues.files) {{
-                foundValues.files = data.files || data.files_total || data.files_analyzed;
-            }}
-            if ((data.entry_points || data.entry_points_count) && !foundValues.entry_points) {{
-                const ep = data.entry_points || data.entry_points_count;
-                foundValues.entry_points = Array.isArray(ep) ? ep.length : ep;
-            }}
-            if ((data.modules_mapped || data.modules_count) && !foundValues.modules_mapped) {{
-                foundValues.modules_mapped = data.modules_mapped || data.modules_count;
-            }}
-
-            const container = document.getElementById("found-boxes-container");
-            const section = document.getElementById("found-so-far-section");
-            if (!container || !section) return;
-
-            let html = "";
-            let hasAny = false;
-            if (foundValues.language) {{
-                hasAny = true;
-                html += `<div class="stat-pill"><span class="stat-pill-label">Language</span><span class="stat-pill-value">${{escapeHtml(foundValues.language)}}</span></div>`;
-            }}
-            if (foundValues.files) {{
-                hasAny = true;
-                html += `<div class="stat-pill"><span class="stat-pill-label">Files</span><span class="stat-pill-value">${{escapeHtml(foundValues.files)}}</span></div>`;
-            }}
-            if (foundValues.entry_points) {{
-                hasAny = true;
-                html += `<div class="stat-pill"><span class="stat-pill-label">Entry points</span><span class="stat-pill-value">${{escapeHtml(foundValues.entry_points)}}</span></div>`;
-            }}
-            if (foundValues.modules_mapped) {{
-                hasAny = true;
-                html += `<div class="stat-pill"><span class="stat-pill-label">Modules mapped</span><span class="stat-pill-value">${{escapeHtml(foundValues.modules_mapped)}}</span></div>`;
-            }}
-
-            if (hasAny) {{
-                container.innerHTML = html;
-                section.style.display = "block";
-            }}
-        }}
-
         const logBox = document.getElementById("sse-terminal-log");
         function addLogEntry(text, type="info") {{
             if (!logBox) return;
@@ -2749,7 +2683,6 @@ def progress_view(
         }}
 
         function addActivityEntry(stageIndex, totalStages, stageName, message, isComplete=false) {{
-            // Progress page only shows phases, eliminating any stage numbering mismatch
             const sIdx = Number(stageIndex) || 0;
             const tStages = Number(totalStages) || 0;
             const _numCheck = `${{Number(stageIndex) || 0}} / ${{Number(totalStages) || 0}}`;
@@ -2785,9 +2718,9 @@ def progress_view(
                 const fEl = document.getElementById("ready-files-count");
                 const mEl = document.getElementById("ready-modules-count");
                 const eEl = document.getElementById("ready-entry-count");
-                if (fEl) fEl.textContent = data.files_analyzed || foundValues.files || "—";
-                if (mEl) mEl.textContent = data.modules_mapped || foundValues.modules_mapped || "—";
-                if (eEl) eEl.textContent = data.entry_points || foundValues.entry_points || "—";
+                if (fEl) fEl.textContent = (data && (data.files_analyzed || data.files)) || "—";
+                if (mEl) mEl.textContent = (data && (data.modules_mapped || data.modules)) || "—";
+                if (eEl) eEl.textContent = (data && (data.entry_points || data.entry_points_count)) || "—";
                 readyCard.style.display = "block";
             }}
 
@@ -2818,19 +2751,16 @@ def progress_view(
 
             const failCard = document.getElementById("failed-card");
             const failureMsg = document.getElementById("failed-reason-text");
-            const statusDesc = document.getElementById("status-desc");
-            const msg = mapFailureReason(reason);
-            const err = msg;
             if (failureMsg) {{
-                failureMsg.textContent = msg;
-                failureMsg.textContent = err;
-            }}
-            if (statusDesc && data && data.message) {{
-                statusDesc.textContent = data.message;
+                failureMsg.textContent = reason || "Something went wrong on our side";
             }}
             if (failCard) {{
                 failCard.style.display = "block";
             }}
+
+            const failedStageKey = (data && data.failed_stage) || "stage_1";
+            const failedPhaseIdx = (typeof stageToPhase !== 'undefined' && stageToPhase[failedStageKey]) || 1;
+            updateStepper(failedPhaseIdx, false, true);
         }}
 
         let eventSource = null;
@@ -2858,6 +2788,11 @@ def progress_view(
             eventSource = new EventSource(`/api/analyses/${{jobId}}/events`);
             addLogEntry("Event stream connected.");
 
+            eventSource.onopen = function() {{
+                const banner = document.getElementById("connection-lost-banner");
+                if (banner) banner.style.display = "none";
+            }};
+
             eventSource.onmessage = function(event) {{
                 try {{
                     const data = JSON.parse(event.data);
@@ -2873,11 +2808,7 @@ def progress_view(
 
                         const barFill = document.getElementById("progress-bar-fill");
                         if (barFill) {{
-                            if (data.files_done && data.files_total && Number(data.files_total) > 0) {{
-                                const pct = Math.round((Number(data.files_done) / Number(data.files_total)) * 100);
-                                barFill.className = "progress-bar-fill determinate";
-                                barFill.style.width = pct + "%";
-                            }} else if (data.percentage && Number(data.percentage) > 0) {{
+                            if (data.percentage && Number(data.percentage) > 0) {{
                                 barFill.className = "progress-bar-fill determinate";
                                 barFill.style.width = Number(data.percentage) + "%";
                             }} else {{
@@ -2885,8 +2816,6 @@ def progress_view(
                                 barFill.style.width = "35%";
                             }}
                         }}
-
-                        updateFoundSoFar(data);
 
                         const stageIcon = document.getElementById("icon-" + stageKey);
                         if (stageIcon) {{
@@ -2984,6 +2913,11 @@ def progress_view(
         color: var(--accent);
         background: var(--surface-2);
     }}
+    .stepper-step.failed .stepper-circle {{
+        background: rgba(239, 91, 91, 0.15);
+        border-color: var(--danger);
+        color: var(--danger);
+    }}
     .stepper-step.upcoming .stepper-circle {{
         background: var(--surface-2);
         border-color: var(--border);
@@ -2998,6 +2932,10 @@ def progress_view(
     .stepper-step.done .stepper-label,
     .stepper-step.active .stepper-label {{
         color: var(--text);
+        font-weight: 600;
+    }}
+    .stepper-step.failed .stepper-label {{
+        color: var(--danger);
         font-weight: 600;
     }}
 
@@ -3102,9 +3040,6 @@ def progress_view(
     }}
     </style>
 
-    <div style="display: none;">
-        Architecture Report: <span style="font-style: italic; color: var(--accent);">{repo}</span>
-    </div>
     <div id="elapsed-timer-badge" style="display: none;">
         <span id="elapsed-timer-text">{timer_badge_text}</span>
     </div>
@@ -3174,10 +3109,6 @@ def progress_view(
 
     <!-- End State: Failed Card -->
     <div class="card failed-card" id="failed-card" style="display: {failed_card_display}; background: rgba(239, 91, 91, 0.06); border: 1px solid var(--danger); border-radius: var(--radius); padding: 1.5rem; margin-bottom: 1.5rem;">
-        <div id="pipeline-failure-banner" style="display: none;">
-            Analysis Execution Encountered a Fatal Error: <span id="failure-error-message">{escaped_error_detail}</span> (Retry Analysis Job)
-        </div>
-        <span id="status-desc" style="display: none;">{escaped_error_detail}</span>
         <div style="display: flex; align-items: flex-start; gap: 0.85rem; margin-bottom: 1rem;">
             <div style="width: 32px; height: 32px; border-radius: 50%; background: rgba(239, 91, 91, 0.15); color: var(--danger); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
@@ -3202,16 +3133,6 @@ def progress_view(
         <h2 style="font-size: 1.15rem; font-weight: 600; color: var(--text); margin: 0 0 0.35rem 0;">Analysis cancelled</h2>
         <p style="font-size: 0.875rem; color: var(--text-muted); margin: 0 0 1.25rem 0;">This analysis was cancelled.</p>
         <a href="/dashboard" class="btn btn-secondary">Back to dashboard</a>
-    </div>
-
-    <!-- "Found so far" strip -->
-    <div id="found-so-far-section" style="display: {found_so_far_display}; margin-bottom: 1.5rem;">
-        <div style="font-size: 0.8125rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.5rem;">
-            Found so far
-        </div>
-        <div id="found-boxes-container" style="display: flex; flex-wrap: wrap; gap: 0.75rem;">
-            {initial_found_boxes}
-        </div>
     </div>
 
     <!-- Cancel Button (while running) -->

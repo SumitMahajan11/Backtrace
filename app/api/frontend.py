@@ -34,9 +34,11 @@ from app.services.billing_service import BillingService, BillingServiceError
 from app.services.points_engine import PointsEngine, PointsRedemptionError
 from app.storage.analysis_job_repository import AnalysisJobRepository
 from app.storage.milestone_attempt_repository import MilestoneAttemptRepository
+from app.orchestration.pipeline import PipelineCancelled
 from app.ui.components import (
     dashboard_view,
     extract_owner_and_repo,
+    failure_reason,
     login_view,
     map_failure_reason,
     map_stage_to_phase,
@@ -918,7 +920,7 @@ async def analysis_progress_events(
             return
 
         if job_status == "failed":
-            yield f"data: {json.dumps({'type': 'failed', 'job_id': job_id, 'failed_stage': initial_failed_stage, 'message': initial_error_msg, 'execution_time_seconds': initial_exec_sec})}\n\n"
+            yield f"data: {json.dumps({'type': 'failed', 'job_id': job_id, 'failed_stage': initial_failed_stage, 'message': failure_reason(initial_error_msg), 'execution_time_seconds': initial_exec_sec})}\n\n"
             return
 
         import time
@@ -989,6 +991,12 @@ async def analysis_progress_events(
         }
 
         def on_pipeline_event(ev: Any):
+            from app.db.session import SessionLocal
+            with SessionLocal() as db_session:
+                current_job = AnalysisJobRepository.get_job_by_id(db_session, job_id)
+                if current_job and str(current_job.status or "").lower() == "cancelled":
+                    raise PipelineCancelled(f"Job {job_id} was cancelled by user.")
+
             stage_name = ev.stage.value if hasattr(ev.stage, "value") else str(ev.stage)
             stage_items = stage_sequence_map.get(stage_name, [])
             for ui_key, pct, default_msg in stage_items:
@@ -1005,7 +1013,6 @@ async def analysis_progress_events(
                     make_stage_complete_payload(ui_key),
                 )
 
-
         def run_full_pipeline_sync():
             from app.services.ingestion import IngestionService
             from app.orchestration.pipeline import PipelineOrchestrator
@@ -1019,33 +1026,42 @@ async def analysis_progress_events(
             is_test_mode = getattr(settings, "ENVIRONMENT", "") in ("test", "testing") or "PYTEST_CURRENT_TEST" in os.environ
             current_stage_key = "stage_0"
 
+            def check_cancellation():
+                with SessionLocal() as db_session:
+                    current_job = AnalysisJobRepository.get_job_by_id(db_session, job_id)
+                    if current_job and str(current_job.status or "").lower() == "cancelled":
+                        raise PipelineCancelled(f"Job {job_id} was cancelled by user.")
+
             try:
                 # Fast branch for pytest test suite
                 if is_test_mode:
                     test_stages = [
-                        ("stage_1", 20, "Repository clone completed", {}),
-                        ("stage_2", 30, "Project layout discovered", {"files": 42, "language": "Python"}),
-                        ("stage_3", 45, "AST parsing and syntax tree analysis", {"files_done": 20, "files_total": 42, "files": 42, "language": "Python"}),
-                        ("stage_4", 60, "Global symbol table built", {"symbols_count": 156}),
-                        ("stage_5", 70, "Module dependency graph constructed", {"modules_mapped": 6, "entry_points": 2}),
-                        ("stage_6", 80, "Architectural layers mapped", {"modules_mapped": 6, "entry_points": 2}),
-                        ("stage_7", 90, "LLM architectural narrative synthesized", {}),
-                        ("stage_8", 95, "Markdown report, dependency graph, and quiz generated", {}),
-                        ("stage_9", 98, "Artifacts cached in storage layer", {}),
-                        ("stage_10", 100, "Telemetry and metrics collection finalized", {}),
+                        ("stage_1", 20, "Repository clone completed"),
+                        ("stage_2", 30, "Project layout discovered"),
+                        ("stage_3", 45, "AST parsing and syntax tree analysis"),
+                        ("stage_4", 60, "Global symbol table built"),
+                        ("stage_5", 70, "Module dependency graph constructed"),
+                        ("stage_6", 80, "Architectural layers mapped"),
+                        ("stage_7", 90, "LLM architectural narrative synthesized"),
+                        ("stage_8", 95, "Markdown report, dependency graph, and quiz generated"),
+                        ("stage_9", 98, "Artifacts cached in storage layer"),
+                        ("stage_10", 100, "Telemetry and metrics collection finalized"),
                     ]
-                    for s_key, pct, s_msg, s_kwargs in test_stages:
+                    for s_key, pct, s_msg in test_stages:
+                        check_cancellation()
                         current_stage_key = s_key
                         loop.call_soon_threadsafe(
                             event_queue.put_nowait,
-                            make_progress_payload(s_key, pct, s_msg, **s_kwargs),
+                            make_progress_payload(s_key, pct, s_msg),
                         )
                         loop.call_soon_threadsafe(
                             event_queue.put_nowait,
                             make_stage_complete_payload(s_key),
                         )
+                    check_cancellation()
                     exec_duration = round(time.time() - start_time, 3)
                     with SessionLocal() as db_session:
+                        check_cancellation()
                         AnalysisJobRepository.update_job_status(
                             session=db_session,
                             job_id=job_id,
@@ -1072,6 +1088,7 @@ async def analysis_progress_events(
 
                 # Live Execution in Development/Production
                 # 1. Ingest Repository (Stage 1)
+                check_cancellation()
                 current_stage_key = "stage_1"
                 loop.call_soon_threadsafe(
                     event_queue.put_nowait,
@@ -1083,6 +1100,7 @@ async def analysis_progress_events(
                     commit_ref=target_commit_ref,
                     subpath=target_subpath,
                 )
+                check_cancellation()
                 completed_stages.add("stage_1")
                 loop.call_soon_threadsafe(
                     event_queue.put_nowait,
@@ -1093,6 +1111,7 @@ async def analysis_progress_events(
                 repo_display_name = target_repo_url.replace("https://github.com/", "").strip("/")
 
                 # 2. Discovery & Structure (Stage 2)
+                check_cancellation()
                 current_stage_key = "stage_2"
                 loop.call_soon_threadsafe(
                     event_queue.put_nowait,
@@ -1105,17 +1124,22 @@ async def analysis_progress_events(
                 )
 
                 # 3. Pipeline Execution across layers 3-8
+                check_cancellation()
                 current_stage_key = "stage_3"
                 orchestrator = PipelineOrchestrator()
+                def on_heartbeat():
+                    check_cancellation()
+                    loop.call_soon_threadsafe(
+                        event_queue.put_nowait, {"type": "heartbeat"}
+                    )
                 pipeline_res = orchestrator.run_pipeline(
                     repo_name=repo_display_name,
                     file_paths=file_paths,
                     file_contents=ingest_res.file_contents,
                     progress_callback=on_pipeline_event,
-                    heartbeat_callback=lambda: loop.call_soon_threadsafe(
-                        event_queue.put_nowait, {"type": "heartbeat"}
-                    ),
+                    heartbeat_callback=on_heartbeat,
                 )
+                check_cancellation()
 
                 # 4. Format Real Report, Graph, and Quiz
                 md_report = ""
@@ -1133,6 +1157,7 @@ async def analysis_progress_events(
                     quiz_data = {"questions": quiz_dict.get("questions", [])}
 
                 # 5. Storage & Caching (Stage 9)
+                check_cancellation()
                 current_stage_key = "stage_9"
                 loop.call_soon_threadsafe(
                     event_queue.put_nowait,
@@ -1157,6 +1182,7 @@ async def analysis_progress_events(
                     except Exception as e:
                         logger.warning("Failed to persist file contents to DB during pipeline run: %s", e)
 
+                    check_cancellation()
                     failed_stage_val = pipeline_res.failed_stage if not pipeline_res.success else None
                     AnalysisJobRepository.update_job_status(
                         session=db_session,
@@ -1185,7 +1211,7 @@ async def analysis_progress_events(
                             "type": "failed",
                             "job_id": job_id,
                             "failed_stage": failed_stage_val or current_stage_key,
-                            "message": fail_err,
+                            "message": failure_reason(fail_err),
                             "execution_time_seconds": exec_duration,
                         }
                     )
@@ -1199,6 +1225,7 @@ async def analysis_progress_events(
                 )
 
                 # 6. Telemetry & Metrics (Stage 10)
+                check_cancellation()
                 current_stage_key = "stage_10"
                 completed_stages.add("stage_10")
                 loop.call_soon_threadsafe(
@@ -1232,6 +1259,10 @@ async def analysis_progress_events(
                 )
                 loop.call_soon_threadsafe(event_queue.put_nowait, None)
 
+            except PipelineCancelled:
+                logger.info("Pipeline execution for job %s stopped due to cancellation.", job_id)
+                loop.call_soon_threadsafe(event_queue.put_nowait, None)
+                return
             except Exception as exc:
                 exec_duration = round(time.time() - start_time, 3)
                 logger.error("Analysis job %s failed at %s: %s", job_id, current_stage_key, exc, exc_info=True)
@@ -1255,21 +1286,23 @@ async def analysis_progress_events(
                     clean_err = stage_messages.get(current_stage_key, f"An unexpected error occurred during analysis.")
                 from app.db.session import SessionLocal
                 with SessionLocal() as db_session:
-                    AnalysisJobRepository.update_job_status(
-                        session=db_session,
-                        job_id=job_id,
-                        status="failed",
-                        error_message=clean_err,
-                        failed_stage=current_stage_key,
-                        execution_time_seconds=exec_duration,
-                    )
+                    current_chk = AnalysisJobRepository.get_job_by_id(db_session, job_id)
+                    if current_chk and str(current_chk.status or "").lower() != "cancelled":
+                        AnalysisJobRepository.update_job_status(
+                            session=db_session,
+                            job_id=job_id,
+                            status="failed",
+                            error_message=clean_err,
+                            failed_stage=current_stage_key,
+                            execution_time_seconds=exec_duration,
+                        )
                 loop.call_soon_threadsafe(
                     event_queue.put_nowait,
                     {
                         "type": "failed",
                         "job_id": job_id,
                         "failed_stage": current_stage_key,
-                        "message": clean_err,
+                        "message": failure_reason(clean_err),
                         "execution_time_seconds": exec_duration,
                     }
                 )

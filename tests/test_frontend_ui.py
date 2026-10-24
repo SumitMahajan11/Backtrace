@@ -992,11 +992,12 @@ def test_failed_job_error_message_surfaced_on_dashboard_and_progress(client, cre
     assert resp_prog.status_code == 200
     prog_html = resp_prog.text
 
-    assert 'id="pipeline-failure-banner"' in prog_html
-    assert "Analysis Execution Encountered a Fatal Error" in prog_html
-    assert 'id="failure-error-message"' in prog_html
-    assert failure_reason in prog_html
-    assert "Retry Analysis Job" in prog_html
+    assert 'id="failed-card"' in prog_html
+    assert "Analysis failed" in prog_html
+    assert 'id="failed-reason-text"' in prog_html
+    assert "The repository is too large" in prog_html
+    assert 'id="retry-btn"' in prog_html
+    assert "Retry" in prog_html
 
 
 def test_execution_time_seconds_persisted_and_displayed_in_dashboard(client, create_user, test_db):
@@ -2156,7 +2157,7 @@ def test_consistent_report_naming_across_lifecycle():
     )
     prog_html = progress_view(job_in_progress, current_user=user, billing_status=billing)
     assert "<title>org/repo-alpha · Backtrace</title>" in prog_html
-    assert "Architecture Report: <span style=\"font-style: italic; color: var(--accent);\">repo-alpha</span>" in prog_html
+    assert "Analyzing org/repo-alpha" in prog_html
     assert "Analysis Job Report" not in prog_html
 
     # 2. Completed report view
