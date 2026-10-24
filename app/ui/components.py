@@ -3520,13 +3520,13 @@ def _render_server_diff_html(
 
     # Tier Badge formatting
     if grading_method == "real_tests":
-        tier_tag = '<span class="badge badge-teal" style="font-size: 0.8125rem; ">Tier 1: Real reproduction</span>'
+        tier_tag = '<span class="badge badge-teal" style="font-size: 0.8125rem; ">Runs real tests</span>'
     elif grading_method == "expected_output":
-        tier_tag = '<span class="badge badge-amber" style="font-size: 0.8125rem; ">Tier 2: Expected interface</span>'
+        tier_tag = '<span class="badge badge-amber" style="font-size: 0.8125rem; ">Checks the interface</span>'
     elif grading_method == "fill_the_blanks":
-        tier_tag = '<span class="badge badge-teal" style="font-size: 0.8125rem; ">Tier 3: Fill the blanks</span>'
+        tier_tag = '<span class="badge badge-teal" style="font-size: 0.8125rem; ">Fill the gaps</span>'
     else:
-        tier_tag = '<span class="badge badge-brass" style="font-size: 0.8125rem; ">Tier 3: Structural verification</span>'
+        tier_tag = '<span class="badge badge-brass" style="font-size: 0.8125rem; ">Structure check</span>'
 
     if is_verified:
         banner = f"""
@@ -4231,6 +4231,7 @@ def render_milestone_body_fragment(
     submit_note_html = ""
     submit_fill_note_html = ""
 
+    # Rule: Keep "Check structure" only where code execution is off and "Check answer" where it is on.
     grading_method, _ = GradingEngine().determine_grading_tier(job, m_tier, graph_data or {})
     requires_execution = grading_method in ("real_tests", "expected_output")
 
@@ -5328,7 +5329,7 @@ def report_view(
                 <div class="kpi-label">Confidence</div>
                 <div class="kpi-value" style="color: {overall_conf_color}; font-size: 1.5rem;">{conf_summary.high_pct}%</div>
                 <div class="kpi-sub" style="font-size: 0.8125rem; color: var(--text-muted);">
-                    {conf_summary.low_count} files low confidence{f'<div class="confidence-estimate-sub" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">Estimated from the dependency graph</div>' if not conf_summary_raw else ''}
+                    {conf_summary.low_count} files low confidence{f'<div class="confidence-estimate-sub" style="font-size: 0.8125rem; color: var(--text-muted); margin-top: 2px;">Estimated from the dependency graph</div>' if not conf_summary_raw else ''}
                 </div>
             </div>
         </div>
@@ -5762,7 +5763,6 @@ def report_view(
                                 <span id="inspect-label" class="mono" style="font-weight: 600; font-size: 0.95rem; color: var(--text); word-break: break-all;">Node Name</span>
                             </div>
                             <div style="display: flex; gap: 0.35rem; align-items: center; margin-top: 0.25rem;">
-                                <span id="inspect-tier" class="tag">Tier 0</span>
                                 <span id="inspect-domain" class="chip">CORE</span>
                             </div>
                         </div>
@@ -6314,6 +6314,7 @@ def report_view(
                 """
                 btn_submit_disabled = 'disabled title="Reference source unavailable" style="cursor: not-allowed; opacity: 0.45;"'
 
+            # Rule: Keep "Check structure" only where code execution is off and "Check answer" where it is on.
             grading_method, _ = GradingEngine().determine_grading_tier(job, m_tier, graph_data or {})
             requires_execution = grading_method in ("real_tests", "expected_output")
 
@@ -7295,13 +7296,13 @@ def report_view(
         }}
 
         function renderDiffHtmlInJs(result, isVerified, errorMsg, gradingMethod) {{
-            let tierTag = '<span class="badge badge-brass" style="font-size: 0.8125rem; ">Tier 3: Structural verification</span>';
+            let tierTag = '<span class="badge badge-brass" style="font-size: 0.8125rem; ">Structure check</span>';
             if (gradingMethod === 'real_tests') {{
-                tierTag = '<span class="badge badge-teal" style="font-size: 0.8125rem; ">Tier 1: Real reproduction</span>';
+                tierTag = '<span class="badge badge-teal" style="font-size: 0.8125rem; ">Runs real tests</span>';
             }} else if (gradingMethod === 'expected_output') {{
-                tierTag = '<span class="badge badge-amber" style="font-size: 0.8125rem; ">Tier 2: Expected interface</span>';
+                tierTag = '<span class="badge badge-amber" style="font-size: 0.8125rem; ">Checks the interface</span>';
             }} else if (gradingMethod === 'fill_the_blanks') {{
-                tierTag = '<span class="badge badge-teal" style="font-size: 0.8125rem; ">Tier 3: Fill the blanks</span>';
+                tierTag = '<span class="badge badge-teal" style="font-size: 0.8125rem; ">Fill the gaps</span>';
             }}
 
             let banner = '';
@@ -8481,9 +8482,6 @@ def report_view(
 
             const pathEl = document.getElementById('inspect-path');
             if (pathEl) pathEl.textContent = node.path || node.id;
-
-            const tierEl = document.getElementById('inspect-tier');
-            if (tierEl) tierEl.textContent = 'Tier ' + (node.tier !== undefined ? node.tier : '—');
 
             const domainEl = document.getElementById('inspect-domain');
             if (domainEl) domainEl.textContent = (node.domain || node.type || 'CORE').toUpperCase();

@@ -219,3 +219,28 @@ def test_no_visible_uppercase_strings_in_templates():
         f"Found {total_violations} visible 5+ uppercase strings in template text:\n"
         + "\n".join(details)
     )
+
+
+def test_no_tier_numbers_or_fill_the_blanks_in_templates():
+    """
+    Part E requirement:
+    Fail on 'Tier [0-9]' and on 'Fill the [Bb]lanks' in visible template text.
+    """
+    files = _read_target_files()
+    violations = []
+    for path, content in files.items():
+        if path.suffix != ".py":
+            continue
+        lines = content.splitlines()
+        for idx, line in enumerate(lines, 1):
+            stripped = line.strip()
+            if stripped.startswith("#") or stripped.startswith("//") or stripped.startswith('"""'):
+                continue
+            if re.search(r"Tier\s+[0-9]", line):
+                violations.append(f"{path.name}:{idx}: {stripped}")
+            if re.search(r"Fill\s+the\s+[Bb]lanks", line):
+                violations.append(f"{path.name}:{idx}: {stripped}")
+    assert len(violations) == 0, (
+        f"Found {len(violations)} forbidden grading wording occurrences:\n"
+        + "\n".join(violations)
+    )
