@@ -566,3 +566,203 @@ def test_dashboard_paid_user_state(client, create_user, test_db):
     assert "UNLIMITED ANALYSIS JOBS" not in html
     assert "FREE (3/5)" not in html
     assert "Upgrade to Pro" not in html
+
+
+def test_retry_endpoint_ui_success(client, create_user, test_db):
+    """POST /analyses/{job_id}/retry resets failed job to pending."""
+    user = create_user(github_id=888001, username="dash_user1")
+    SessionLocal, _ = test_db
+    token = create_access_token(user_id=user.id, github_id=user.github_id, github_username=user.github_username)
+    client.cookies.set("access_token", token)
+
+    with SessionLocal() as session:
+        job = AnalysisJobRepository.create_job(
+            session=session,
+            user_id=user.id,
+            repo_url="https://github.com/fastapi/fastapi",
+            status="failed",
+        )
+        job.error_message = "Network timeout during shallow clone"
+        job.markdown_output = "# Stale Report"
+        job.graph_output_json = '{"stale": true}'
+        job.quiz_output_json = '{"questions": ["stale?"]}'
+        job.execution_time_seconds = 42.5
+        session.commit()
+        job_id = job.id
+
+        initial_usage = BillingRepository.get_monthly_usage_count(session, user.id)
+
+    # Post to retry endpoint
+    resp = client.post(f"/analyses/{job_id}/retry", follow_redirects=False)
+    assert resp.status_code == 302
+    assert resp.headers["location"] == f"/progress/{job_id}"
+
+    # Verify DB state
+    with SessionLocal() as session:
+        updated_job = AnalysisJobRepository.get_job_by_id(session, job_id)
+        assert updated_job.status == "pending"
+        assert updated_job.error_message is None
+        assert updated_job.markdown_output == ""
+        assert updated_job.graph_output_json == "{}"
+        assert updated_job.quiz_output_json == "{}"
+        assert updated_job.execution_time_seconds == 0.0
+        assert updated_job.run_id.startswith(f"retry_{job_id}_")
+
+        final_usage = BillingRepository.get_monthly_usage_count(session, user.id)
+        assert final_usage == initial_usage + 1
+
+
+def test_retry_endpoint_api_success(client, create_user, test_db):
+    """POST /api/analyses/{job_id}/retry returns JSON redirect info."""
+    user = create_user(github_id=888001, username="dash_user1")
+    SessionLocal, _ = test_db
+    token = create_access_token(user_id=user.id, github_id=user.github_id, github_username=user.github_username)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    with SessionLocal() as session:
+        job = AnalysisJobRepository.create_job(
+            session=session,
+            user_id=user.id,
+            repo_url="https://github.com/encode/uvicorn",
+            status="failed",
+        )
+        job_id = job.id
+
+    resp = client.post(f"/api/analyses/{job_id}/retry", headers=headers)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["success"] is True
+    assert data["job_id"] == job_id
+    assert data["status"] == "pending"
+    assert data["redirect_url"] == f"/progress/{job_id}"
+
+
+def test_retry_endpoint_idor_protection(client, create_user, test_db):
+    """User B cannot retry User A's failed analysis job (IDOR Defense)."""
+    user1 = create_user(github_id=888001, username="dash_user1")
+    user2 = create_user(github_id=888002, username="dash_user2")
+    SessionLocal, _ = test_db
+    u2_token = create_access_token(user_id=user2.id, github_id=user2.github_id, github_username=user2.github_username)
+    client.cookies.set("access_token", u2_token)
+
+    with SessionLocal() as session:
+        job = AnalysisJobRepository.create_job(
+            session=session,
+            user_id=user1.id,
+            repo_url="https://github.com/psf/requests",
+            status="failed",
+        )
+        job_id = job.id
+
+    resp = client.post(f"/analyses/{job_id}/retry")
+    assert resp.status_code == 403
+    assert "Access forbidden" in resp.text
+
+
+def test_dashboard_distinct_timestamps_in_same_minute(client, create_user, test_db):
+    """Confirm two jobs submitted in the same minute show distinct HH:MM:SS timestamps."""
+    from datetime import datetime, timezone
+    user = create_user(github_id=888005, username="ts_user")
+    SessionLocal, _ = test_db
+    token = create_access_token(user_id=user.id, github_id=user.github_id, github_username=user.github_username)
+    client.cookies.set("access_token", token)
+
+    t1 = datetime(2026, 9, 25, 12, 30, 10, tzinfo=timezone.utc)
+    t2 = datetime(2026, 9, 25, 12, 30, 45, tzinfo=timezone.utc)
+
+    with SessionLocal() as session:
+        job1 = AnalysisJobRepository.create_job(
+            session=session,
+            user_id=user.id,
+            repo_url="https://github.com/fastapi/fastapi",
+            status="completed",
+        )
+        job1.created_at = t1.replace(tzinfo=None)
+
+        job2 = AnalysisJobRepository.create_job(
+            session=session,
+            user_id=user.id,
+            repo_url="https://github.com/pallets/flask",
+            status="failed",
+            failed_stage="stage_3",
+            error_message="Failed while parsing code syntax trees.",
+        )
+        job2.created_at = t2.replace(tzinfo=None)
+        session.commit()
+
+    resp = client.get("/dashboard")
+    assert resp.status_code == 200
+    html = resp.text
+
+    # Both distinct seconds must be rendered
+    assert "12:30:10 UTC" in html
+    assert "12:30:45 UTC" in html
+
+    # Failed error line must be displayed
+    assert "Failed:" in html
+    assert "Failed while parsing code syntax trees." in html
+
+
+def test_progress_view_activity_log_and_collapsed_technical_log(client, create_user, test_db):
+    """Confirm progress view renders active progress card and collapsed technical log."""
+    user = create_user(github_id=888006, username="prog_user")
+    SessionLocal, _ = test_db
+    token = create_access_token(user_id=user.id, github_id=user.github_id, github_username=user.github_username)
+    client.cookies.set("access_token", token)
+
+    with SessionLocal() as session:
+        job = AnalysisJobRepository.create_job(
+            session=session,
+            user_id=user.id,
+            repo_url="https://github.com/psf/requests",
+            status="running",
+        )
+        job_id = job.id
+
+    resp = client.get(f"/progress/{job_id}")
+    assert resp.status_code == 200
+    html = resp.text
+
+    # Active progress card
+    assert 'id="active-card"' in html
+    assert 'id="active-sentence"' in html
+
+    # Technical log is collapsed by default in details toggle
+    assert 'id="details-toggle"' in html
+    assert 'id="sse-terminal-log"' in html
+
+
+def test_dashboard_xss_protection_repo_and_error_message(client, create_user, test_db):
+    """
+    Test with a job whose repo_name, repo_url and error_message all contain
+    <img src=x onerror=alert(1)> and "><svg onload=alert(1)>.
+    Render the dashboard through the real route.
+    Assert none of: <img src=x onerror, <svg onload, onmouseover= appear unescaped,
+    including inside title="" attributes.
+    """
+    user = create_user(github_id=888009, username="xss_user")
+    SessionLocal, _ = test_db
+    token = create_access_token(user_id=user.id, github_id=user.github_id, github_username=user.github_username)
+    client.cookies.set("access_token", token)
+
+    payload = '<img src=x onerror=alert(1)>"><svg onload=alert(1)>'
+
+    with SessionLocal() as session:
+        job = AnalysisJobRepository.create_job(
+            session=session,
+            user_id=user.id,
+            repo_url=f"https://github.com/test/{payload}",
+            repo_name=f"test-repo-{payload}",
+            status="failed",
+        )
+        job.error_message = f"Clone failed with error: {payload}"
+        session.commit()
+
+    resp = client.get("/dashboard")
+    assert resp.status_code == 200
+    html = resp.text
+
+    # Assert none of the forbidden unescaped tokens appear anywhere in the rendered HTML
+    assert "<img src=x onerror" not in html
+    assert "<svg onload" not in html
+    assert " onmouseover=" not in html

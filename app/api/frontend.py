@@ -16,6 +16,7 @@ from typing import Any, AsyncGenerator, Dict, Optional
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
+from sqlalchemy import update
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user, get_current_user_optional, get_db
@@ -615,9 +616,42 @@ def retry_analysis_ui(
             detail="Access forbidden: You do not own this analysis job",
         )
 
-    # Enforce Billing Quota Gate exactly like a new submission
+    # Conditional UPDATE: set status="pending", clear outputs, only WHERE id=job.id AND user_id=user.id AND status IN ("failed","cancelled")
+    run_id = f"retry_{job.id}_{int(time.time())}"
+    stmt = (
+        update(AnalysisJobModel)
+        .where(
+            AnalysisJobModel.id == job.id,
+            AnalysisJobModel.user_id == user.id,
+            AnalysisJobModel.status.in_(["failed", "cancelled"]),
+        )
+        .values(
+            status="pending",
+            error_message=None,
+            markdown_output="",
+            graph_output_json="{}",
+            quiz_output_json="{}",
+            execution_time_seconds=0.0,
+            run_id=run_id,
+            updated_at=utc_now(),
+        )
+    )
+    result = session.execute(stmt)
+    if result.rowcount == 0:
+        if "application/json" in request.headers.get("accept", ""):
+            return JSONResponse(
+                status_code=status.HTTP_409_CONFLICT,
+                content={"detail": "This analysis can't be retried."},
+            )
+        return RedirectResponse(
+            url="/dashboard?error=This+analysis+can't+be+retried.",
+            status_code=status.HTTP_302_FOUND,
+        )
+
+    # Check and consume quota inside the same transaction
     is_allowed, usage, limit, tier = BillingService.check_and_consume_quota(user, session, job_id=job.id)
     if not is_allowed:
+        session.rollback()
         from datetime import datetime, timezone
         now = datetime.now(timezone.utc)
         if now.month == 12:
@@ -637,16 +671,8 @@ def retry_analysis_ui(
             status_code=status.HTTP_302_FOUND,
         )
 
-    # Reset job status and wipe stale output fields
-    job.status = "pending"
-    job.error_message = None
-    job.markdown_output = ""
-    job.graph_output_json = "{}"
-    job.quiz_output_json = "{}"
-    job.execution_time_seconds = 0.0
-    job.run_id = f"retry_{job.id}_{int(time.time())}"
-    job.updated_at = utc_now()
     session.commit()
+    session.refresh(job)
 
     if "application/json" in request.headers.get("accept", ""):
         return JSONResponse(
@@ -683,8 +709,35 @@ def retry_analysis_api(
             detail="Access forbidden: You do not own this analysis job",
         )
 
+    run_id = f"retry_{job.id}_{int(time.time())}"
+    stmt = (
+        update(AnalysisJobModel)
+        .where(
+            AnalysisJobModel.id == job.id,
+            AnalysisJobModel.user_id == user.id,
+            AnalysisJobModel.status.in_(["failed", "cancelled"]),
+        )
+        .values(
+            status="pending",
+            error_message=None,
+            markdown_output="",
+            graph_output_json="{}",
+            quiz_output_json="{}",
+            execution_time_seconds=0.0,
+            run_id=run_id,
+            updated_at=utc_now(),
+        )
+    )
+    result = session.execute(stmt)
+    if result.rowcount == 0:
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={"detail": "This analysis can't be retried."},
+        )
+
     is_allowed, usage, limit, tier = BillingService.check_and_consume_quota(user, session, job_id=job.id)
     if not is_allowed:
+        session.rollback()
         from datetime import datetime, timezone
         now = datetime.now(timezone.utc)
         if now.month == 12:
@@ -698,15 +751,8 @@ def retry_analysis_api(
             detail=err_msg,
         )
 
-    job.status = "pending"
-    job.error_message = None
-    job.markdown_output = ""
-    job.graph_output_json = "{}"
-    job.quiz_output_json = "{}"
-    job.execution_time_seconds = 0.0
-    job.run_id = f"retry_{job.id}_{int(time.time())}"
-    job.updated_at = utc_now()
     session.commit()
+    session.refresh(job)
 
     return JSONResponse(
         content={
