@@ -228,8 +228,8 @@ def test_authz_matrix_routes(client, owner_user, other_user, test_db):
         else:
             resp_owner = client.post(path, follow_redirects=False)
 
-        # Owner gets 200 (or 302 progress redirect for retry)
-        assert resp_owner.status_code in (200, 302), f"Owner got {resp_owner.status_code} on {path}"
+        # Owner gets 200 (or 302 progress redirect for retry, or 409 if already completed/running)
+        assert resp_owner.status_code in (200, 302, 409), f"Owner got {resp_owner.status_code} on {path}"
 
 
 def test_authz_matrix_showcase_exception(client, owner_user, other_user, test_db):
@@ -331,7 +331,7 @@ def test_input_checks(client, owner_user, test_db, monkeypatch):
                 raw_msg = qs.get("error", [""])[0]
             else:
                 raw_msg = f"Redirect to {loc}"
-        elif resp.status_code in (200, 400, 422):
+        elif resp.status_code in (200, 400, 409, 422):
             import re
             # Extract error text from rendered dashboard banner or json detail
             m = re.search(r'id="form-error-banner"[^>]*>([\s\S]*?)</div>', resp.text)

@@ -2679,7 +2679,6 @@ def progress_view(
             return "Analyzing repository…";
         }}
 
-        const timerTextEl = document.getElementById("elapsed-timer-text");
         const activeCardTimerEl = document.getElementById("active-card-timer");
         function updateElapsedTimer() {{
             if (isJobTerminated) return;
@@ -2690,9 +2689,6 @@ def progress_view(
             const formatted = `${{mins}}:${{secs < 10 ? '0' : ''}}${{secs}}`;
             if (activeCardTimerEl) {{
                 activeCardTimerEl.textContent = formatted;
-            }}
-            if (timerTextEl) {{
-                timerTextEl.textContent = `Running for ${{formatted}}`;
             }}
         }}
 
