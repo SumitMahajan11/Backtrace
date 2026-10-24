@@ -122,37 +122,46 @@ def test_progress_view_renders_11_distinct_stages(client, create_user, test_db):
     assert resp.status_code == 200
     html = resp.text
 
-    # Header & Meta
-    assert f"Job #{job_id}" in html
-    assert "https://github.com/pallets/flask" in html
-    assert "completed-stage-count" in html
-    assert "OF 11 STAGES RESOLVED" in html
+    # Header & Title: Analyzing {owner}/{repo}
+    assert "Analyzing pallets/flask" in html
+    assert "progress-stepper" in html
+    assert "Get the code" in html
+    assert "Read the files" in html
+    assert "Map how they connect" in html
+    assert "Build your guide" in html
 
-    # Verify all 11 distinct stages are present with unique keys and titles
-    expected_stages = [
-        ("STAGE 00", "Consent & Auth Gate", "Verified GitHub OAuth scopes"),
-        ("STAGE 01", "Shallow Clone", "shallow git clone"),
-        ("STAGE 02", "Discovery & File Hierarchy", "tree layout"),
-        ("STAGE 03", "Code Structure Parsing", "structural parts"),
-        ("STAGE 04", "Global Symbol Table", "function signatures"),
-        ("STAGE 05", "Directed Dependency Graph", "dependency graph"),
-        ("STAGE 06", "Architecture Domain Mapping", "levels"),
-        ("STAGE 07", "Step-by-step narration", "chronological reading order"),
-        ("STAGE 08", "Graph & Quiz Generation", "interactive visual dependency graph"),
-        ("STAGE 09", "Persistence & Architecture Report Assembly", "persisted final report"),
-        ("STAGE 10", "Telemetry & Quota Allocation", "tracked AST token metrics"),
+    # Verify all 11 distinct stages are present with clean names in Details
+    expected_stage_titles = [
+        "Consent & Auth Gate",
+        "Shallow Clone",
+        "Discovery & File Hierarchy",
+        "Code Structure Parsing",
+        "Global Symbol Table",
+        "Directed Dependency Graph",
+        "Architecture Domain Mapping",
+        "Step-by-step narration",
+        "Graph & Quiz Generation",
+        "Persistence & Architecture Report Assembly",
+        "Telemetry & Quota Allocation",
     ]
 
-    for num, title, snippet in expected_stages:
-        assert num in html
+    for title in expected_stage_titles:
         assert title in html
-        assert snippet in html
 
-    # Real SSE Event Log Terminal is present
+    # Event log is present and renamed from Live Event Stream Log
     assert "sse-terminal-log" in html
-    assert "Live Event Stream Log" in html
+    assert "Event log" in html
+    assert "Live Event Stream Log" not in html
 
-    # Purged Telemetry Checks: Zero fake baud rate, packet counts, or crypto seals
+    # Purged legacy label checks
+    assert "STAGE 00" not in html
+    assert "STAGE 09" not in html
+    assert "S00" not in html
+    assert "S02" not in html
+    assert "docket" not in html.lower()
+    assert "tenant" not in html.lower()
+
+    # Zero fake telemetry
     assert "baud" not in html.lower()
     assert "packet rx" not in html.lower()
     assert "packet tx" not in html.lower()

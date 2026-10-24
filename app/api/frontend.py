@@ -15,26 +15,42 @@ import time
 from typing import Any, AsyncGenerator, Dict, Optional
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, status
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user, get_current_user_optional, get_db
-from app.models.db import AnalysisJobModel, UserModel, utc_now
+from app.core.config import rewards_enabled
+from app.models.db import (
+    AnalysisJobModel,
+    MilestoneAttemptModel,
+    PointsLedgerModel,
+    RefreshTokenModel,
+    SubscriptionModel,
+    UsageEventModel,
+    UserModel,
+    utc_now,
+)
 from app.services.billing_service import BillingService, BillingServiceError
 from app.services.points_engine import PointsEngine, PointsRedemptionError
 from app.storage.analysis_job_repository import AnalysisJobRepository
 from app.storage.milestone_attempt_repository import MilestoneAttemptRepository
 from app.ui.components import (
     dashboard_view,
+    extract_owner_and_repo,
     login_view,
+    map_failure_reason,
+    map_stage_to_phase,
     page_shell,
     pricing_view,
     privacy_view,
     progress_view,
+    render_milestone_body_fragment,
     report_view,
     rewards_view,
     settings_view,
     showcase_view,
+    support_view,
+    _parse_report_markdown,
 )
 from app.ui.sanitizer import sanitize_text
 
@@ -52,6 +68,18 @@ def root_redirect(
     if user:
         return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
     return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
+
+
+@router.get("/favicon.svg", summary="Favicon SVG")
+def get_favicon():
+    """Serve favicon.svg icon."""
+    favicon_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "static", "favicon.svg")
+    if os.path.exists(favicon_path):
+        with open(favicon_path, "r", encoding="utf-8") as f:
+            content = f.read()
+    else:
+        content = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32"><rect width="32" height="32" rx="8" fill="#4f8cff"/><text x="16" y="22" font-family="Inter, system-ui, sans-serif" font-weight="700" font-size="18" fill="#ffffff" text-anchor="middle">B</text></svg>'
+    return Response(content=content, media_type="image/svg+xml")
 
 
 @router.get("/login", response_class=HTMLResponse, summary="Login View")
@@ -96,7 +124,7 @@ def show_dashboard(
             pass
 
     billing_status = BillingService.get_user_billing_status(user, session)
-    past_jobs = AnalysisJobRepository.get_jobs_for_user(session, user.id)
+    past_jobs = AnalysisJobRepository.get_grouped_jobs_for_user(session, user.id)
 
     return HTMLResponse(
         content=dashboard_view(
@@ -159,6 +187,164 @@ def show_settings(
     )
 
 
+@router.post("/settings", summary="Update User Settings")
+def update_settings(
+    request: Request,
+    show_on_leaderboard: Optional[str] = Form(None),
+    user: Optional[UserModel] = Depends(get_current_user_optional),
+    session: Session = Depends(get_db),
+):
+    """Update user settings such as leaderboard username visibility."""
+    if not user:
+        return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
+
+    user.show_on_leaderboard = bool(show_on_leaderboard and show_on_leaderboard.lower() in ("true", "on", "1", "yes"))
+    session.add(user)
+    session.commit()
+
+    return RedirectResponse(url="/settings?success=Preferences+updated", status_code=status.HTTP_302_FOUND)
+
+
+@router.get("/account/export.json", summary="Export User Account Data (JSON)")
+def export_user_data(
+    user: Optional[UserModel] = Depends(get_current_user_optional),
+    session: Session = Depends(get_db),
+):
+    """
+    Downloads user account data in JSON format:
+    jobs, progress (milestone attempts), and quiz scores.
+    """
+    if not user:
+        return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
+
+    jobs = (
+        session.query(AnalysisJobModel)
+        .filter(AnalysisJobModel.user_id == user.id)
+        .order_by(AnalysisJobModel.created_at.desc())
+        .all()
+    )
+    attempts = (
+        session.query(MilestoneAttemptModel)
+        .filter(MilestoneAttemptModel.user_id == user.id)
+        .order_by(MilestoneAttemptModel.created_at.desc())
+        .all()
+    )
+
+    jobs_data = []
+    for j in jobs:
+        jobs_data.append({
+            "id": j.id,
+            "repo_name": j.repo_name,
+            "github_url": j.github_url,
+            "commit_ref": j.commit_ref,
+            "resolved_sha": j.resolved_sha,
+            "subpath": j.subpath,
+            "status": j.status,
+            "failed_stage": j.failed_stage,
+            "error_message": j.error_message,
+            "execution_time_seconds": j.execution_time_seconds,
+            "is_showcase": j.is_showcase,
+            "created_at": j.created_at.isoformat() if j.created_at else None,
+            "updated_at": j.updated_at.isoformat() if j.updated_at else None,
+        })
+
+    progress_data = []
+    quiz_scores_data = []
+    for a in attempts:
+        progress_data.append({
+            "id": a.id,
+            "job_id": a.job_id,
+            "milestone_tier": a.milestone_tier,
+            "status": a.status,
+            "hint_level_revealed": a.hint_level_revealed,
+            "implementation_revealed": a.implementation_revealed,
+            "grading_method": a.grading_method,
+            "created_at": a.created_at.isoformat() if a.created_at else None,
+            "updated_at": a.updated_at.isoformat() if a.updated_at else None,
+        })
+        if a.grading_details_json:
+            try:
+                gd = json.loads(a.grading_details_json)
+                if isinstance(gd, dict) and "quiz_score" in gd:
+                    quiz_scores_data.append({
+                        "job_id": a.job_id,
+                        "milestone_tier": a.milestone_tier,
+                        "quiz_score": gd.get("quiz_score"),
+                        "quiz_total": gd.get("quiz_total"),
+                        "quiz_passed": gd.get("quiz_passed"),
+                        "recorded_at": gd.get("quiz_recorded_at"),
+                    })
+            except Exception:
+                pass
+
+    export_payload = {
+        "user": {
+            "id": user.id,
+            "github_username": user.github_username,
+            "email": user.email,
+            "created_at": user.created_at.isoformat() if user.created_at else None,
+            "show_on_leaderboard": getattr(user, "show_on_leaderboard", False),
+        },
+        "jobs": jobs_data,
+        "progress": progress_data,
+        "quiz_scores": quiz_scores_data,
+        "exported_at": utc_now().isoformat(),
+    }
+
+    content_str = json.dumps(export_payload, indent=2)
+    filename = f"backtrace_export_{user.github_username}.json"
+    return Response(
+        content=content_str,
+        media_type="application/json",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+        },
+    )
+
+
+@router.post("/account/delete", summary="Permanently Delete User Account")
+def delete_user_account(
+    request: Request,
+    username: str = Form(..., description="Confirmed GitHub username"),
+    user: Optional[UserModel] = Depends(get_current_user_optional),
+    session: Session = Depends(get_db),
+):
+    """
+    Permanently purges the authenticated user and all associated records across:
+    - milestone_attempts
+    - points_ledger
+    - analysis_jobs
+    - usage_events
+    - refresh_tokens
+    - subscriptions
+    - users
+    Clears session cookies and redirects to /login.
+    """
+    if not user:
+        return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
+
+    if username.strip() != user.github_username:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Confirmation username '{username.strip()}' does not match account username '{user.github_username}'.",
+        )
+
+    # Purge user references across dependent tables explicitly to ensure integrity across SQLite and Postgres
+    session.query(MilestoneAttemptModel).filter(MilestoneAttemptModel.user_id == user.id).delete()
+    session.query(PointsLedgerModel).filter(PointsLedgerModel.user_id == user.id).delete()
+    session.query(AnalysisJobModel).filter(AnalysisJobModel.user_id == user.id).delete()
+    session.query(UsageEventModel).filter(UsageEventModel.user_id == user.id).delete()
+    session.query(RefreshTokenModel).filter(RefreshTokenModel.user_id == user.id).delete()
+    session.query(SubscriptionModel).filter(SubscriptionModel.user_id == user.id).delete()
+    session.delete(user)
+    session.commit()
+
+    resp = RedirectResponse(url="/login?deleted=1", status_code=status.HTTP_302_FOUND)
+    resp.delete_cookie("access_token", path="/")
+    resp.delete_cookie("refresh_token", path="/")
+    return resp
+
+
 @router.get("/rewards", response_class=HTMLResponse, summary="Rewards & Points Economy View")
 @router.get("/points", response_class=HTMLResponse, summary="Points Economy View (Alias)")
 def show_rewards(
@@ -173,6 +359,9 @@ def show_rewards(
     Displays active balance with 180-day expiry notice, software perks redemption,
     achievement badges, global leaderboard, and audit ledger.
     """
+    if not rewards_enabled():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rewards protocol disabled")
+
     if not user:
         return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
 
@@ -207,6 +396,9 @@ def redeem_quota_form_action(
     """
     Form action endpoint for redeeming points for +2 monthly analysis quota.
     """
+    if not rewards_enabled():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rewards protocol disabled")
+
     if not user:
         return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
 
@@ -225,28 +417,36 @@ def submit_analysis(
     repo_url: str = Form(..., description="Target GitHub repository URL"),
     commit_ref: Optional[str] = Form(None, description="Optional branch or commit reference"),
     subpath: Optional[str] = Form(None, description="Optional subdirectory path scope"),
+    reanalyze_anyway: Optional[bool] = Form(False, description="Optional flag to force re-analysis even if commit SHA is unchanged"),
+    force_reanalyze: Optional[bool] = Form(False, description="Alias for reanalyze_anyway"),
     user: Optional[UserModel] = Depends(get_current_user_optional),
     session: Session = Depends(get_db),
 ):
     """
     Process repository submission form.
     Executes lightweight preflight size check against GitHub API before database job creation.
-    Enforces quota gating only on valid repos and records an AnalysisJob.
+    Resolves remote commit SHA and redirects to existing completed report if commit is unchanged.
+    Enforces quota gating only on valid, un-cached repos and records an AnalysisJob.
     """
     if not user:
         return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
 
     clean_url = repo_url.strip()
-    if not clean_url.startswith("https://github.com/"):
+    from app.utils.url_validator import validate_github_url
+    try:
+        validate_github_url(clean_url)
+    except Exception:
         return RedirectResponse(
-            url="/dashboard?error=Invalid+repository+URL.+Must+start+with+https://github.com/",
+            url="/dashboard?error=That+doesn%27t+look+like+a+GitHub+repository+link.",
             status_code=status.HTTP_302_FOUND,
         )
+
+    is_forced = bool(reanalyze_anyway or force_reanalyze)
 
     from app.utils.file_filter import sanitize_and_validate_subpath
     from app.services.ingestion import validate_commit_ref
     billing_status = BillingService.get_user_billing_status(user, session)
-    past_jobs = AnalysisJobRepository.get_jobs_for_user(session, user.id)
+    past_jobs = AnalysisJobRepository.get_grouped_jobs_for_user(session, user.id)
 
     try:
         clean_subpath = sanitize_and_validate_subpath(subpath)
@@ -318,26 +518,65 @@ def submit_analysis(
                 current_user=user,
                 billing_status=billing_status,
                 past_jobs=past_jobs,
-                error=str(e),
+                error="That doesn't look like a GitHub repository link.",
             ),
             status_code=status.HTTP_200_OK,
         )
 
-    # 2. Enforce Billing Quota Gate (only after passing preflight)
+    # 2. Resolve Remote Latest Commit SHA (Part A: cache re-analysis)
+    from app.services.cached_ingestion import get_remote_head_commit
+    try:
+        resolved_sha = get_remote_head_commit(clean_url, commit_ref=clean_ref)
+    except TypeError:
+        resolved_sha = get_remote_head_commit(clean_url)
+
+    # Check for existing completed report for identical repo URL, branch, subdirectory AND commit SHA
+    if not is_forced:
+        existing_job = AnalysisJobRepository.find_completed_job(
+            session=session,
+            user_id=user.id,
+            github_url=clean_url,
+            commit_ref=clean_ref,
+            subpath=clean_subpath,
+            resolved_sha=resolved_sha,
+        )
+        if existing_job:
+            # Redirect to existing completed report without creating job, charging quota, or resetting progress
+            return RedirectResponse(
+                url=f"/report/{existing_job.id}",
+                status_code=status.HTTP_302_FOUND,
+            )
+
+    # 3. Enforce Billing Quota Gate (only after passing preflight and cache check)
     is_allowed, usage, limit, tier = BillingService.check_and_consume_quota(user, session)
     if not is_allowed:
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
+        if now.month == 12:
+            next_month_date = datetime(now.year + 1, 1, 1, tzinfo=timezone.utc)
+        else:
+            next_month_date = datetime(now.year, now.month + 1, 1, tzinfo=timezone.utc)
+        renewal_date_str = next_month_date.strftime("%b %d, %Y")
+        err_msg = f"You've used all {limit} analyses this month. Resets on {renewal_date_str}."
+
+        if "application/json" in request.headers.get("accept", ""):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=err_msg,
+            )
         return RedirectResponse(
-            url=f"/dashboard?error=Monthly+analysis+quota+exceeded+({usage}/{limit}).+Please+upgrade+to+Pro.",
+            url=f"/dashboard?error={err_msg.replace(' ', '+')}",
             status_code=status.HTTP_302_FOUND,
         )
 
-    # 3. Create Analysis Job record
+    # 4. Create Analysis Job record
     job = AnalysisJobRepository.create_job(
         session=session,
         user_id=user.id,
         repo_url=clean_url,
         commit_ref=clean_ref,
         subpath=clean_subpath,
+        resolved_sha=resolved_sha,
         status="running",
     )
 
@@ -348,6 +587,7 @@ def submit_analysis(
 
 
 @router.post("/analyses/{job_id}/retry", summary="Retry Failed Analysis Job (UI)")
+@router.post("/jobs/{job_id}/retry", summary="Retry Failed Analysis Job (UI alias)")
 def retry_analysis_ui(
     job_id: str,
     request: Request,
@@ -356,7 +596,6 @@ def retry_analysis_ui(
 ):
     """
     Retry a failed analysis job.
-    Does NOT burn an extra quota slot since the user already consumed one for the failed attempt.
     """
     if not user:
         return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
@@ -374,7 +613,29 @@ def retry_analysis_ui(
             detail="Access forbidden: You do not own this analysis job",
         )
 
-    # Reset job status and wipe stale output fields without charging additional quota
+    # Enforce Billing Quota Gate exactly like a new submission
+    is_allowed, usage, limit, tier = BillingService.check_and_consume_quota(user, session, job_id=job.id)
+    if not is_allowed:
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
+        if now.month == 12:
+            next_month_date = datetime(now.year + 1, 1, 1, tzinfo=timezone.utc)
+        else:
+            next_month_date = datetime(now.year, now.month + 1, 1, tzinfo=timezone.utc)
+        renewal_date_str = next_month_date.strftime("%b %d, %Y")
+        err_msg = f"You've used all {limit} analyses this month. Resets on {renewal_date_str}."
+
+        if "application/json" in request.headers.get("accept", ""):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=err_msg,
+            )
+        return RedirectResponse(
+            url=f"/dashboard?error={err_msg.replace(' ', '+')}",
+            status_code=status.HTTP_302_FOUND,
+        )
+
+    # Reset job status and wipe stale output fields
     job.status = "pending"
     job.error_message = None
     job.markdown_output = ""
@@ -384,6 +645,16 @@ def retry_analysis_ui(
     job.run_id = f"retry_{job.id}_{int(time.time())}"
     job.updated_at = utc_now()
     session.commit()
+
+    if "application/json" in request.headers.get("accept", ""):
+        return JSONResponse(
+            content={
+                "success": True,
+                "job_id": job.id,
+                "status": "pending",
+                "redirect_url": f"/progress/{job.id}",
+            }
+        )
 
     return RedirectResponse(url=f"/progress/{job.id}", status_code=status.HTTP_302_FOUND)
 
@@ -396,7 +667,6 @@ def retry_analysis_api(
 ):
     """
     API endpoint to retry a failed analysis job.
-    Does NOT burn an extra quota slot.
     """
     job = AnalysisJobRepository.get_job_by_id(session, job_id)
     if not job:
@@ -409,6 +679,21 @@ def retry_analysis_api(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access forbidden: You do not own this analysis job",
+        )
+
+    is_allowed, usage, limit, tier = BillingService.check_and_consume_quota(user, session, job_id=job.id)
+    if not is_allowed:
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
+        if now.month == 12:
+            next_month_date = datetime(now.year + 1, 1, 1, tzinfo=timezone.utc)
+        else:
+            next_month_date = datetime(now.year, now.month + 1, 1, tzinfo=timezone.utc)
+        renewal_date_str = next_month_date.strftime("%b %d, %Y")
+        err_msg = f"You've used all {limit} analyses this month. Resets on {renewal_date_str}."
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=err_msg,
         )
 
     job.status = "pending"
@@ -431,6 +716,104 @@ def retry_analysis_api(
     )
 
 
+@router.post("/jobs/{job_id}/cancel", summary="Cancel Analysis Job")
+@router.post("/analyses/{job_id}/cancel", summary="Cancel Analysis Job (alias)")
+async def cancel_job(
+    job_id: str,
+    request: Request,
+    user: Optional[UserModel] = Depends(get_current_user_optional),
+    session: Session = Depends(get_db),
+):
+    """
+    Cancel an in-progress or queued analysis job and refund user quota.
+    """
+    if not user:
+        return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
+
+    job = AnalysisJobRepository.get_job_by_id(session, job_id)
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Analysis job not found",
+        )
+
+    if job.user_id != user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access forbidden: You do not own this analysis job",
+        )
+
+    job_status = str(job.status or "").lower()
+    if job_status in ("pending", "queued", "running", "processing"):
+        AnalysisJobRepository.update_job_status(session, job.id, status="cancelled")
+        session.commit()
+
+    if "application/json" in request.headers.get("accept", ""):
+        return JSONResponse(
+            content={
+                "success": True,
+                "job_id": job.id,
+                "status": "cancelled",
+                "message": "Analysis cancelled.",
+            }
+        )
+
+    return RedirectResponse(url=f"/progress/{job.id}", status_code=status.HTTP_302_FOUND)
+
+
+@router.post("/jobs/{job_id}/delete", summary="Delete Analysis Job")
+@router.post("/analyses/{job_id}/delete", summary="Delete Analysis Job (alias)")
+@router.delete("/jobs/{job_id}", summary="Delete Analysis Job (REST)")
+@router.delete("/analyses/{job_id}", summary="Delete Analysis Job (REST alias)")
+@router.post("/api/analyses/{job_id}/delete", summary="Delete Analysis Job (API)")
+@router.delete("/api/analyses/{job_id}", summary="Delete Analysis Job (API REST)")
+async def delete_job(
+    job_id: str,
+    request: Request,
+    user: Optional[UserModel] = Depends(get_current_user_optional),
+    session: Session = Depends(get_db),
+):
+    """
+    Delete an analysis job.
+    Only the job's owner may delete it. Returns 403 Forbidden if another user attempts deletion.
+    Redirects back to /dashboard on success or returns JSON if requested.
+    """
+    if not user:
+        if "application/json" in request.headers.get("accept", ""):
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
+        return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
+
+    job = AnalysisJobRepository.get_job_by_id(session, job_id)
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Analysis job not found",
+        )
+
+    if job.user_id != user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access forbidden: You do not own this analysis job",
+        )
+
+    session.delete(job)
+    session.commit()
+
+    if "application/json" in request.headers.get("accept", ""):
+        return JSONResponse(
+            content={
+                "success": True,
+                "job_id": int(job_id) if str(job_id).isdigit() else job_id,
+                "message": "Analysis job deleted successfully.",
+            }
+        )
+
+    return RedirectResponse(
+        url="/dashboard?success=Repository+analysis+deleted",
+        status_code=status.HTTP_303_SEE_OTHER,
+    )
+
+
 @router.get("/progress/{job_id}", response_class=HTMLResponse, summary="Analysis Progress View")
 def show_progress(
     job_id: str,
@@ -441,6 +824,7 @@ def show_progress(
     """
     Render live progress view with SSE listeners.
     Strict IDOR check: Users can only view their own jobs.
+    Auto-redirect on completed removed: renders Report ready card with real numbers.
     """
     if not user:
         return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
@@ -458,9 +842,6 @@ def show_progress(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access forbidden: You do not own this analysis job",
         )
-
-    if job.status == "completed":
-        return RedirectResponse(url=f"/report/{job.id}", status_code=status.HTTP_302_FOUND)
 
     billing_status = BillingService.get_user_billing_status(user, session)
     return HTMLResponse(content=progress_view(job=job, current_user=user, billing_status=billing_status))
@@ -520,10 +901,20 @@ async def analysis_progress_events(
     initial_exec_sec = float(getattr(job, "execution_time_seconds", 0.0) or 0.0)
     initial_failed_stage = str(getattr(job, "failed_stage", None) or "pipeline")
     initial_error_msg = str(getattr(job, "error_message", None) or "Analysis job previously failed.")
+    initial_markdown_output = str(getattr(job, "markdown_output", "") or "")
 
     async def event_generator() -> AsyncGenerator[str, None]:
         if job_status == "completed":
-            yield f"data: {json.dumps({'type': 'completed', 'job_id': job_id, 'percentage': 100, 'execution_time_seconds': initial_exec_sec})}\n\n"
+            files_analyzed, modules_count, entry_points_count = 0, 0, 0
+            if initial_markdown_output:
+                try:
+                    ov = _parse_report_markdown(initial_markdown_output).get("overview", {})
+                    files_analyzed = ov.get("total_files", 0)
+                    modules_count = ov.get("total_domains", 0)
+                    entry_points_count = len(ov.get("entry_points", []))
+                except Exception:
+                    pass
+            yield f"data: {json.dumps({'type': 'completed', 'job_id': job_id, 'percentage': 100, 'execution_time_seconds': initial_exec_sec, 'files_analyzed': files_analyzed, 'modules_mapped': modules_count, 'entry_points': entry_points_count})}\n\n"
             return
 
         if job_status == "failed":
@@ -542,13 +933,13 @@ async def analysis_progress_events(
         last_emitted_pct = [0]
         completed_stages = set()
 
-        def make_progress_payload(ui_key: str, pct: int, msg: str) -> dict:
+        def make_progress_payload(ui_key: str, pct: int, msg: str, **kwargs) -> dict:
             meta = STAGE_METADATA.get(ui_key, {})
             layer_name = meta.get("layer", "")
             est_rem = metrics_collector.estimate_remaining_duration_seconds(layer_name)
             effective_pct = max(last_emitted_pct[0], pct)
             last_emitted_pct[0] = effective_pct
-            return {
+            payload = {
                 "type": "progress",
                 "job_id": job_id,
                 "stage": ui_key,
@@ -559,6 +950,8 @@ async def analysis_progress_events(
                 "message": msg,
                 "estimated_remaining_seconds": est_rem,
             }
+            payload.update(kwargs)
+            return payload
 
         def make_stage_complete_payload(ui_key: str) -> dict:
             meta = STAGE_METADATA.get(ui_key, {})
@@ -630,22 +1023,22 @@ async def analysis_progress_events(
                 # Fast branch for pytest test suite
                 if is_test_mode:
                     test_stages = [
-                        ("stage_1", 20, "Repository clone completed"),
-                        ("stage_2", 30, "Project layout discovered"),
-                        ("stage_3", 45, "AST parsing and syntax tree analysis"),
-                        ("stage_4", 60, "Global symbol table built"),
-                        ("stage_5", 70, "Module dependency graph constructed"),
-                        ("stage_6", 80, "Architectural layers mapped"),
-                        ("stage_7", 90, "LLM architectural narrative synthesized"),
-                        ("stage_8", 95, "Markdown report, dependency graph, and quiz generated"),
-                        ("stage_9", 98, "Artifacts cached in storage layer"),
-                        ("stage_10", 100, "Telemetry and metrics collection finalized"),
+                        ("stage_1", 20, "Repository clone completed", {}),
+                        ("stage_2", 30, "Project layout discovered", {"files": 42, "language": "Python"}),
+                        ("stage_3", 45, "AST parsing and syntax tree analysis", {"files_done": 20, "files_total": 42, "files": 42, "language": "Python"}),
+                        ("stage_4", 60, "Global symbol table built", {"symbols_count": 156}),
+                        ("stage_5", 70, "Module dependency graph constructed", {"modules_mapped": 6, "entry_points": 2}),
+                        ("stage_6", 80, "Architectural layers mapped", {"modules_mapped": 6, "entry_points": 2}),
+                        ("stage_7", 90, "LLM architectural narrative synthesized", {}),
+                        ("stage_8", 95, "Markdown report, dependency graph, and quiz generated", {}),
+                        ("stage_9", 98, "Artifacts cached in storage layer", {}),
+                        ("stage_10", 100, "Telemetry and metrics collection finalized", {}),
                     ]
-                    for s_key, pct, s_msg in test_stages:
+                    for s_key, pct, s_msg, s_kwargs in test_stages:
                         current_stage_key = s_key
                         loop.call_soon_threadsafe(
                             event_queue.put_nowait,
-                            make_progress_payload(s_key, pct, s_msg),
+                            make_progress_payload(s_key, pct, s_msg, **s_kwargs),
                         )
                         loop.call_soon_threadsafe(
                             event_queue.put_nowait,
@@ -669,6 +1062,9 @@ async def analysis_progress_events(
                             "job_id": job_id,
                             "percentage": 100,
                             "execution_time_seconds": exec_duration,
+                            "files_analyzed": 42,
+                            "modules_mapped": 6,
+                            "entry_points": 2,
                         },
                     )
                     loop.call_soon_threadsafe(event_queue.put_nowait, None)
@@ -819,6 +1215,9 @@ async def analysis_progress_events(
                     job_id=job_id,
                     duration_seconds=exec_duration,
                 )
+                real_files_count = len(file_paths) if file_paths else 0
+                real_modules_count = len(pipeline_res.report.architecture_overview.domain_file_counts) if (pipeline_res.report and pipeline_res.report.architecture_overview) else 0
+                real_ep_count = len(pipeline_res.report.architecture_overview.entry_point_files) if (pipeline_res.report and pipeline_res.report.architecture_overview) else 0
                 loop.call_soon_threadsafe(
                     event_queue.put_nowait,
                     {
@@ -826,6 +1225,9 @@ async def analysis_progress_events(
                         "job_id": job_id,
                         "percentage": 100,
                         "execution_time_seconds": exec_duration,
+                        "files_analyzed": real_files_count,
+                        "modules_mapped": real_modules_count,
+                        "entry_points": real_ep_count,
                     },
                 )
                 loop.call_soon_threadsafe(event_queue.put_nowait, None)
@@ -978,6 +1380,7 @@ def get_analysis_status_api(
     }
 
 
+@router.get("/reports/{job_id}", response_class=HTMLResponse, summary="Analysis Report View (Plural)")
 @router.get("/report/{job_id}", response_class=HTMLResponse, summary="Analysis Report View")
 def show_report(
     job_id: str,
@@ -1031,6 +1434,21 @@ def show_report(
     file_contents = FileContentService.get_file_contents_for_job(session=session, job=job)
     redacted_files = FileContentService.get_redacted_files_for_job(session=session, job=job)
 
+    # Check whether the commit remains unchanged on remote
+    is_commit_unchanged = False
+    if job.status == "completed" and getattr(job, "resolved_sha", None):
+        try:
+            from app.services.cached_ingestion import get_remote_head_commit
+            try:
+                curr_sha = get_remote_head_commit(job.github_url, commit_ref=job.commit_ref)
+            except TypeError:
+                curr_sha = get_remote_head_commit(job.github_url)
+            if curr_sha == job.resolved_sha:
+                is_commit_unchanged = True
+        except Exception:
+            is_commit_unchanged = True
+
+    lazy_milestones = (request.query_params.get("preload") not in ("1", "true"))
     billing_status = BillingService.get_user_billing_status(user, session) if user else None
     return HTMLResponse(
         content=report_view(
@@ -1043,8 +1461,169 @@ def show_report(
             attempts_by_tier=attempts_by_tier,
             file_contents=file_contents,
             redacted_files=redacted_files,
+            is_commit_unchanged=is_commit_unchanged,
+            lazy_milestones=lazy_milestones,
         )
     )
+
+
+@router.get("/reports/{job_id}/graph.json", summary="Get Report Graph JSON (Plural)")
+@router.get("/report/{job_id}/graph.json", summary="Get Report Graph JSON")
+def get_report_graph_json(
+    job_id: str,
+    user: Optional[UserModel] = Depends(get_current_user_optional),
+    session: Session = Depends(get_db),
+):
+    """
+    Returns the JSON graph data containing nodes and deduped edges for the analysis report.
+    """
+    job = AnalysisJobRepository.get_job_by_id(session, job_id)
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Report not found",
+        )
+    is_showcase = bool(getattr(job, "is_showcase", False))
+    if not is_showcase and (not user or job.user_id != user.id):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Report not found",
+        )
+
+    from app.formatters.graph_formatter import dedupe_edges
+    raw_graph = job.graph_data if isinstance(job.graph_data, dict) else {}
+    nodes = raw_graph.get("nodes", [])
+    raw_edges = raw_graph.get("edges", [])
+    deduped = dedupe_edges(raw_edges)
+    return JSONResponse(
+        content={
+            "job_id": job.id,
+            "nodes": nodes,
+            "edges": deduped,
+            "node_count": len(nodes),
+            "edge_count": len(deduped),
+        }
+    )
+
+
+@router.get("/reports/{job_id}/export.md", summary="Export Report as Markdown (Plural)")
+@router.get("/report/{job_id}/export.md", summary="Export Report as Markdown")
+def export_report_markdown(
+    job_id: str,
+    user: Optional[UserModel] = Depends(get_current_user_optional),
+    session: Session = Depends(get_db),
+):
+    """
+    Downloads the analysis report raw markdown transcript.
+    Strictly owner-only: returns 404 Not Found for anonymous or non-owner users.
+    """
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Report not found",
+        )
+    job = AnalysisJobRepository.get_job_by_id(session, job_id)
+    if not job or job.user_id != user.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Report not found",
+        )
+
+    content = job.report_markdown or "# Analysis Report\n\nNo report markdown generated."
+    return Response(
+        content=content,
+        media_type="text/markdown",
+        headers={
+            "Content-Disposition": f'attachment; filename="report-{job.id}.md"'
+        },
+    )
+
+
+@router.get(
+    "/reports/{job_id}/milestones/{milestone_id}",
+    response_class=HTMLResponse,
+    summary="Milestone HTML Fragment (Plural)",
+)
+@router.get(
+    "/report/{job_id}/milestones/{milestone_id}",
+    response_class=HTMLResponse,
+    summary="Milestone HTML Fragment",
+)
+def get_milestone_fragment(
+    job_id: str,
+    milestone_id: str,
+    user: Optional[UserModel] = Depends(get_current_user_optional),
+    session: Session = Depends(get_db),
+):
+    """
+    Returns HTML fragment for a single milestone workspace.
+    Loaded on demand when user opens a milestone.
+    Returns 404 if not found or unauthorized (non-owner and non-showcase).
+    """
+    if not user:
+        job = AnalysisJobRepository.get_job_by_id(session, job_id)
+        if not job or not getattr(job, "is_showcase", False):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Milestone not found",
+            )
+    else:
+        job = AnalysisJobRepository.get_job_by_id(session, job_id)
+        if not job:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Milestone not found",
+            )
+        if not getattr(job, "is_showcase", False) and job.user_id != user.id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Milestone not found",
+            )
+
+    is_showcase = bool(getattr(job, "is_showcase", False))
+    raw_markdown = job.report_markdown or ""
+    parsed_md = _parse_report_markdown(raw_markdown)
+    milestones = parsed_md.get("milestones") or []
+
+    target_milestone = None
+    target_idx = 1
+    for idx, m in enumerate(milestones, 1):
+        m_tier = m.get("tier", idx)
+        if str(m_tier) == str(milestone_id) or str(idx) == str(milestone_id):
+            target_milestone = m
+            target_idx = idx
+            break
+
+    if not target_milestone:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Milestone not found",
+        )
+
+    attempts_by_tier = {}
+    if user and not is_showcase:
+        attempts = MilestoneAttemptRepository.get_attempts_for_job(
+            session=session,
+            user_id=user.id,
+            job_id=job.id,
+        )
+        attempts_by_tier = {a.milestone_tier: a for a in attempts}
+
+    from app.services.file_content_service import FileContentService
+    file_contents = FileContentService.get_file_contents_for_job(session=session, job=job)
+    redacted_files = FileContentService.get_redacted_files_for_job(session=session, job=job)
+
+    fragment_html = render_milestone_body_fragment(
+        job=job,
+        milestone=target_milestone,
+        m_idx=target_idx,
+        graph_data=job.graph_data if isinstance(job.graph_data, dict) else None,
+        attempts_by_tier=attempts_by_tier,
+        file_contents=file_contents,
+        redacted_files=redacted_files,
+        is_showcase=is_showcase,
+    )
+    return HTMLResponse(content=fragment_html)
 
 
 @router.get("/report/{job_id}/milestone/{tier}", response_class=HTMLResponse, summary="Direct Milestone Editor Route")
@@ -1128,3 +1707,10 @@ def show_pricing(
     """Render public Pricing and Plan Limits page."""
     return HTMLResponse(content=pricing_view(current_user=user))
 
+
+@router.get("/support", response_class=HTMLResponse, summary="Public Support and Assistance")
+def show_support(
+    user: Optional[UserModel] = Depends(get_current_user_optional),
+):
+    """Render public Support and Help page."""
+    return HTMLResponse(content=support_view(current_user=user))

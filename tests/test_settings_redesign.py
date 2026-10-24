@@ -81,51 +81,43 @@ def test_settings_unauthenticated_redirect(client):
     assert resp.headers["location"] == "/login"
 
 
-def test_settings_free_user_view(client, create_user, test_db):
-    """Free user sees identity, theme cards, free quota meter, and dynamic upgrade CTA."""
+def test_settings_free_user_view(client, create_user, test_db, monkeypatch):
+    """Free user sees identity, theme cards, free quota meter, and upgrade CTA when billing is enabled."""
+    monkeypatch.setenv("STRIPE_BILLING_ENABLED", "true")
+    monkeypatch.setenv("PRO_PRICE_DISPLAY", "$9 / month")
     user = create_user(github_id=777001, username="settings_user1")
     token = create_access_token(user_id=user.id, github_id=user.github_id, github_username=user.github_username)
     client.cookies.set("access_token", token)
 
-    mock_price = MagicMock()
-    mock_price.unit_amount = 1000
-    mock_price.currency = "inr"
-    mock_price.recurring = {"interval": "month"}
+    resp = client.get("/settings")
+    assert resp.status_code == 200
+    html = resp.text
 
-    # Clear cache to ensure mock executes
-    BillingService._price_cache.clear()
+    # 1. Identity
+    assert "@settings_user1" in html
+    assert "settings_user1@example.com" in html
+    assert "Institutional Identity" in html
+    assert "Profile information and notification email are synced directly from GitHub OAuth" in html
 
-    with patch("stripe.Price.retrieve", return_value=mock_price):
-        resp = client.get("/settings")
-        assert resp.status_code == 200
-        html = resp.text
+    # 2. Themes
+    assert "Theme" in html
+    assert "Dark Architecture Report" in html
+    assert "Light Archival" in html
+    assert "Detect my system" in html
 
-        # 1. Identity
-        assert "@settings_user1" in html
-        assert "settings_user1@example.com" in html
-        assert "Institutional Identity" in html
-        assert "Profile information and notification email are synced directly from GitHub OAuth" in html
+    # 3. Quota & Plan
+    assert "FREE TIER" in html
+    assert "0 / 5 CONSUMED" in html
+    assert "AUTOMATIC RESET:" in html
 
-        # 2. Themes
-        assert "Theme" in html
-        assert "Dark Architecture Report" in html
-        assert "Light Archival" in html
-        assert "Detect my system" in html
+    # 4. Price Display ($9 / month, NOT hardcoded $29)
+    assert "$9 / month" in html
+    assert "$29" not in html
+    assert "/api/billing/checkout" in html
 
-        # 3. Quota & Plan
-        assert "FREE TIER" in html
-        assert "0 / 5 CONSUMED" in html
-        assert "AUTOMATIC RESET:" in html
-
-        # 4. Dynamic Stripe Price (₹10 / month, NOT hardcoded $29)
-        assert "₹10" in html
-        assert "/ month" in html
-        assert "$29" not in html
-        assert "/api/billing/checkout" in html
-
-        # 5. Logout
-        assert "/auth/logout" in html
-        assert "Sign Out of Backtrace" in html
+    # 5. Logout
+    assert "/auth/logout" in html
+    assert "Sign Out of Backtrace" in html
 
 
 def test_settings_paid_user_view(client, create_user, test_db):
@@ -157,39 +149,14 @@ def test_settings_paid_user_view(client, create_user, test_db):
     assert "/api/billing/portal" in html
 
 
-def test_billing_service_price_retrieval_and_formatting():
-    """Unit test: Stripe Price objects format properly across currencies with caching."""
-    BillingService._price_cache.clear()
+def test_billing_service_price_retrieval_and_formatting(monkeypatch):
+    """Unit test: PRO_PRICE_DISPLAY formatting without calling Stripe."""
+    monkeypatch.setenv("STRIPE_BILLING_ENABLED", "true")
+    monkeypatch.setenv("PRO_PRICE_DISPLAY", "$9 / month")
 
-    # 1. USD formatting ($25.50)
-    mock_usd = MagicMock()
-    mock_usd.unit_amount = 2550
-    mock_usd.currency = "usd"
-    mock_usd.recurring = {"interval": "month"}
-
-    with patch("stripe.Price.retrieve", return_value=mock_usd):
+    with patch("stripe.Price.retrieve", side_effect=RuntimeError("Stripe should never be called")):
         res = BillingService.get_pro_price_details("price_usd_test")
-        assert res["amount_formatted"] == "$25.50"
+        assert res["amount_formatted"] == "$9 / month"
+        assert res["price_display"] == "$9 / month"
         assert res["currency"] == "usd"
         assert res["interval"] == "month"
-
-    # Verify cached without calling stripe again
-    with patch("stripe.Price.retrieve", side_effect=RuntimeError("Should be cached")):
-        res_cached = BillingService.get_pro_price_details("price_usd_test")
-        assert res_cached["amount_formatted"] == "$25.50"
-
-    # 2. JPY zero-decimal formatting (¥3000)
-    mock_jpy = MagicMock()
-    mock_jpy.unit_amount = 3000
-    mock_jpy.currency = "jpy"
-    mock_jpy.recurring = {"interval": "year"}
-
-    with patch("stripe.Price.retrieve", return_value=mock_jpy):
-        res_jpy = BillingService.get_pro_price_details("price_jpy_test")
-        assert res_jpy["amount_formatted"] == "¥3,000"
-        assert res_jpy["interval"] == "year"
-
-    # 3. Fallback error handling when Stripe fails
-    with patch("stripe.Price.retrieve", side_effect=Exception("Stripe API down")):
-        res_err = BillingService.get_pro_price_details("price_invalid")
-        assert res_err["amount_formatted"] == "Upgrade to Pro"

@@ -163,7 +163,7 @@ def test_oauth_callback_sets_httponly_cookies_and_redirects(client, test_db):
 
         assert resp.status_code == 302
         assert resp.headers["location"] == "/dashboard"
-        
+
         # Verify httpOnly cookies were set
         assert "access_token" in resp.cookies
         assert "refresh_token" in resp.cookies
@@ -179,7 +179,7 @@ def test_dashboard_view_free_and_paid_tier_indicators(client, create_user):
     """
     user = create_user(github_id=1111, username="coder_bob")
     token = create_access_token(user_id=user.id, github_id=user.github_id, github_username=user.github_username)
-    
+
     # Cookie-authenticated request to Dashboard
     client.cookies.set("access_token", token)
     resp = client.get("/dashboard")
@@ -661,7 +661,7 @@ def test_report_view_dependency_graph_fullscreen_toggle(client, create_user, tes
     # Fullscreen CSS rules
     assert "#section-graph.graph-fullscreen" in html
     assert "position: fixed !important;" in html
-    assert "inset: 0 !important;" in html
+    assert "inset: 57px 0 0 0 !important;" in html
     assert "z-index: 9999 !important;" in html
     assert "background: var(--ink) !important;" in html
 
@@ -869,7 +869,7 @@ def test_dependency_graph_legend_rendering(client, create_user, test_db):
     assert 'id="dag-legend-panel"' in html
     assert 'id="toggle-legend-btn"' in html
     assert "Legend" in html
-    assert "Node Domains:" in html
+    assert "Node Domains" in html
 
     # Dynamic domain tags present in the test graph
     assert "CORE" in html
@@ -1171,7 +1171,7 @@ def test_progress_view_elapsed_timer_accurate_known_timestamp(client, create_use
     timer_match = re.search(r'<span id="elapsed-timer-text">(.*?)</span>', html_15s)
     assert timer_match is not None, "elapsed-timer-text element not found in HTML"
     rendered_timer = timer_match.group(1)
-    
+
     # Must be "Running for 0:1x" (around 15s), strictly NOT 330:xx
     assert "330:" not in rendered_timer
     assert "329:" not in rendered_timer
@@ -1819,7 +1819,7 @@ MAX_RETRIES = 5
         )
         job_id = job.id
 
-    resp = client.get(f"/report/{job_id}")
+    resp = client.get(f"/report/{job_id}?preload=1")
     assert resp.status_code == 200
     html_text = resp.text
 
@@ -2033,10 +2033,10 @@ def test_repeated_repo_submissions_visual_indicator(client, create_user, test_db
     assert resp.status_code == 200
     html_text = resp.text
 
-    # Visual signal for repeated repository is present
-    assert "repo-repeat-indicator" in html_text
-    assert "Re-analyzed (2x)" in html_text
-    assert "Repository analyzed 2 times in history" in html_text
+    # Visual signal for repeated repository is present in grouped history
+    assert "runs-count" in html_text
+    assert "2 runs" in html_text
+    assert "Re-analyzed (2x)" not in html_text
 
 
 # =========================================================================
@@ -2490,7 +2490,7 @@ def test_milestone_brief_rendering_with_data_and_omission_paths(client, create_u
         )
         job_id = job.id
 
-    resp = client.get(f"/report/{job_id}")
+    resp = client.get(f"/report/{job_id}?preload=1")
     assert resp.status_code == 200
     html = resp.text
 
@@ -3482,7 +3482,3 @@ def test_payload_xss_prevention_in_report_and_settings_views(payload):
     assert f'src="{escaped_payload}"' in set_html
     assert f'alt="@{escaped_payload}"' in set_html
     assert f'@{escaped_payload}' in set_html
-
-
-
-
