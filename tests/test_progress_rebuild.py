@@ -170,7 +170,7 @@ def test_failed_job_page_contains_no_docket_tenant_traceback(client, create_user
         "Traceback (most recent call last):\n"
         "  File '/app/security/tenant_validator.py', line 45, in validate_tenant\n"
         "    raise TenantSecurityException('docket security check failed: clone unauthorized 403 token=abc')\n"
-        "fatal: could not resolve host or repository is private"
+        "fatal: Authentication failed for 'https://github.com/private-org/secret-repo'"
     )
 
     with SessionLocal() as session:
