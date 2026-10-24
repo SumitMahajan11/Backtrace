@@ -18,20 +18,34 @@ from app.core.config import get_settings
 _settings = get_settings()
 
 
-def _is_secure_cookie() -> bool:
-    """Returns True if ENVIRONMENT is production, requiring Secure cookies."""
+def _is_secure_cookie(request: Optional[Request] = None) -> bool:
+    """Returns True if running behind HTTPS (via headers or scheme) or in production mode."""
+    if request is not None:
+        forwarded_proto = request.headers.get("x-forwarded-proto", "").lower().strip()
+        if forwarded_proto == "https":
+            return True
+        if hasattr(request, "scope") and request.scope.get("scheme") == "https":
+            return True
+        if getattr(request, "url", None) and getattr(request.url, "scheme", None) == "https":
+            return True
+        if request.headers.get("x-forwarded-ssl", "").lower().strip() == "on":
+            return True
+
+    env_var = os.getenv("ENVIRONMENT", "").strip().lower()
+    if env_var == "production":
+        return True
+    if env_var in ("development", "test"):
+        return False
+
     try:
         from app.core.config import get_settings
         settings = get_settings()
         if getattr(settings, "ENVIRONMENT", None) == "production":
             return True
-        if getattr(settings, "ENVIRONMENT", None) in ("development", "test"):
-            if os.getenv("ENVIRONMENT", "").strip().lower() == "production":
-                return True
-            return False
+        return False
     except Exception:
         pass
-    return os.getenv("ENVIRONMENT", "").strip().lower() == "production"
+    return False
 
 
 class RefreshTokenRequest(BaseModel):
@@ -119,7 +133,7 @@ async def github_callback(
         response = JSONResponse(content=tokens, status_code=status.HTTP_200_OK)
 
     # Set httpOnly cookies for seamless browser session management
-    is_secure = _is_secure_cookie()
+    is_secure = _is_secure_cookie(request)
     response.set_cookie(
         key="access_token",
         value=tokens["access_token"],
@@ -175,7 +189,7 @@ def refresh_session_token(
             detail=f"Token refresh failed: {exc}",
         )
 
-    is_secure = _is_secure_cookie()
+    is_secure = _is_secure_cookie(request)
     response = JSONResponse(content=new_tokens, status_code=status.HTTP_200_OK)
     response.set_cookie(
         key="access_token",
@@ -249,8 +263,9 @@ def get_authenticated_user_profile(
 if _settings.ENVIRONMENT == "development":
     @router.get("/dev-login", summary="Dev Environment Login Helper")
     def dev_login(
+        request: Request,
         user_id: int = Query(..., description="User ID to simulate login for"),
-        redirect_url: str = Query("/rewards", description="Destination URL"),
+        redirect_url: str = Query("/dashboard", description="Destination URL"),
         session: Session = Depends(get_db),
     ):
         """Dev authentication helper that sets an access token cookie for local/test browser verification."""
@@ -274,10 +289,9 @@ if _settings.ENVIRONMENT == "development":
             key="access_token",
             value=token,
             httponly=True,
-            secure=_is_secure_cookie(),
+            secure=_is_secure_cookie(request),
             samesite="lax",
             max_age=86400,
             path="/",
         )
         return resp
-

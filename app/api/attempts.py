@@ -685,3 +685,76 @@ def mark_milestone_reviewed(
         "attempt": _serialize_attempt(updated_attempt, current_user.id, job_id, milestone_tier),
     }
 
+
+class AttemptQuizRequest(BaseModel):
+    score: int = Field(..., ge=0, description="Number of questions answered correctly")
+    total: int = Field(default=3, ge=1, description="Total questions in milestone quiz")
+
+
+@router.post("/{job_id}/{milestone_tier}/quiz", summary="Persist Quiz Score for Milestone")
+def record_milestone_quiz_score(
+    job_id: int,
+    milestone_tier: int,
+    payload: AttemptQuizRequest,
+    current_user: UserModel = Depends(get_current_user),
+    session: Session = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    Persists quiz score in MilestoneAttemptModel.grading_details_json.
+    Guarded by strict IDOR check (job ownership).
+    """
+    job = AnalysisJobRepository.get_job_by_id(session, job_id)
+    if not job:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Analysis job not found")
+
+    if job.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access forbidden: You do not own this analysis job",
+        )
+
+    attempt = MilestoneAttemptRepository.get_attempt(
+        session=session,
+        user_id=current_user.id,
+        job_id=job_id,
+        milestone_tier=milestone_tier,
+    )
+
+    submitted_code = attempt.submitted_code if attempt else ""
+    hint_level = attempt.hint_level_revealed if attempt else 0
+    impl_revealed = attempt.implementation_revealed if attempt else False
+    existing_status = attempt.status if attempt else "not_started"
+    existing_grading_method = attempt.grading_method if attempt else "structural_only"
+
+    details: Dict[str, Any] = {}
+    if attempt and attempt.grading_details_json:
+        try:
+            details = json.loads(attempt.grading_details_json) or {}
+        except Exception:
+            details = {}
+
+    details["quiz_score"] = payload.score
+    details["quiz_total"] = payload.total
+    details["quiz_passed"] = payload.score >= (payload.total * 0.6)
+    details["quiz_recorded_at"] = utc_now().isoformat()
+
+    updated_attempt = MilestoneAttemptRepository.save_or_update_attempt(
+        session=session,
+        user_id=current_user.id,
+        job_id=job_id,
+        milestone_tier=milestone_tier,
+        submitted_code=submitted_code,
+        status=existing_status,
+        hint_level_revealed=hint_level,
+        implementation_revealed=impl_revealed,
+        grading_method=existing_grading_method,
+        grading_details_json=json.dumps(details),
+    )
+
+    return {
+        "status": updated_attempt.status,
+        "quiz_score": payload.score,
+        "quiz_total": payload.total,
+        "score_text": f"{payload.score} of {payload.total} correct",
+        "grading_details": details,
+    }

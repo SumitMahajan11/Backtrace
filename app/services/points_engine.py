@@ -69,7 +69,7 @@ class PointsEngine:
         Returns (total_files, total_loc).
         """
         g_data = job.graph_data if hasattr(job, "graph_data") and job.graph_data else {}
-        
+
         # 1. Check structured ArchitectureOverview dictionary in graph_data
         arch_ov = g_data.get("architecture_overview")
         if isinstance(arch_ov, dict):
@@ -523,9 +523,10 @@ class PointsEngine:
                 UserModel.github_username,
                 UserModel.avatar_url,
                 func.coalesce(func.sum(PointsLedgerModel.points_awarded), 0).label("total_points"),
+                UserModel.show_on_leaderboard,
             )
             .outerjoin(PointsLedgerModel, (PointsLedgerModel.user_id == UserModel.id) & (PointsLedgerModel.points_awarded > 0))
-            .group_by(UserModel.id, UserModel.github_username, UserModel.avatar_url)
+            .group_by(UserModel.id, UserModel.github_username, UserModel.avatar_url, UserModel.show_on_leaderboard)
             .order_by(desc("total_points"), UserModel.id.asc())
         )
         all_ranks = list(session.execute(stmt).all())
@@ -543,13 +544,17 @@ class PointsEngine:
         paged_rows = all_ranks[offset : offset + limit]
         entries = []
         for idx, row in enumerate(paged_rows, start=offset + 1):
+            show_name = bool(row[4])
+            display_username = row[1] if show_name else "Anonymous"
+            display_avatar = row[2] if show_name else None
             entries.append({
                 "rank": idx,
                 "user_id": row[0],
-                "username": row[1],
-                "avatar_url": row[2],
+                "username": display_username,
+                "avatar_url": display_avatar,
                 "points": int(row[3]),
                 "is_current_user": (row[0] == current_user_id),
+                "show_on_leaderboard": show_name,
             })
 
         return {

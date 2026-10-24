@@ -169,6 +169,11 @@ app.include_router(webhooks_router)
 app.include_router(webhooks_router, prefix="/api")
 app.include_router(frontend_router)
 
+from fastapi.staticfiles import StaticFiles
+_static_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static")
+if os.path.isdir(_static_dir):
+    app.mount("/static", StaticFiles(directory=_static_dir), name="static")
+
 
 @app.get("/health", tags=["Health"], summary="System Health and Readiness Inspection")
 def get_health(response: Response) -> Dict[str, Any]:
@@ -195,5 +200,3 @@ def get_public_config() -> Dict[str, Any]:
         "sandbox_enabled": bool(sandbox_enabled),
         "demo_video_url": demo_video_url,
     }
-
-

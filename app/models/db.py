@@ -104,6 +104,7 @@ class UserModel(Base):
     avatar_url: Optional[str] = Column(String(500), nullable=True)
     created_at: datetime = Column(DateTime, nullable=False, default=utc_now)
     is_admin: bool = Column(Boolean, nullable=False, default=False)
+    show_on_leaderboard: bool = Column(Boolean, nullable=False, default=False, server_default=false())
 
     # Relationships
     refresh_tokens = relationship(
@@ -137,6 +138,18 @@ class UserModel(Base):
         back_populates="user",
         cascade="all, delete-orphan",
     )
+
+    @property
+    def quota_used(self) -> int:
+        """Returns the user's monthly analysis quota usage count."""
+        from sqlalchemy.orm import object_session
+        from app.storage.billing_repository import BillingRepository
+        s = object_session(self)
+        if s:
+            return BillingRepository.get_monthly_usage_count(s, self.id)
+        from app.db.session import SessionLocal
+        with SessionLocal() as s2:
+            return BillingRepository.get_monthly_usage_count(s2, self.id)
 
 
 class RefreshTokenModel(Base):
@@ -179,6 +192,7 @@ class UsageEventModel(Base):
 
     id: int = Column(Integer, primary_key=True, autoincrement=True)
     user_id: int = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    job_id: Optional[int] = Column(Integer, ForeignKey("analysis_jobs.id", ondelete="CASCADE"), nullable=True, index=True)
     event_type: str = Column(String(64), nullable=False, default="repo_analysis")
     created_at: datetime = Column(DateTime, nullable=False, default=utc_now, index=True)
 
@@ -293,6 +307,11 @@ class AnalysisJobModel(Base):
                 return m.group(1)
         return "template"
 
+    runs: int = 1
+
+    def __getitem__(self, item: str) -> Any:
+        return getattr(self, item)
+
 
 class MilestoneAttemptModel(Base):
     """Database model tracking user attempts and structural verification per milestone tier."""
@@ -345,8 +364,3 @@ class PointsLedgerModel(Base):
         Index("idx_points_user_created", "user_id", "created_at"),
         Index("idx_points_user_job_tier", "user_id", "job_id", "milestone_tier"),
     )
-
-
-
-
-

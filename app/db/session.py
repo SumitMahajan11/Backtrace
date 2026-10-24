@@ -78,10 +78,11 @@ class Base(DeclarativeBase):
     pass
 
 
-def init_db(target_engine=engine) -> None:
+def init_db(target_engine=None) -> None:
     """Creates tables if they do not exist."""
     import app.models.db  # noqa: F401 - ensure models are registered
-    Base.metadata.create_all(bind=target_engine)
+    eng = target_engine if target_engine is not None else engine
+    Base.metadata.create_all(bind=eng)
 
 
 @contextmanager
