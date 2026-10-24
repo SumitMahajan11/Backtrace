@@ -1,0 +1,144 @@
+"""Design rules lint test suite.
+
+Ensures no design violations exist in app/ui/components.py and static/style.css:
+1. No font-size under 13px (px values 1-12, or rem values below 0.8125).
+2. No text-transform: uppercase.
+3. No 'IBM Plex Mono' and no 'Newsreader' (except the .brand-title rule).
+4. No legacy tokens: var(--brass), var(--teal), var(--text-primary),
+   var(--text-secondary), var(--text-tertiary), var(--hairline), var(--panel).
+"""
+
+from pathlib import Path
+import re
+import pytest
+
+ROOT_DIR = Path(__file__).resolve().parent.parent
+TARGET_FILES = [
+    ROOT_DIR / "app" / "ui" / "components.py",
+    ROOT_DIR / "static" / "style.css",
+]
+
+LEGACY_TOKENS = [
+    "var(--brass)",
+    "var(--teal)",
+    "var(--text-primary)",
+    "var(--text-secondary)",
+    "var(--text-tertiary)",
+    "var(--hairline)",
+    "var(--panel)",
+]
+
+
+def _read_target_files():
+    data = {}
+    for path in TARGET_FILES:
+        assert path.exists(), f"Target file missing: {path}"
+        data[path] = path.read_text(encoding="utf-8")
+    return data
+
+
+def get_font_size_violations(content: str):
+    violations = []
+    # Match px values under 13px (0 < px < 13)
+    for m in re.finditer(r"font-size:\s*([0-9.]+)\s*px", content, re.IGNORECASE):
+        val = float(m.group(1))
+        if val < 13.0:
+            violations.append(m.group(0))
+    # Match rem values under 0.8125rem
+    for m in re.finditer(r"font-size:\s*([0-9.]+)\s*rem", content, re.IGNORECASE):
+        val = float(m.group(1))
+        if val < 0.8125:
+            violations.append(m.group(0))
+    return violations
+
+
+def get_uppercase_violations(content: str):
+    return re.findall(r"text-transform:\s*uppercase", content, re.IGNORECASE)
+
+
+def get_font_literal_violations(content: str):
+    violations = []
+    # IBM Plex Mono is never allowed
+    for m in re.finditer(r"IBM Plex Mono", content):
+        violations.append("IBM Plex Mono")
+
+    # Newsreader is only allowed within .brand-title rule
+    lines = content.splitlines()
+    for idx, line in enumerate(lines):
+        if "Newsreader" in line:
+            context = "\n".join(lines[max(0, idx - 5) : idx + 1])
+            if ".brand-title" not in context:
+                violations.append(f"Newsreader at line {idx + 1}")
+    return violations
+
+
+def get_legacy_token_violations(content: str):
+    violations = {}
+    for token in LEGACY_TOKENS:
+        c = content.count(token)
+        if c > 0:
+            violations[token] = c
+    return violations
+
+
+def test_no_font_size_under_13px():
+    files = _read_target_files()
+    total_violations = 0
+    details = []
+    for path, content in files.items():
+        v = get_font_size_violations(content)
+        count = len(v)
+        total_violations += count
+        if count > 0:
+            details.append(f"{path.name}: {count} violations ({set(v)})")
+    assert total_violations == 0, (
+        f"Found {total_violations} font-size < 13px (or < 0.8125rem) violations:\n"
+        + "\n".join(details)
+    )
+
+
+def test_no_text_transform_uppercase():
+    files = _read_target_files()
+    total_violations = 0
+    details = []
+    for path, content in files.items():
+        v = get_uppercase_violations(content)
+        count = len(v)
+        total_violations += count
+        if count > 0:
+            details.append(f"{path.name}: {count} uppercase rules")
+    assert total_violations == 0, (
+        f"Found {total_violations} text-transform: uppercase violations:\n"
+        + "\n".join(details)
+    )
+
+
+def test_no_forbidden_font_literals():
+    files = _read_target_files()
+    total_violations = 0
+    details = []
+    for path, content in files.items():
+        v = get_font_literal_violations(content)
+        count = len(v)
+        total_violations += count
+        if count > 0:
+            details.append(f"{path.name}: {count} forbidden font literal occurrences")
+    assert total_violations == 0, (
+        f"Found {total_violations} forbidden font literal occurrences ('IBM Plex Mono' or non-.brand-title 'Newsreader'):\n"
+        + "\n".join(details)
+    )
+
+
+def test_no_legacy_tokens():
+    files = _read_target_files()
+    total_violations = 0
+    details = []
+    for path, content in files.items():
+        v = get_legacy_token_violations(content)
+        count = sum(v.values())
+        total_violations += count
+        if count > 0:
+            details.append(f"{path.name}: {v}")
+    assert total_violations == 0, (
+        f"Found {total_violations} legacy token violations:\n" + "\n".join(details)
+    )

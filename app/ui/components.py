@@ -262,14 +262,14 @@ def page_shell(
 
     clean_title = sanitize_text(title)
     if clean_title == "Dashboard":
-        doc_title = '<title>Dashboard · Backtrace</title><!-- <title>Dashboard // Backtrace</title> -->'
+        doc_title = '<title>Dashboard · Backtrace</title>'
     elif clean_title.startswith("Architecture Report: "):
         repo_part = clean_title.replace("Architecture Report: ", "")
-        doc_title = f'<title>{repo_part} · Backtrace</title><!-- <title>{clean_title} // Backtrace</title> -->'
+        doc_title = f'<title>{repo_part} · Backtrace</title>'
     elif active_route == "/login" or title == "Backtrace - Understand any GitHub repository":
         doc_title = "<title>Backtrace - Understand any GitHub repository</title>"
     else:
-        doc_title = f'<title>{clean_title} · Backtrace</title><!-- <title>{clean_title} // Backtrace</title> -->'
+        doc_title = f'<title>{clean_title} · Backtrace</title>'
 
     try:
         from app.core.config import get_settings
@@ -326,6 +326,7 @@ def page_shell(
             --text: #e8eaf0;
             --text-muted: #9aa3b2;
             --accent: #4f8cff;
+            --accent-strong: #2563eb;
             --danger: #ef5b5b;
             --success: #3ecf8e;
             --radius: 10px;
@@ -369,7 +370,9 @@ def page_shell(
             --border: #e3e5ea;
             --text: #14161a;
             --text-muted: #5b6472;
-            --accent: #4f8cff;
+            --accent: #2563eb;
+            --accent-strong: #1d4ed8;
+            --accent-strong: #2563eb;
             --danger: #ef5b5b;
             --success: #3ecf8e;
             --radius: 10px;
@@ -459,7 +462,7 @@ def page_shell(
         .CodeMirror-hscrollbar::-webkit-scrollbar-thumb:hover,
         pre::-webkit-scrollbar-thumb:hover,
         textarea::-webkit-scrollbar-thumb:hover {{{{
-            background: var(--brass);
+            background: var(--accent);
             border-color: var(--brass-border);
         }}}}
 
@@ -506,8 +509,8 @@ def page_shell(
 
         /* Navigation Header Shell */
         .nav-shell {{
-            background: var(--panel);
-            border-bottom: 1px solid var(--hairline);
+            background: var(--surface-2);
+            border-bottom: 1px solid var(--border);
             padding: 0.85rem 1.75rem;
             position: sticky;
             top: 0;
@@ -522,11 +525,11 @@ def page_shell(
             align-items: center;
             gap: 0.75rem;
             text-decoration: none;
-            color: var(--text-primary);
+            color: var(--text);
         }}
 
         .brand:hover {{
-            color: var(--text-primary);
+            color: var(--text);
         }}
 
         .brand-title {{
@@ -534,20 +537,18 @@ def page_shell(
             font-size: 1.35rem;
             font-weight: 500;
             letter-spacing: -0.02em;
-            color: var(--text-primary);
+            color: var(--text);
         }}
 
         .brand-pill {{
-            font-family: 'IBM Plex Mono', monospace;
-            font-size: 0.6875rem;
+            font-family: var(--font-ui);
+            font-size: 0.8125rem;
             padding: 0.15rem 0.5rem;
             border-radius: 2px;
             background: var(--brass-soft);
-            color: var(--brass);
+            color: var(--accent);
             border: 1px solid var(--brass-border);
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }}
+            }}
 
         .nav-links {{
             display: flex;
@@ -556,12 +557,10 @@ def page_shell(
         }}
 
         .nav-link {{
-            font-family: 'IBM Plex Mono', monospace;
+            font-family: var(--font-ui);
             font-size: 0.8125rem;
             font-weight: 500;
-            text-transform: uppercase;
-            letter-spacing: 0.04em;
-            color: var(--text-secondary);
+            color: var(--text-muted);
             padding: 0.4rem 0.85rem;
             border-radius: 4px;
             border: 1px solid transparent;
@@ -571,13 +570,13 @@ def page_shell(
         }}
 
         .nav-link:hover {{
-            color: var(--text-primary);
+            color: var(--text);
             background: var(--panel-raised);
             border-color: var(--hairline-soft);
         }}
 
         .nav-link.active {{
-            color: var(--brass);
+            color: var(--accent);
             background: var(--brass-soft);
             border-color: var(--brass-border);
             font-weight: 600;
@@ -591,12 +590,12 @@ def page_shell(
 
         .theme-toggle-btn {{
             background: var(--panel-raised);
-            border: 1px solid var(--hairline);
-            color: var(--text-secondary);
+            border: 1px solid var(--border);
+            color: var(--text-muted);
             padding: 0.35rem 0.65rem;
             border-radius: 4px;
-            font-family: 'IBM Plex Mono', monospace;
-            font-size: 0.75rem;
+            font-family: var(--font-ui);
+            font-size: 0.8125rem;
             cursor: pointer;
             display: inline-flex;
             align-items: center;
@@ -606,14 +605,14 @@ def page_shell(
 
         .theme-toggle-btn:hover {{
             background: var(--panel-overlay);
-            color: var(--text-primary);
-            border-color: var(--hairline);
+            color: var(--text);
+            border-color: var(--border);
         }}
 
         .theme-toggle-btn:focus,
         .theme-toggle-btn:focus-visible {{
             outline: none;
-            border-color: var(--brass);
+            border-color: var(--accent);
             box-shadow: 0 0 0 2px var(--focus-ring);
         }}
 
@@ -622,7 +621,7 @@ def page_shell(
             align-items: center;
             gap: 0.65rem;
             background: var(--panel-raised);
-            border: 1px solid var(--hairline);
+            border: 1px solid var(--border);
             padding: 0.25rem 0.75rem;
             border-radius: 4px;
         }}
@@ -632,20 +631,20 @@ def page_shell(
             height: 22px;
             border-radius: 50%;
             object-fit: cover;
-            border: 1px solid var(--hairline);
+            border: 1px solid var(--border);
         }}
 
         .avatar-placeholder {{
             width: 22px;
             height: 22px;
             border-radius: 50%;
-            background: var(--hairline);
+            background: var(--border);
         }}
 
         .username {{
             font-size: 0.8125rem;
             font-weight: 500;
-            color: var(--text-primary);
+            color: var(--text);
         }}
 
         /* Container Layout */
@@ -884,17 +883,17 @@ def page_shell(
             display: inline-flex;
             align-items: center;
             gap: 0.35rem;
-            font-family: 'IBM Plex Mono', monospace;
-            font-size: 0.7rem;
-            color: var(--text-secondary);
-            background: var(--panel);
+            font-family: var(--font-ui);
+            font-size: 0.8125rem;
+            color: var(--text-muted);
+            background: var(--surface-2);
             border: 1px solid var(--hairline-soft);
             border-radius: 3px;
             padding: 0.2rem 0.5rem;
             transition: all 120ms ease;
         }}
         .legend-chip:hover {{
-            border-color: var(--brass);
+            border-color: var(--accent);
             background: var(--panel-raised);
         }}
 
@@ -913,10 +912,10 @@ def page_shell(
             height: 15px;
             border-radius: 50%;
             background: var(--panel-raised);
-            border: 1px solid var(--hairline);
-            color: var(--text-tertiary);
-            font-size: 0.65rem;
-            font-family: 'IBM Plex Mono', monospace;
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            font-size: 0.8125rem;
+            font-family: var(--font-ui);
             font-weight: 600;
             cursor: pointer;
             margin-left: 0.35rem;
@@ -928,8 +927,8 @@ def page_shell(
         }}
 
         .info-icon-btn:hover, .info-icon-btn:focus {{
-            color: var(--text-primary);
-            border-color: var(--brass);
+            color: var(--text);
+            border-color: var(--accent);
             background: var(--brass-soft);
         }}
 
@@ -942,11 +941,11 @@ def page_shell(
             transform: translateX(-50%) translateY(4px);
             width: 290px;
             background: var(--panel-raised);
-            color: var(--text-secondary);
-            border: 1px solid var(--hairline);
+            color: var(--text-muted);
+            border: 1px solid var(--border);
             border-radius: 6px;
             padding: 0.75rem 0.85rem;
-            font-size: 0.75rem;
+            font-size: 0.8125rem;
             font-family: 'IBM Plex Sans', sans-serif;
             line-height: 1.45;
             box-shadow: 0 6px 20px rgba(0,0,0,0.3);
@@ -954,7 +953,6 @@ def page_shell(
             pointer-events: none;
             transition: opacity 150ms ease, transform 150ms ease, visibility 150ms;
             text-transform: none;
-            letter-spacing: normal;
             font-weight: normal;
             text-align: left;
         }}
@@ -988,17 +986,17 @@ def page_shell(
             margin-bottom: 0.4rem;
             font-size: 0.8125rem;
             font-weight: 600;
-            color: var(--text-secondary);
+            color: var(--text-muted);
             font-family: 'IBM Plex Sans', sans-serif;
         }}
 
         .form-input {{
             width: 100%;
             background: var(--panel-raised);
-            border: 1px solid var(--hairline);
+            border: 1px solid var(--border);
             border-radius: 4px;
             padding: 0.65rem 0.95rem;
-            color: var(--text-primary);
+            color: var(--text);
             font-family: 'IBM Plex Sans', sans-serif;
             font-size: 0.9375rem;
             outline: none;
@@ -1006,12 +1004,12 @@ def page_shell(
         }}
 
         .form-input:focus {{
-            border-color: var(--brass);
+            border-color: var(--accent);
             box-shadow: 0 0 0 2px var(--focus-ring);
         }}
 
         .form-input::placeholder {{
-            color: var(--text-tertiary);
+            color: var(--text-muted);
         }}
 
         /* Table Styling */
@@ -1026,14 +1024,12 @@ def page_shell(
         }}
 
         th {{
-            color: var(--text-tertiary);
-            font-family: 'IBM Plex Mono', monospace;
-            font-size: 0.75rem;
+            color: var(--text-muted);
+            font-family: var(--font-ui);
+            font-size: 0.8125rem;
             font-weight: 500;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
             padding: 0.75rem 1rem;
-            border-bottom: 1px solid var(--hairline);
+            border-bottom: 1px solid var(--border);
         }}
 
         td {{
@@ -1059,8 +1055,8 @@ def page_shell(
 
         .alert-success {{
             background: var(--teal-soft);
-            border: 1px solid var(--teal);
-            color: var(--teal);
+            border: 1px solid var(--success);
+            color: var(--success);
             padding: 0.85rem 1.15rem;
             border-radius: 4px;
             margin-bottom: 1.25rem;
@@ -1070,18 +1066,18 @@ def page_shell(
         /* Markdown / Report Styling */
         .markdown-body {{
             line-height: 1.7;
-            color: var(--text-primary);
+            color: var(--text);
         }}
 
         .markdown-body h1, .markdown-body h2, .markdown-body h3 {{
-            color: var(--text-primary);
+            color: var(--text);
             margin-top: 1.75rem;
             margin-bottom: 0.75rem;
-            font-family: 'Newsreader', Georgia, serif;
+            font-family: var(--font-ui);
             font-weight: 500;
         }}
 
-        .markdown-body h1 {{ font-size: 1.85rem; border-bottom: 1px solid var(--hairline); padding-bottom: 0.5rem; }}
+        .markdown-body h1 {{ font-size: 1.85rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }}
         .markdown-body h2 {{ font-size: 1.45rem; }}
         .markdown-body h3 {{ font-size: 1.2rem; }}
         .markdown-body p {{ margin-bottom: 1rem; }}
@@ -1091,15 +1087,15 @@ def page_shell(
             background: var(--panel-raised);
             padding: 0.2rem 0.4rem;
             border-radius: 3px;
-            font-family: 'IBM Plex Mono', monospace;
+            font-family: var(--font-ui);
             font-size: 0.8125rem;
-            color: var(--brass);
+            color: var(--accent);
             border: 1px solid var(--hairline-soft);
         }}
 
         .markdown-body pre {{
             background: var(--ink);
-            border: 1px solid var(--hairline);
+            border: 1px solid var(--border);
             border-radius: 4px;
             padding: 1.25rem;
             overflow-x: auto;
@@ -1110,17 +1106,17 @@ def page_shell(
             background: transparent;
             padding: 0;
             border: none;
-            color: var(--text-primary);
+            color: var(--text);
         }}
 
         /* Footer */
         .footer {{
             text-align: center;
             padding: 2rem;
-            color: var(--text-tertiary);
-            font-family: 'IBM Plex Mono', monospace;
-            font-size: 0.75rem;
-            border-top: 1px solid var(--hairline);
+            color: var(--text-muted);
+            font-family: var(--font-ui);
+            font-size: 0.8125rem;
+            border-top: 1px solid var(--border);
         }}
 
         /* Accessibility & Responsive Refinements */
@@ -1388,7 +1384,7 @@ def login_view(error: Optional[str] = None) -> str:
                     View a sample report &rarr;
                 </a>
             </div>
-            <div style="margin-top: 1.5rem; font-size: 0.75rem; color: var(--text-muted); line-height: 1.4;">
+            <div style="margin-top: 1.5rem; font-size: 0.8125rem; color: var(--text-muted); line-height: 1.4;">
                 Repository files are stored with secrets scanned and redacted (best effort) and deleted after 30 days. Reports are kept until you ask us to delete them. <a href="/privacy" style="color: var(--text); text-decoration: underline;">Privacy Policy</a>
             </div>
         </div>
@@ -1415,9 +1411,9 @@ def showcase_view(
     """Render the public showcase directory view."""
     if not jobs:
         items_html = """
-        <div style="padding: 2.5rem 1rem; text-align: center; color: var(--text-tertiary); font-size: 0.95rem;">
+        <div style="padding: 2.5rem 1rem; text-align: center; color: var(--text-muted); font-size: 0.95rem;">
             <p style="margin-bottom: 1.25rem;">Sample reports are coming soon.</p>
-            <a href="/login" class="btn btn-sm btn-secondary" style="font-family: 'IBM Plex Mono', monospace; font-size: 0.8rem;">
+            <a href="/login" class="btn btn-sm btn-secondary" style="font-family: var(--font-ui); font-size: 0.8125rem;">
                 &larr; Back to Login
             </a>
         </div>
@@ -1428,9 +1424,9 @@ def showcase_view(
             job_id = getattr(job, "id", None) if hasattr(job, "id") else (job.get("id") if isinstance(job, dict) else 0)
             repo_name = sanitize_text(getattr(job, "repo_name", None) if hasattr(job, "repo_name") else (job.get("repo_name", "Repository") if isinstance(job, dict) else "Repository"))
             rows_html += f"""
-            <li class="showcase-item" style="display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.25rem; background: var(--panel); border: 1px solid var(--hairline); border-radius: 4px; margin-bottom: 0.75rem;">
-                <span class="showcase-repo-name" style="font-weight: 600; font-size: 1rem; color: var(--text-primary);">{repo_name}</span>
-                <a href="/report/{job_id}" class="btn btn-sm btn-secondary showcase-link" style="font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem;">
+            <li class="showcase-item" style="display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.25rem; background: var(--surface-2); border: 1px solid var(--border); border-radius: 4px; margin-bottom: 0.75rem;">
+                <span class="showcase-repo-name" style="font-weight: 600; font-size: 1rem; color: var(--text);">{repo_name}</span>
+                <a href="/report/{job_id}" class="btn btn-sm btn-secondary showcase-link" style="font-family: var(--font-ui); font-size: 0.8125rem;">
                     View Architecture Report &rarr;
                 </a>
             </li>
@@ -1444,14 +1440,14 @@ def showcase_view(
     content = f"""
     <div style="max-width: 800px; margin: 3rem auto 0 auto; padding: 0 1rem;">
         <div class="stratum-card" style="padding: 2rem 2.25rem;">
-            <div style="margin-bottom: 1.5rem; border-bottom: 1px solid var(--hairline); padding-bottom: 1rem;">
-                <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--brass); text-transform: uppercase; letter-spacing: 0.05em;">
+            <div style="margin-bottom: 1.5rem; border-bottom: 1px solid var(--border); padding-bottom: 1rem;">
+                <div style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--accent); ">
                     Public Dossier Showcase
                 </div>
                 <h1 style="font-size: 1.75rem; font-weight: 500; margin-top: 0.25rem; letter-spacing: -0.02em;">
                     Featured Repository Architectures
                 </h1>
-                <p style="color: var(--text-secondary); font-size: 0.875rem; line-height: 1.5; margin-top: 0.35rem;">
+                <p style="color: var(--text-muted); font-size: 0.875rem; line-height: 1.5; margin-top: 0.35rem;">
                     Curated public showcase of reverse-engineered software architectures.
                 </p>
             </div>
@@ -1486,21 +1482,21 @@ def privacy_view(current_user: Optional[UserModel] = None) -> str:
     content = f"""
     <div style="max-width: 760px; margin: 3rem auto 0 auto; padding: 0 1rem;">
         <div class="stratum-card" style="padding: 2.5rem 2.25rem;">
-            <div style="margin-bottom: 2rem; border-bottom: 1px solid var(--hairline); padding-bottom: 1.25rem;">
-                <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--brass); text-transform: uppercase; letter-spacing: 0.05em;">
+            <div style="margin-bottom: 2rem; border-bottom: 1px solid var(--border); padding-bottom: 1.25rem;">
+                <div style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--accent); ">
                     Policy Dossier
                 </div>
                 <h1 style="font-size: 2rem; font-weight: 500; margin-top: 0.25rem; letter-spacing: -0.02em;">
                     Privacy Policy
                 </h1>
-                <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--text-tertiary); margin-top: 0.5rem;">
+                <div style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--text-muted); margin-top: 0.5rem;">
                     Last updated October 24, 2026
                 </div>
             </div>
 
-            <div style="display: flex; flex-direction: column; gap: 2rem; font-size: 0.925rem; line-height: 1.6; color: var(--text-secondary);">
+            <div style="display: flex; flex-direction: column; gap: 2rem; font-size: 0.925rem; line-height: 1.6; color: var(--text-muted);">
                 <section>
-                    <h2 style="font-size: 1.25rem; color: var(--text-primary); margin-bottom: 0.5rem; font-weight: 600;">What data is stored</h2>
+                    <h2 style="font-size: 1.25rem; color: var(--text); margin-bottom: 0.5rem; font-weight: 600;">What data is stored</h2>
                     <p style="margin-bottom: 0.75rem;">
                         Backtrace stores only the essential data needed to provide repository architecture analysis, interactive milestones, and progress tracking:
                     </p>
@@ -1512,26 +1508,26 @@ def privacy_view(current_user: Optional[UserModel] = None) -> str:
                 </section>
 
                 <section>
-                    <h2 style="font-size: 1.25rem; color: var(--text-primary); margin-bottom: 0.5rem; font-weight: 600;">How long data is kept</h2>
+                    <h2 style="font-size: 1.25rem; color: var(--text); margin-bottom: 0.5rem; font-weight: 600;">How long data is kept</h2>
                     <p>
                         Repository file text is purged automatically after 30 days (showcase repositories are retained). Synthesized reports, dependency graphs, milestone attempts, and quiz scores are retained until you request deletion.
                     </p>
                 </section>
 
                 <section>
-                    <h2 style="font-size: 1.25rem; color: var(--text-primary); margin-bottom: 0.5rem; font-weight: 600;">How to delete your data</h2>
+                    <h2 style="font-size: 1.25rem; color: var(--text); margin-bottom: 0.5rem; font-weight: 600;">How to delete your data</h2>
                     <p style="margin-bottom: 0.75rem;">
                         You have complete control over your account. You can export or permanently delete all your data at any time:
                     </p>
                     <p style="margin-bottom: 0.75rem;">
-                        Navigate to your <a href="/settings" style="color: var(--teal); text-decoration: underline; font-weight: 500;">Settings</a> and click the <strong>Delete my account</strong> button. After typing your username to confirm, Backtrace permanently deletes your user profile, analysis jobs, milestone attempts, quiz results, points history, and active sessions.
+                        Navigate to your <a href="/settings" style="color: var(--success); text-decoration: underline; font-weight: 500;">Settings</a> and click the <strong>Delete my account</strong> button. After typing your username to confirm, Backtrace permanently deletes your user profile, analysis jobs, milestone attempts, quiz results, points history, and active sessions.
                     </p>
                 </section>
 
                 <section>
-                    <h2 style="font-size: 1.25rem; color: var(--text-primary); margin-bottom: 0.5rem; font-weight: 600;">Contact &amp; Privacy Requests</h2>
+                    <h2 style="font-size: 1.25rem; color: var(--text); margin-bottom: 0.5rem; font-weight: 600;">Contact &amp; Privacy Requests</h2>
                     <p>
-                        For any privacy inquiries or assistance, email us at <a href="mailto:{html.escape(support_email)}" id="privacy-support-email" style="color: var(--teal); text-decoration: underline; font-weight: 500;">{html.escape(support_email)}</a>.
+                        For any privacy inquiries or assistance, email us at <a href="mailto:{html.escape(support_email)}" id="privacy-support-email" style="color: var(--success); text-decoration: underline; font-weight: 500;">{html.escape(support_email)}</a>.
                     </p>
                 </section>
             </div>
@@ -1555,33 +1551,33 @@ def support_view(current_user: Optional[UserModel] = None) -> str:
     content = f"""
     <div style="max-width: 760px; margin: 3rem auto 0 auto; padding: 0 1rem;">
         <div class="stratum-card" style="padding: 2.5rem 2.25rem;">
-            <div style="margin-bottom: 2rem; border-bottom: 1px solid var(--hairline); padding-bottom: 1.25rem;">
-                <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--brass); text-transform: uppercase; letter-spacing: 0.05em;">
+            <div style="margin-bottom: 2rem; border-bottom: 1px solid var(--border); padding-bottom: 1.25rem;">
+                <div style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--accent); ">
                     HELP // ARCHIVE
                 </div>
                 <h1 style="font-size: 2rem; font-weight: 500; margin-top: 0.25rem; letter-spacing: -0.02em;">
                     Support &amp; Assistance
                 </h1>
-                <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--text-tertiary); margin-top: 0.5rem;">
+                <div style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--text-muted); margin-top: 0.5rem;">
                     We are here to help you understand complex software architectures.
                 </div>
             </div>
 
-            <div style="display: flex; flex-direction: column; gap: 2rem; font-size: 0.95rem; line-height: 1.6; color: var(--text-secondary);">
+            <div style="display: flex; flex-direction: column; gap: 2rem; font-size: 0.95rem; line-height: 1.6; color: var(--text-muted);">
                 <section>
-                    <h2 style="font-size: 1.15rem; color: var(--text-primary); margin-bottom: 0.5rem; font-weight: 600;">Contact Us</h2>
+                    <h2 style="font-size: 1.15rem; color: var(--text); margin-bottom: 0.5rem; font-weight: 600;">Contact Us</h2>
                     <p style="margin-bottom: 0.75rem;">
                         For technical support, questions about repository analysis, or billing assistance, email our support team directly:
                     </p>
                     <p>
-                        <a href="mailto:{html.escape(support_email)}" id="support-email-link" style="font-family: 'IBM Plex Mono', monospace; font-size: 1.05rem; color: var(--teal); font-weight: 600; text-decoration: underline;">
+                        <a href="mailto:{html.escape(support_email)}" id="support-email-link" style="font-family: var(--font-ui); font-size: 1.05rem; color: var(--success); font-weight: 600; text-decoration: underline;">
                             {html.escape(support_email)}
                         </a>
                     </p>
                 </section>
 
                 <section>
-                    <h2 style="font-size: 1.15rem; color: var(--text-primary); margin-bottom: 0.5rem; font-weight: 600;">Bug Reports &amp; Feature Requests</h2>
+                    <h2 style="font-size: 1.15rem; color: var(--text); margin-bottom: 0.5rem; font-weight: 600;">Bug Reports &amp; Feature Requests</h2>
                     <p style="margin-bottom: 0.75rem;">
                         Encountered a bug or have a suggestion? Open an issue on our GitHub tracker:
                     </p>
@@ -1593,9 +1589,9 @@ def support_view(current_user: Optional[UserModel] = None) -> str:
                 </section>
 
                 <section>
-                    <h2 style="font-size: 1.15rem; color: var(--text-primary); margin-bottom: 0.5rem; font-weight: 600;">Data Export &amp; Account Deletion</h2>
+                    <h2 style="font-size: 1.15rem; color: var(--text); margin-bottom: 0.5rem; font-weight: 600;">Data Export &amp; Account Deletion</h2>
                     <p>
-                        You can download a complete JSON export of your data or permanently delete your account at any time in <a href="/settings" style="color: var(--brass); text-decoration: underline;">Settings</a>.
+                        You can download a complete JSON export of your data or permanently delete your account at any time in <a href="/settings" style="color: var(--accent); text-decoration: underline;">Settings</a>.
                     </p>
                 </section>
             </div>
@@ -1615,25 +1611,25 @@ def pricing_view(current_user: Optional[UserModel] = None) -> str:
     content = f"""
     <div style="max-width: 840px; margin: 3rem auto 0 auto; padding: 0 1rem;">
         <div class="stratum-card" style="padding: 2.5rem 2.25rem;">
-            <div style="margin-bottom: 2rem; border-bottom: 1px solid var(--hairline); padding-bottom: 1.25rem; text-align: center;">
-                <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--brass); text-transform: uppercase; letter-spacing: 0.05em;">
+            <div style="margin-bottom: 2rem; border-bottom: 1px solid var(--border); padding-bottom: 1.25rem; text-align: center;">
+                <div style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--accent); ">
                     Plan Limits &amp; Subscriptions
                 </div>
                 <h1 style="font-size: 2rem; font-weight: 500; margin-top: 0.25rem; letter-spacing: -0.02em;">
                     Pricing &amp; Limits
                 </h1>
-                <p style="color: var(--text-secondary); font-size: 0.95rem; margin-top: 0.5rem;">
+                <p style="color: var(--text-muted); font-size: 0.95rem; margin-top: 0.5rem;">
                     Clear, transparent plan limits for reverse-engineering repository architecture.
                 </p>
             </div>
 
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.75rem; margin-bottom: 2rem;">
                 <!-- Free Plan -->
-                <div style="background: var(--panel-raised); border: 1px solid var(--hairline); border-radius: 4px; padding: 2rem 1.75rem; display: flex; flex-direction: column; justify-content: space-between;">
+                <div style="background: var(--panel-raised); border: 1px solid var(--border); border-radius: 4px; padding: 2rem 1.75rem; display: flex; flex-direction: column; justify-content: space-between;">
                     <div>
-                        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--text-tertiary); text-transform: uppercase;">Tier</div>
-                        <h2 style="font-size: 1.5rem; font-weight: 600; margin: 0.25rem 0 1rem 0; color: var(--text-primary);">Free Plan</h2>
-                        <ul style="list-style: none; padding: 0; margin: 0 0 1.5rem 0; font-size: 0.9rem; line-height: 1.8; color: var(--text-secondary);">
+                        <div style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--text-muted); ">Tier</div>
+                        <h2 style="font-size: 1.5rem; font-weight: 600; margin: 0.25rem 0 1rem 0; color: var(--text);">Free Plan</h2>
+                        <ul style="list-style: none; padding: 0; margin: 0 0 1.5rem 0; font-size: 0.9rem; line-height: 1.8; color: var(--text-muted);">
                             <li>&check; <strong>5 repository analyses</strong> per month</li>
                             <li>&check; <strong>{enforced_mb} MB</strong> repository size cap</li>
                             <li>&check; <strong>{enforced_files} supported files</strong> cap</li>
@@ -1648,11 +1644,11 @@ def pricing_view(current_user: Optional[UserModel] = None) -> str:
                 <div style="background: var(--panel-raised); border: 1px solid var(--brass-border); border-radius: 4px; padding: 2rem 1.75rem; display: flex; flex-direction: column; justify-content: space-between; position: relative;">
                     <div>
                         <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--brass); text-transform: uppercase; font-weight: 600;">Monthly Subscription</div>
-                            <span class="badge" style="background: var(--panel); color: var(--text-secondary); font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; padding: 0.15rem 0.45rem; border: 1px solid var(--hairline); border-radius: 3px;">Coming soon</span>
+                            <div style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--accent); font-weight: 600;">Monthly Subscription</div>
+                            <span class="badge" style="background: var(--surface-2); color: var(--text-muted); font-family: var(--font-ui); font-size: 0.8125rem; padding: 0.15rem 0.45rem; border: 1px solid var(--border); border-radius: 3px;">Coming soon</span>
                         </div>
-                        <h2 style="font-size: 1.5rem; font-weight: 600; margin: 0.25rem 0 1rem 0; color: var(--text-primary);">Pro Plan</h2>
-                        <ul style="list-style: none; padding: 0; margin: 0 0 1.5rem 0; font-size: 0.9rem; line-height: 1.8; color: var(--text-secondary);">
+                        <h2 style="font-size: 1.5rem; font-weight: 600; margin: 0.25rem 0 1rem 0; color: var(--text);">Pro Plan</h2>
+                        <ul style="list-style: none; padding: 0; margin: 0 0 1.5rem 0; font-size: 0.9rem; line-height: 1.8; color: var(--text-muted);">
                             <li>&check; <strong>Unlimited repository analyses</strong></li>
                             <li>&check; Bypasses standard monthly quota</li>
                         </ul>
@@ -1857,7 +1853,7 @@ def dashboard_view(
 
     error_html = f'<div class="alert-error" style="margin-bottom: 1.5rem;">{sanitize_text(error)}</div>' if (error and not is_invalid_url_error) else ""
     success_html = (
-        f'<div style="background: rgba(45, 212, 191, 0.12); border: 1px solid var(--teal); color: var(--teal); padding: 0.85rem 1.15rem; border-radius: var(--radius); margin-bottom: 1.5rem; font-size: 0.875rem; display: flex; align-items: center; gap: 0.6rem;">'
+        f'<div style="background: rgba(45, 212, 191, 0.12); border: 1px solid var(--success); color: var(--success); padding: 0.85rem 1.15rem; border-radius: var(--radius); margin-bottom: 1.5rem; font-size: 0.875rem; display: flex; align-items: center; gap: 0.6rem;">'
         f'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>'
         f'<span>{sanitize_text(success)}</span>'
         f'</div>'
@@ -1882,7 +1878,7 @@ def dashboard_view(
                 </svg>
                 <h2 style="font-size: 1.25rem; font-weight: 600; color: var(--danger); margin: 0;">Repository Too Large</h2>
             </div>
-            <span class="badge" style="background: rgba(239, 91, 91, 0.15); color: var(--danger); border: 1px solid rgba(239, 91, 91, 0.3); font-family: var(--font-mono); font-size: 0.75rem;">
+            <span class="badge" style="background: rgba(239, 91, 91, 0.15); color: var(--danger); border: 1px solid rgba(239, 91, 91, 0.3); font-family: var(--font-mono); font-size: 0.8125rem;">
                 EXCEEDS {file_limit} FILE LIMIT
             </span>
         </div>
@@ -2032,7 +2028,7 @@ def dashboard_view(
                 safe_err_full = sanitize_text(raw_err_str)
                 safe_err_summary = sanitize_text(truncate_text_clean(raw_err_str, 85))
                 repo_error_html = f"""
-                <div class="job-failure-reason" title="{safe_err_full}" style="margin-top: 0.35rem; font-family: var(--font-mono); font-size: 12px; color: var(--danger); display: flex; align-items: flex-start; gap: 0.35rem; line-height: 1.35; max-width: 420px; cursor: help;">
+                <div class="job-failure-reason" title="{safe_err_full}" style="margin-top: 0.35rem; font-family: var(--font-mono); font-size: 0.8125rem; color: var(--danger); display: flex; align-items: flex-start; gap: 0.35rem; line-height: 1.35; max-width: 420px; cursor: help;">
                     <span style="font-weight: 600; flex-shrink: 0; color: var(--danger);">Failed:</span>
                     <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{safe_err_summary}</span>
                 </div>
@@ -2045,14 +2041,14 @@ def dashboard_view(
                     <span>{repo_display}</span>
                     {runs_html}
                 </div>
-                <div style="font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); margin-top: 0.2rem;">{repo_url}</div>
+                <div style="font-family: var(--font-mono); font-size: 0.8125rem; color: var(--text-muted); margin-top: 0.2rem;">{repo_url}</div>
                 {repo_error_html}
             </td>
             <td style="padding: 0.85rem 1rem; border-bottom: 1px solid var(--border);"><span class="badge {status_class}">{status_label}</span></td>
             <td style="padding: 0.85rem 1rem; border-bottom: 1px solid var(--border);">{progress_html}</td>
             <td style="padding: 0.85rem 1rem; border-bottom: 1px solid var(--border); color: var(--text-muted); font-size: 13px;">
                 <div>{created_at}</div>
-                <div style="font-size: 11px; font-family: var(--font-mono); color: var(--text-muted); margin-top: 0.15rem;">{duration_str}</div>
+                <div style="font-size: 0.8125rem; font-family: var(--font-mono); color: var(--text-muted); margin-top: 0.15rem;">{duration_str}</div>
             </td>
             <td style="padding: 0.85rem 1rem; border-bottom: 1px solid var(--border); text-align: right; white-space: nowrap;">
                 <div style="display: inline-flex; align-items: center; gap: 0.4rem; justify-content: flex-end;">
@@ -2087,11 +2083,11 @@ def dashboard_view(
             <table style="width: 100%; border-collapse: collapse;">
                 <thead>
                     <tr style="border-bottom: 1px solid var(--border); background: var(--surface-2);">
-                        <th style="padding: 0.75rem 1rem; text-align: left; font-size: 12px; font-family: var(--font-mono); color: var(--text-muted); text-transform: uppercase;">Repository</th>
-                        <th style="padding: 0.75rem 1rem; text-align: left; font-size: 12px; font-family: var(--font-mono); color: var(--text-muted); text-transform: uppercase;">Status</th>
-                        <th style="padding: 0.75rem 1rem; text-align: left; font-size: 12px; font-family: var(--font-mono); color: var(--text-muted); text-transform: uppercase;">Learning Progress</th>
-                        <th style="padding: 0.75rem 1rem; text-align: left; font-size: 12px; font-family: var(--font-mono); color: var(--text-muted); text-transform: uppercase;">Submitted</th>
-                        <th style="padding: 0.75rem 1rem; text-align: right; font-size: 12px; font-family: var(--font-mono); color: var(--text-muted); text-transform: uppercase; white-space: nowrap;">Action</th>
+                        <th style="padding: 0.75rem 1rem; text-align: left; font-size: 13px; font-family: var(--font-ui); color: var(--text-muted);">Repository</th>
+                        <th style="padding: 0.75rem 1rem; text-align: left; font-size: 13px; font-family: var(--font-ui); color: var(--text-muted);">Status</th>
+                        <th style="padding: 0.75rem 1rem; text-align: left; font-size: 13px; font-family: var(--font-ui); color: var(--text-muted);">Learning progress</th>
+                        <th style="padding: 0.75rem 1rem; text-align: left; font-size: 13px; font-family: var(--font-ui); color: var(--text-muted);">Submitted</th>
+                        <th style="padding: 0.75rem 1rem; text-align: right; font-size: 13px; font-family: var(--font-ui); color: var(--text-muted); white-space: nowrap;">Action</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -2165,7 +2161,7 @@ def dashboard_view(
                     id="sample-chip-btn"
                     data-repo="https://github.com/expressjs/express"
                     onclick="document.getElementById('repo-url-input').value='https://github.com/expressjs/express'; document.getElementById('repo-url-input').focus();"
-                    style="background: var(--surface-2); border: 1px solid var(--border); color: var(--text); border-radius: 9999px; padding: 0.2rem 0.65rem; font-size: 12px; font-family: var(--font-mono); cursor: pointer;"
+                    style="background: var(--surface-2); border: 1px solid var(--border); color: var(--text); border-radius: 9999px; padding: 0.2rem 0.65rem; font-size: 0.8125rem; font-family: var(--font-mono); cursor: pointer;"
                 >
                     expressjs/express
                 </button>
@@ -2178,7 +2174,7 @@ def dashboard_view(
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-top: 0.85rem; padding: 1rem; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius);">
                     <div class="form-group" style="margin-bottom: 0;">
                         <label class="form-label" for="branch-ref-input" style="font-size: 13px; color: var(--text-muted); margin-bottom: 0.35rem; display: block;">
-                            Branch / Commit Ref <span style="font-size: 11px; color: var(--text-muted);">(Optional)</span>
+                            Branch / Commit Ref <span style="font-size: 0.8125rem; color: var(--text-muted);">(Optional)</span>
                         </label>
                         <input
                             type="text"
@@ -2191,7 +2187,7 @@ def dashboard_view(
                     </div>
                     <div class="form-group" style="margin-bottom: 0;">
                         <label class="form-label" for="subpath-input" style="font-size: 13px; color: var(--text-muted); margin-bottom: 0.35rem; display: block;">
-                            Subdirectory Path <span style="font-size: 11px; color: var(--text-muted);">(Optional)</span>
+                            Subdirectory Path <span style="font-size: 0.8125rem; color: var(--text-muted);">(Optional)</span>
                         </label>
                         <input
                             type="text"
@@ -2547,7 +2543,7 @@ def progress_view(
                 </span>
                 <span style="font-weight: 500; color: var(--text);">{s_name}</span>
             </div>
-            <span style="font-size: 0.75rem; color: var(--text-muted);">{s_desc}</span>
+            <span style="font-size: 0.8125rem; color: var(--text-muted);">{s_desc}</span>
         </div>
         """
     stages_list_html += '</div>'
@@ -3073,10 +3069,8 @@ def progress_view(
         min-width: 110px;
     }}
     .stat-pill-label {{
-        font-size: 0.6875rem;
+        font-size: 0.8125rem;
         color: var(--text-muted);
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
         font-weight: 500;
     }}
     .stat-pill-value {{
@@ -3109,7 +3103,7 @@ def progress_view(
     </style>
 
     <div style="display: none;">
-        Architecture Report: <span style="font-style: italic; color: var(--brass);">{repo}</span>
+        Architecture Report: <span style="font-style: italic; color: var(--accent);">{repo}</span>
     </div>
     <div id="elapsed-timer-badge" style="display: none;">
         <span id="elapsed-timer-text">{timer_badge_text}</span>
@@ -3161,15 +3155,15 @@ def progress_view(
         </div>
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
             <div class="stat-card" style="background: var(--surface-2); padding: 1rem; border-radius: 6px; border: 1px solid var(--border);">
-                <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Files analyzed</div>
+                <div style="font-size: 0.8125rem; color: var(--text-muted); ">Files analyzed</div>
                 <div id="ready-files-count" style="font-size: 1.5rem; font-weight: 700; color: var(--text); margin-top: 0.25rem;">{files_analyzed}</div>
             </div>
             <div class="stat-card" style="background: var(--surface-2); padding: 1rem; border-radius: 6px; border: 1px solid var(--border);">
-                <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Modules</div>
+                <div style="font-size: 0.8125rem; color: var(--text-muted); ">Modules</div>
                 <div id="ready-modules-count" style="font-size: 1.5rem; font-weight: 700; color: var(--text); margin-top: 0.25rem;">{modules_count}</div>
             </div>
             <div class="stat-card" style="background: var(--surface-2); padding: 1rem; border-radius: 6px; border: 1px solid var(--border);">
-                <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Entry points</div>
+                <div style="font-size: 0.8125rem; color: var(--text-muted); ">Entry points</div>
                 <div id="ready-entry-count" style="font-size: 1.5rem; font-weight: 700; color: var(--text); margin-top: 0.25rem;">{entry_points_count}</div>
             </div>
         </div>
@@ -3212,7 +3206,7 @@ def progress_view(
 
     <!-- "Found so far" strip -->
     <div id="found-so-far-section" style="display: {found_so_far_display}; margin-bottom: 1.5rem;">
-        <div style="font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 0.5rem;">
+        <div style="font-size: 0.8125rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.5rem;">
             Found so far
         </div>
         <div id="found-boxes-container" style="display: flex; flex-wrap: wrap; gap: 0.75rem;">
@@ -3234,17 +3228,17 @@ def progress_view(
         </summary>
         <div style="padding: 0 1.25rem 1.25rem 1.25rem; border-top: 1px solid var(--border);">
             <div style="margin-top: 1rem; margin-bottom: 1.5rem;">
-                <h4 style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 0.75rem 0;">Pipeline stages</h4>
+                <h4 style="font-size: 0.8125rem; color: var(--text-muted); margin: 0 0 0.75rem 0;">Pipeline stages</h4>
                 {stages_list_html}
             </div>
             <div>
-                <h4 style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 0.5rem 0;">Event log</h4>
-                <div id="sse-terminal-log" style="background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; padding: 0.85rem; max-height: 200px; overflow-y: auto; font-family: var(--font-mono); font-size: 0.75rem; line-height: 1.6; color: var(--text);"></div>
+                <h4 style="font-size: 0.8125rem; color: var(--text-muted); margin: 0 0 0.5rem 0;">Event log</h4>
+                <div id="sse-terminal-log" style="background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; padding: 0.85rem; max-height: 200px; overflow-y: auto; font-family: var(--font-mono); font-size: 0.8125rem; line-height: 1.6; color: var(--text);"></div>
             </div>
         </div>
     </details>
     """
-    page_title = f"Architecture Report: {repo} (In Progress)" if is_running else f"Architecture Report: {repo}"
+    page_title = f"{owner}/{repo}" if owner else repo
     return page_shell(
         page_title,
         content,
@@ -3426,7 +3420,7 @@ def _render_confidence_badge_with_tooltip(
         level_title = "LOW CONFIDENCE"
         level_desc = "Ordering is an educated structural estimate due to cyclic co-dependencies (circular imports), isolated standalone files, or reduced history confidence."
 
-    return f"""<div class="tooltip-container" style="display: inline-flex; align-items: center; position: relative;"><span class="badge {badge_cls}">{clean_badge}</span><button type="button" class="info-icon-btn" aria-expanded="false" aria-haspopup="dialog" aria-label="Confidence scoring explanation" onclick="toggleConfidencePopover(this, event)">ⓘ</button><div class="confidence-tooltip" role="tooltip" aria-hidden="true"><div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.25rem; display: flex; align-items: center; justify-content: space-between;"><span>Sequence Confidence</span><span class="badge {badge_cls}" style="font-size: 0.58rem; padding: 0.1rem 0.35rem;">{level_title}</span></div><div style="color: var(--text-secondary); font-size: 0.72rem; margin-bottom: 0.35rem; line-height: 1.4;">{level_desc}</div><div style="border-top: 1px solid var(--hairline-soft); padding-top: 0.35rem; font-size: 0.6875rem; color: var(--text-tertiary); line-height: 1.4;"><div>&bull; <strong style="color: var(--teal);">High:</strong> Verified imports and commit history</div><div>&bull; <strong style="color: var(--amber);">Medium:</strong> Estimated from common code patterns</div><div>&bull; <strong style="color: var(--crimson);">Low:</strong> Circular dependencies, standalone files, or unclear history</div></div></div></div>"""
+    return f"""<div class="tooltip-container" style="display: inline-flex; align-items: center; position: relative;"><span class="badge {badge_cls}">{clean_badge}</span><button type="button" class="info-icon-btn" aria-expanded="false" aria-haspopup="dialog" aria-label="Confidence scoring explanation" onclick="toggleConfidencePopover(this, event)">ⓘ</button><div class="confidence-tooltip" role="tooltip" aria-hidden="true"><div style="font-weight: 600; color: var(--text); margin-bottom: 0.25rem; display: flex; align-items: center; justify-content: space-between;"><span>Sequence Confidence</span><span class="badge {badge_cls}" style="font-size: 0.8125rem; padding: 0.1rem 0.35rem;">{level_title}</span></div><div style="color: var(--text-muted); font-size: 0.8125rem; margin-bottom: 0.35rem; line-height: 1.4;">{level_desc}</div><div style="border-top: 1px solid var(--hairline-soft); padding-top: 0.35rem; font-size: 0.8125rem; color: var(--text-muted); line-height: 1.4;"><div>&bull; <strong style="color: var(--success);">High:</strong> Verified imports and commit history</div><div>&bull; <strong style="color: var(--amber);">Medium:</strong> Estimated from common code patterns</div><div>&bull; <strong style="color: var(--crimson);">Low:</strong> Circular dependencies, standalone files, or unclear history</div></div></div></div>"""
 
 
 def _render_confidence_info_icon(level: str = "high") -> str:
@@ -3445,7 +3439,7 @@ def _render_confidence_info_icon(level: str = "high") -> str:
         level_title = "LOW CONFIDENCE"
         level_desc = "Ordering is an educated structural estimate due to cyclic co-dependencies (circular imports), isolated standalone files, or reduced history confidence."
 
-    return f"""<div class="tooltip-container" style="display: inline-flex; align-items: center; position: relative;"><button type="button" class="info-icon-btn" aria-expanded="false" aria-haspopup="dialog" aria-label="Confidence scoring explanation" onclick="toggleConfidencePopover(this, event)">ⓘ</button><div class="confidence-tooltip" role="tooltip" aria-hidden="true"><div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.25rem; display: flex; align-items: center; justify-content: space-between;"><span>Sequence Confidence</span><span class="badge {badge_cls}" style="font-size: 0.58rem; padding: 0.1rem 0.35rem;">{level_title}</span></div><div style="color: var(--text-secondary); font-size: 0.72rem; margin-bottom: 0.35rem; line-height: 1.4;">{level_desc}</div><div style="border-top: 1px solid var(--hairline-soft); padding-top: 0.35rem; font-size: 0.6875rem; color: var(--text-tertiary); line-height: 1.4;"><div>&bull; <strong style="color: var(--teal);">High:</strong> Verified imports and commit history</div><div>&bull; <strong style="color: var(--amber);">Medium:</strong> Estimated from common code patterns</div><div>&bull; <strong style="color: var(--crimson);">Low:</strong> Circular dependencies, standalone files, or unclear history</div></div></div></div>"""
+    return f"""<div class="tooltip-container" style="display: inline-flex; align-items: center; position: relative;"><button type="button" class="info-icon-btn" aria-expanded="false" aria-haspopup="dialog" aria-label="Confidence scoring explanation" onclick="toggleConfidencePopover(this, event)">ⓘ</button><div class="confidence-tooltip" role="tooltip" aria-hidden="true"><div style="font-weight: 600; color: var(--text); margin-bottom: 0.25rem; display: flex; align-items: center; justify-content: space-between;"><span>Sequence Confidence</span><span class="badge {badge_cls}" style="font-size: 0.8125rem; padding: 0.1rem 0.35rem;">{level_title}</span></div><div style="color: var(--text-muted); font-size: 0.8125rem; margin-bottom: 0.35rem; line-height: 1.4;">{level_desc}</div><div style="border-top: 1px solid var(--hairline-soft); padding-top: 0.35rem; font-size: 0.8125rem; color: var(--text-muted); line-height: 1.4;"><div>&bull; <strong style="color: var(--success);">High:</strong> Verified imports and commit history</div><div>&bull; <strong style="color: var(--amber);">Medium:</strong> Estimated from common code patterns</div><div>&bull; <strong style="color: var(--crimson);">Low:</strong> Circular dependencies, standalone files, or unclear history</div></div></div></div>"""
 
 
 
@@ -3471,7 +3465,7 @@ def _render_grouped_fill_chips(
     """Renders Fill the Blanks target function chips grouped by class/module with auto-collapsing for large lists."""
     if not blanked_functions:
         reason_text = html.escape(fallback_reason or "File contains no function bodies to blank.")
-        return f'<span style="font-size: 0.75rem; color: var(--text-tertiary); font-style: italic;">{reason_text}</span>'
+        return f'<span style="font-size: 0.8125rem; color: var(--text-muted); font-style: italic;">{reason_text}</span>'
 
     total_count = len(blanked_functions)
     should_collapse = total_count > 15
@@ -3500,16 +3494,16 @@ def _render_grouped_fill_chips(
         icon = "🏛️" if g["is_class"] else "📁"
 
         chips_html = "".join([
-            f'<span class="mono" title="{html.escape(bf.get("full_name", bf.get("name", "")))}()" style="display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.15rem 0.45rem; background: var(--panel-raised); border: 1px solid var(--hairline); border-radius: 3px; font-size: 0.72rem; color: var(--teal);">🧩 {html.escape(bf.get("name", ""))}</span> '
+            f'<span class="mono" title="{html.escape(bf.get("full_name", bf.get("name", "")))}()" style="display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.15rem 0.45rem; background: var(--panel-raised); border: 1px solid var(--border); border-radius: 3px; font-size: 0.8125rem; color: var(--success);">🧩 {html.escape(bf.get("name", ""))}</span> '
             for bf in g["items"]
         ])
 
         open_attr = "" if should_collapse else " open"
         html_parts.append(
-            f'<details{open_attr} class="fill-chip-group" style="margin-bottom: 0.4rem; background: var(--panel); border: 1px solid var(--hairline); border-radius: 4px; padding: 0.35rem 0.6rem;">'
-            f'<summary style="cursor: pointer; font-family: \'IBM Plex Mono\', monospace; font-size: 0.72rem; font-weight: 600; color: var(--text-secondary); user-select: none; display: flex; align-items: center; justify-content: space-between;">'
-            f'<span>{icon} {group_title} <span style="opacity: 0.7; font-weight: normal; font-size: 0.6875rem;">({count_label})</span></span>'
-            f'<span style="font-size: 0.65rem; color: var(--text-tertiary);">▾</span>'
+            f'<details{open_attr} class="fill-chip-group" style="margin-bottom: 0.4rem; background: var(--surface-2); border: 1px solid var(--border); border-radius: 4px; padding: 0.35rem 0.6rem;">'
+            f'<summary style="cursor: pointer; font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600; color: var(--text-muted); user-select: none; display: flex; align-items: center; justify-content: space-between;">'
+            f'<span>{icon} {group_title} <span style="opacity: 0.7; font-weight: normal; font-size: 0.8125rem;">({count_label})</span></span>'
+            f'<span style="font-size: 0.8125rem; color: var(--text-muted);">▾</span>'
             f'</summary>'
             f'<div style="display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.4rem; padding-top: 0.35rem; border-top: 1px solid var(--hairline-soft);">{chips_html}</div>'
             f'</details>'
@@ -3542,17 +3536,17 @@ def _render_server_diff_html(
 
     # Tier Badge formatting
     if grading_method == "real_tests":
-        tier_tag = '<span class="badge badge-teal" style="font-size: 0.65rem; letter-spacing: 0.04em;">TIER 1 // REAL REPO TEST SUITE</span>'
+        tier_tag = '<span class="badge badge-teal" style="font-size: 0.8125rem; ">TIER 1 // REAL REPO TEST SUITE</span>'
     elif grading_method == "expected_output":
-        tier_tag = '<span class="badge badge-amber" style="font-size: 0.65rem; letter-spacing: 0.04em;">TIER 2 // EXPECTED OUTPUT</span>'
+        tier_tag = '<span class="badge badge-amber" style="font-size: 0.8125rem; ">TIER 2 // EXPECTED OUTPUT</span>'
     elif grading_method == "fill_the_blanks":
-        tier_tag = '<span class="badge badge-teal" style="font-size: 0.65rem; letter-spacing: 0.04em;">TIER 3 // FILL THE GAPS (SCOPED EVALUATION)</span>'
+        tier_tag = '<span class="badge badge-teal" style="font-size: 0.8125rem; ">TIER 3 // FILL THE GAPS (SCOPED EVALUATION)</span>'
     else:
-        tier_tag = '<span class="badge badge-brass" style="font-size: 0.65rem; letter-spacing: 0.04em;">TIER 3 // Structure Comparison</span>'
+        tier_tag = '<span class="badge badge-brass" style="font-size: 0.8125rem; ">TIER 3 // Structure Comparison</span>'
 
     if is_verified:
         banner = f"""
-        <div class="diff-banner success" style="background: rgba(45, 212, 191, 0.12); border: 1px solid var(--teal-border); color: var(--teal); padding: 0.65rem 0.85rem; border-radius: 4px; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; font-weight: 600; margin-bottom: 0.65rem; display: flex; justify-content: space-between; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
+        <div class="diff-banner success" style="background: rgba(45, 212, 191, 0.12); border: 1px solid var(--teal-border); color: var(--success); padding: 0.65rem 0.85rem; border-radius: 4px; font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600; margin-bottom: 0.65rem; display: flex; justify-content: space-between; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
             <div style="display: flex; align-items: center; gap: 0.4rem;">
                 <span>✓</span> VERIFIED: Milestone requirements fulfilled
             </div>
@@ -3561,7 +3555,7 @@ def _render_server_diff_html(
         """
     else:
         banner = f"""
-        <div class="diff-banner failure" style="background: rgba(244, 63, 94, 0.12); border: 1px solid rgba(244, 63, 94, 0.35); color: var(--crimson); padding: 0.65rem 0.85rem; border-radius: 4px; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; font-weight: 600; margin-bottom: 0.65rem; display: flex; justify-content: space-between; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
+        <div class="diff-banner failure" style="background: rgba(244, 63, 94, 0.12); border: 1px solid rgba(244, 63, 94, 0.35); color: var(--crimson); padding: 0.65rem 0.85rem; border-radius: 4px; font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600; margin-bottom: 0.65rem; display: flex; justify-content: space-between; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
             <div style="display: flex; align-items: center; gap: 0.4rem;">
                 <span>⚠</span> VERIFICATION GAPS: Requirements not yet satisfied
             </div>
@@ -3569,7 +3563,7 @@ def _render_server_diff_html(
         </div>
         """
 
-    err_html = f"""<div style="color: var(--crimson); font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; margin-bottom: 0.5rem; background: rgba(244,63,94,0.08); padding: 0.5rem; border-radius: 3px;">{sanitize_text(err_msg)}</div>""" if err_msg else ""
+    err_html = f"""<div style="color: var(--crimson); font-family: var(--font-ui); font-size: 0.8125rem; margin-bottom: 0.5rem; background: rgba(244,63,94,0.08); padding: 0.5rem; border-radius: 3px;">{sanitize_text(err_msg)}</div>""" if err_msg else ""
 
     # Check for Fill the Blanks grading results specially
     blank_details = verification.get("blank_details", [])
@@ -3581,20 +3575,20 @@ def _render_server_diff_html(
         for b in blank_details:
             name = sanitize_text(b.get("name", "function"))
             if b.get("status") == "implemented":
-                implemented_pills += f"""<span style="display: inline-flex; align-items: center; gap: 0.3rem; background: rgba(45, 212, 191, 0.12); border: 1px solid var(--teal-border); color: var(--teal); padding: 0.2rem 0.5rem; border-radius: 3px; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem;">✓ {name}() <span style="opacity: 0.75; font-size: 0.6875rem;">(implemented)</span></span> """
+                implemented_pills += f"""<span style="display: inline-flex; align-items: center; gap: 0.3rem; background: rgba(45, 212, 191, 0.12); border: 1px solid var(--teal-border); color: var(--success); padding: 0.2rem 0.5rem; border-radius: 3px; font-family: var(--font-mono); font-size: 0.8125rem;">✓ {name}() <span style="opacity: 0.75; font-size: 0.8125rem;">(implemented)</span></span> """
             else:
                 reason = sanitize_text(b.get("reason", "unimplemented stub"))
-                stub_pills += f"""<span style="display: inline-flex; align-items: center; gap: 0.3rem; background: rgba(244, 63, 94, 0.12); border: 1px solid rgba(244, 63, 94, 0.35); color: var(--crimson); padding: 0.2rem 0.5rem; border-radius: 3px; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem;">✗ {name}() <span style="opacity: 0.75; font-size: 0.6875rem;">({reason})</span></span> """
+                stub_pills += f"""<span style="display: inline-flex; align-items: center; gap: 0.3rem; background: rgba(244, 63, 94, 0.12); border: 1px solid rgba(244, 63, 94, 0.35); color: var(--crimson); padding: 0.2rem 0.5rem; border-radius: 3px; font-family: var(--font-mono); font-size: 0.8125rem;">✗ {name}() <span style="opacity: 0.75; font-size: 0.8125rem;">({reason})</span></span> """
 
         is_all_done = (implemented_count == blanked_count and blanked_count > 0)
         fill_summary = f"{implemented_count}/{blanked_count} functions completed" + (" ✓" if is_all_done else "")
-        fill_sections_html = f"""<div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.4rem;">Scoped blanks evaluated: <strong>{implemented_count} / {blanked_count}</strong> completed.</div>"""
+        fill_sections_html = f"""<div style="font-family: var(--font-mono); font-size: 0.8125rem; color: var(--text-muted); margin-bottom: 0.4rem;">Scoped blanks evaluated: <strong>{implemented_count} / {blanked_count}</strong> completed.</div>"""
         if implemented_pills:
             fill_sections_html += f"""
-            <details class="matched-symbols-collapse" style="background: var(--panel); border: 1px solid var(--teal-border); border-radius: 4px; padding: 0.45rem 0.75rem; margin-bottom: 0.4rem;">
-                <summary style="cursor: pointer; font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem; font-weight: 600; color: var(--teal); display: flex; align-items: center; justify-content: space-between; user-select: none;">
+            <details class="matched-symbols-collapse" style="background: var(--surface-2); border: 1px solid var(--teal-border); border-radius: 4px; padding: 0.45rem 0.75rem; margin-bottom: 0.4rem;">
+                <summary style="cursor: pointer; font-family: var(--font-mono); font-size: 0.8125rem; font-weight: 600; color: var(--success); display: flex; align-items: center; justify-content: space-between; user-select: none;">
                     <span>IMPLEMENTED BLANKS ({fill_summary}):</span>
-                    <span style="font-size: 0.6875rem; opacity: 0.85; font-weight: normal;">View list ▾</span>
+                    <span style="font-size: 0.8125rem; opacity: 0.85; font-weight: normal;">View list ▾</span>
                 </summary>
                 <div style="display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.5rem; padding-top: 0.4rem; border-top: 1px solid var(--hairline-soft);">
                     {implemented_pills}
@@ -3604,7 +3598,7 @@ def _render_server_diff_html(
         if stub_pills:
             fill_sections_html += f"""
             <div style="background: rgba(244, 63, 94, 0.06); border: 1px solid rgba(244, 63, 94, 0.25); border-radius: 4px; padding: 0.45rem 0.75rem; margin-bottom: 0.4rem;">
-                <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--crimson); font-weight: 600; margin-bottom: 0.35rem;">UNIMPLEMENTED / STUB BLANKS:</div>
+                <div style="font-family: var(--font-mono); font-size: 0.8125rem; color: var(--crimson); font-weight: 600; margin-bottom: 0.35rem;">UNIMPLEMENTED / STUB BLANKS:</div>
                 <div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">{stub_pills}</div>
             </div>
             """
@@ -3624,19 +3618,19 @@ def _render_server_diff_html(
         raw_args = mat.get("args", [])
         safe_args = [sanitize_text(arg) for arg in raw_args] if isinstance(raw_args, list) else []
         args_str = f"({', '.join(safe_args)})" if safe_args else ""
-        present_pills += f"""<span style="display: inline-flex; align-items: center; gap: 0.3rem; background: rgba(45, 212, 191, 0.12); border: 1px solid var(--teal-border); color: var(--teal); padding: 0.2rem 0.5rem; border-radius: 3px; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem;">✓ {name}{args_str} <span style="opacity: 0.75; font-size: 0.6875rem;">({kind})</span></span> """
+        present_pills += f"""<span style="display: inline-flex; align-items: center; gap: 0.3rem; background: rgba(45, 212, 191, 0.12); border: 1px solid var(--teal-border); color: var(--success); padding: 0.2rem 0.5rem; border-radius: 3px; font-family: var(--font-mono); font-size: 0.8125rem;">✓ {name}{args_str} <span style="opacity: 0.75; font-size: 0.8125rem;">({kind})</span></span> """
 
     missing_pills = ""
     for s in missing_syms:
         name = sanitize_text(s.get("name", "") if isinstance(s, dict) else str(s))
         kind = sanitize_text(s.get("kind", "required") if isinstance(s, dict) else "required")
-        missing_pills += f"""<span style="display: inline-flex; align-items: center; gap: 0.3rem; background: rgba(244, 63, 94, 0.12); border: 1px solid rgba(244, 63, 94, 0.35); color: var(--crimson); padding: 0.2rem 0.5rem; border-radius: 3px; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem;">✗ {name} <span style="opacity: 0.75; font-size: 0.6875rem;">({kind})</span></span> """
+        missing_pills += f"""<span style="display: inline-flex; align-items: center; gap: 0.3rem; background: rgba(244, 63, 94, 0.12); border: 1px solid rgba(244, 63, 94, 0.35); color: var(--crimson); padding: 0.2rem 0.5rem; border-radius: 3px; font-family: var(--font-mono); font-size: 0.8125rem;">✗ {name} <span style="opacity: 0.75; font-size: 0.8125rem;">({kind})</span></span> """
 
     extra_pills = ""
     for s in extra_syms:
         name = sanitize_text(s.get("name", "") if isinstance(s, dict) else str(s))
         kind = sanitize_text(s.get("kind", "extra") if isinstance(s, dict) else "extra")
-        extra_pills += f"""<span style="display: inline-flex; align-items: center; gap: 0.3rem; background: var(--panel-raised); border: 1px solid var(--hairline); color: var(--text-secondary); padding: 0.2rem 0.5rem; border-radius: 3px; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem;">+ {name} <span style="opacity: 0.75; font-size: 0.6875rem;">({kind})</span></span> """
+        extra_pills += f"""<span style="display: inline-flex; align-items: center; gap: 0.3rem; background: var(--panel-raised); border: 1px solid var(--border); color: var(--text-muted); padding: 0.2rem 0.5rem; border-radius: 3px; font-family: var(--font-mono); font-size: 0.8125rem;">+ {name} <span style="opacity: 0.75; font-size: 0.8125rem;">({kind})</span></span> """
 
     total_expected = len(present_syms) + len(missing_syms)
     is_all_matched = (len(missing_syms) == 0 and total_expected > 0)
@@ -3645,10 +3639,10 @@ def _render_server_diff_html(
     sections_html = ""
     if present_pills:
         sections_html += f"""
-        <details class="matched-symbols-collapse" style="background: var(--panel); border: 1px solid var(--teal-border); border-radius: 4px; padding: 0.45rem 0.75rem; margin-bottom: 0.4rem;">
-            <summary style="cursor: pointer; font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem; font-weight: 600; color: var(--teal); display: flex; align-items: center; justify-content: space-between; user-select: none;">
+        <details class="matched-symbols-collapse" style="background: var(--surface-2); border: 1px solid var(--teal-border); border-radius: 4px; padding: 0.45rem 0.75rem; margin-bottom: 0.4rem;">
+            <summary style="cursor: pointer; font-family: var(--font-mono); font-size: 0.8125rem; font-weight: 600; color: var(--success); display: flex; align-items: center; justify-content: space-between; user-select: none;">
                 <span>PRESENT &amp; MATCHED SYMBOLS ({matched_summary_str}):</span>
-                <span style="font-size: 0.6875rem; opacity: 0.85; font-weight: normal;">View list ▾</span>
+                <span style="font-size: 0.8125rem; opacity: 0.85; font-weight: normal;">View list ▾</span>
             </summary>
             <div style="display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.5rem; padding-top: 0.4rem; border-top: 1px solid var(--hairline-soft);">
                 {present_pills}
@@ -3658,14 +3652,14 @@ def _render_server_diff_html(
     if missing_pills:
         sections_html += f"""
         <div style="background: rgba(244, 63, 94, 0.06); border: 1px solid rgba(244, 63, 94, 0.25); border-radius: 4px; padding: 0.45rem 0.75rem; margin-bottom: 0.4rem;">
-            <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--crimson); font-weight: 600; margin-bottom: 0.35rem;">MISSING EXPECTED SYMBOLS ({len(missing_syms)}):</div>
+            <div style="font-family: var(--font-mono); font-size: 0.8125rem; color: var(--crimson); font-weight: 600; margin-bottom: 0.35rem;">MISSING EXPECTED SYMBOLS ({len(missing_syms)}):</div>
             <div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">{missing_pills}</div>
         </div>
         """
     if extra_pills:
         sections_html += f"""
-        <div style="background: var(--panel); border: 1px solid var(--hairline); border-radius: 4px; padding: 0.45rem 0.75rem; margin-bottom: 0.4rem;">
-            <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--text-tertiary); font-weight: 600; margin-bottom: 0.35rem;">EXTRA / AUXILIARY SYMBOLS ({len(extra_syms)}):</div>
+        <div style="background: var(--surface-2); border: 1px solid var(--border); border-radius: 4px; padding: 0.45rem 0.75rem; margin-bottom: 0.4rem;">
+            <div style="font-family: var(--font-mono); font-size: 0.8125rem; color: var(--text-muted); font-weight: 600; margin-bottom: 0.35rem;">EXTRA / AUXILIARY SYMBOLS ({len(extra_syms)}):</div>
             <div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">{extra_pills}</div>
         </div>
         """
@@ -3701,23 +3695,23 @@ def _render_server_console_html(attempt: Optional[Any]) -> str:
     if stderr:
         content += f'<div style="color: var(--crimson); white-space: pre-wrap; word-break: break-all; margin-top: 0.25rem;">{html.escape(stderr)}</div>'
     if not stdout and not stderr:
-        content = '<div style="color: var(--text-tertiary); font-style: italic;">(Process completed with no output)</div>'
+        content = '<div style="color: var(--text-muted); font-style: italic;">(Process completed with no output)</div>'
 
     last_run_str = last_run_at.strftime("%H:%M:%S") if hasattr(last_run_at, "strftime") else str(last_run_at)[:8]
-    time_badge = f'<span class="tag" style="font-size: 0.65rem;">{last_run_str}</span>' if last_run_str else ""
+    time_badge = f'<span class="tag" style="font-size: 0.8125rem;">{last_run_str}</span>' if last_run_str else ""
     dot_color = "teal" if is_success else "crimson"
 
     return f"""
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; border-bottom: 1px solid var(--hairline); padding-bottom: 0.4rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; border-bottom: 1px solid var(--border); padding-bottom: 0.4rem;">
         <div style="display: flex; align-items: center; gap: 0.5rem;">
             <span class="chip-dot {dot_color}"></span>
-            <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem; font-weight: 600; color: var(--text-primary); text-transform: uppercase;">Execution Console</span>
-            <span class="badge {exit_badge_cls}" style="font-size: 0.65rem;">{exit_badge_text}</span>
+            <span style="font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600; color: var(--text); ">Execution Console</span>
+            <span class="badge {exit_badge_cls}" style="font-size: 0.8125rem;">{exit_badge_text}</span>
             {time_badge}
         </div>
-        <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.65rem; color: var(--text-tertiary);">UNMETERED PLAYGROUND</span>
+        <span style="font-family: var(--font-mono); font-size: 0.8125rem; color: var(--text-muted);">UNMETERED PLAYGROUND</span>
     </div>
-    <pre style="background: #0d0e12; padding: 0.75rem; border-radius: 3px; border: 1px solid var(--hairline-soft); font-family: 'IBM Plex Mono', monospace; font-size: 0.78rem; line-height: 1.45; overflow-x: auto; margin: 0;"><code>{content}</code></pre>
+    <pre style="background: #0d0e12; padding: 0.75rem; border-radius: 3px; border: 1px solid var(--hairline-soft); font-family: var(--font-mono); font-size: 0.8125rem; line-height: 1.45; overflow-x: auto; margin: 0;"><code>{content}</code></pre>
     """
 
 
@@ -3951,7 +3945,7 @@ function selectGuidedMilestone(tier) {
 
     const lazyContainer = document.getElementById('milestone-body-container-' + tier);
     if (lazyContainer && lazyContainer.children.length === 0 && window.BACKTRACE_JOB_ID) {
-        lazyContainer.innerHTML = '<div style="padding: 1.5rem; text-align: center; font-family: monospace; color: var(--text-secondary);">Loading milestone workspace...</div>';
+        lazyContainer.innerHTML = '<div style="padding: 1.5rem; text-align: center; font-family: monospace; color: var(--text-muted);">Loading milestone workspace...</div>';
         fetch('/reports/' + window.BACKTRACE_JOB_ID + '/milestones/' + tier)
             .then(r => r.text())
             .then(frag => {
@@ -4028,7 +4022,7 @@ async function checkMilestoneUnderstanding(jobId, tier) {
             correctCount++;
             if (feedbackEl) {
                 feedbackEl.style.display = 'inline-block';
-                feedbackEl.style.color = 'var(--teal)';
+                feedbackEl.style.color = 'var(--success)';
                 feedbackEl.textContent = '✓ Correct';
             }
         } else {
@@ -4050,8 +4044,8 @@ async function checkMilestoneUnderstanding(jobId, tier) {
         scoreText.textContent = correctCount + ' of ' + total + ' correct';
         if (correctCount >= 2) {
             scoreBanner.style.background = 'rgba(45, 212, 191, 0.15)';
-            scoreBanner.style.border = '1px solid var(--teal)';
-            scoreBanner.style.color = 'var(--teal)';
+            scoreBanner.style.border = '1px solid var(--success)';
+            scoreBanner.style.color = 'var(--success)';
         } else {
             scoreBanner.style.background = 'rgba(239, 68, 68, 0.15)';
             scoreBanner.style.border = '1px solid var(--crimson)';
@@ -4124,7 +4118,7 @@ function toggleMilestoneBody(jobId, tier) {
                 })
                 .catch(function(err) {
                     if (btn) btn.textContent = 'Retry Open ▾';
-                    container.innerHTML = '<div style="color: var(--crimson); padding: 0.75rem; font-size: 0.8rem;">Error loading milestone: ' + err.message + '</div>';
+                    container.innerHTML = '<div style="color: var(--crimson); padding: 0.75rem; font-size: 0.8125rem;">Error loading milestone: ' + err.message + '</div>';
                     container.style.display = 'block';
                 });
         } else {
@@ -4258,14 +4252,14 @@ def render_milestone_body_fragment(
         btn_run_disabled = 'disabled title="Code execution is turned off on this demo" style="display: none;"'
         btn_run_fill_disabled = 'disabled title="Code execution is turned off on this demo" style="display: none;"'
         run_note_html = ""
-        submit_fill_note_html = '<div class="demo-submit-note" style="font-family: \'IBM Plex Mono\', monospace; font-size: 0.6875rem; color: var(--text-tertiary); margin-top: 0.25rem;">No points are awarded on this demo.</div>'
+        submit_fill_note_html = '<div class="demo-submit-note" style="font-family: var(--font-mono); font-size: 0.8125rem; color: var(--text-muted); margin-top: 0.25rem;">No points are awarded on this demo.</div>'
 
         if requires_execution:
             btn_submit_disabled = 'disabled title="Grading this milestone needs code execution, which is off on this demo" style="cursor: not-allowed; opacity: 0.5;"'
-            submit_note_html = '<div class="demo-submit-note" style="font-family: \'IBM Plex Mono\', monospace; font-size: 0.6875rem; color: var(--text-tertiary); margin-top: 0.25rem;">Grading this milestone needs code execution, which is off on this demo.</div>'
+            submit_note_html = '<div class="demo-submit-note" style="font-family: var(--font-mono); font-size: 0.8125rem; color: var(--text-muted); margin-top: 0.25rem;">Grading this milestone needs code execution, which is off on this demo.</div>'
         else:
             btn_submit_label = "Check answer"
-            submit_note_html = '<div class="demo-submit-note" style="font-family: \'IBM Plex Mono\', monospace; font-size: 0.6875rem; color: var(--text-tertiary); margin-top: 0.25rem;">Check structure: Structure check only. No points are awarded on this demo.</div>'
+            submit_note_html = '<div class="demo-submit-note" style="font-family: var(--font-mono); font-size: 0.8125rem; color: var(--text-muted); margin-top: 0.25rem;">Check structure: Structure check only. No points are awarded on this demo.</div>'
 
     # Diff and console output
     diff_initial_display = "display: block;" if (attempt and attempt.submitted_code) else "display: none;"
@@ -4281,7 +4275,7 @@ def render_milestone_body_fragment(
                 grading_method=attempt.grading_method if attempt else None,
             )
         except Exception as e:
-            diff_rendered_html = f'<div style="color: var(--crimson); font-family: \'IBM Plex Mono\', monospace; font-size: 0.75rem;">Verification load error: {html.escape(str(e))}</div>'
+            diff_rendered_html = f'<div style="color: var(--crimson); font-family: var(--font-ui); font-size: 0.8125rem;">Verification load error: {html.escape(str(e))}</div>'
 
     console_initial_display = "display: block;" if (attempt and attempt.last_run_at is not None) else "display: none;"
     console_rendered_html = _render_server_console_html(attempt)
@@ -4291,8 +4285,8 @@ def render_milestone_body_fragment(
     if m_exports:
         symbols_rendered = ", ".join(m_exports[:10])
         symbols_html = f"""
-        <div style="margin-top: 0.65rem; font-size: 0.75rem; font-family: 'IBM Plex Mono', monospace; color: var(--text-secondary);">
-            <span style="color: var(--text-tertiary); font-weight: 600;">KEY SYMBOLS:</span> {sanitize_text(symbols_rendered)}
+        <div style="margin-top: 0.65rem; font-size: 0.8125rem; font-family: var(--font-ui); color: var(--text-muted);">
+            <span style="color: var(--text-muted); font-weight: 600;">KEY SYMBOLS:</span> {sanitize_text(symbols_rendered)}
         </div>
         """
 
@@ -4300,20 +4294,20 @@ def render_milestone_body_fragment(
     if m_exports:
         for exp_sym in m_exports:
             safe_sym = sanitize_text(exp_sym)
-            expected_pills_html += f"""<span class="expected-sym-chip" style="display: inline-flex; align-items: center; gap: 0.25rem; background: var(--panel-raised); border: 1px solid var(--hairline); padding: 0.15rem 0.45rem; border-radius: 3px; font-family: 'IBM Plex Mono', monospace; font-size: 0.7rem; color: var(--text-secondary);">&bull; {safe_sym}</span> """
+            expected_pills_html += f"""<span class="expected-sym-chip" style="display: inline-flex; align-items: center; gap: 0.25rem; background: var(--panel-raised); border: 1px solid var(--border); padding: 0.15rem 0.45rem; border-radius: 3px; font-family: var(--font-mono); font-size: 0.8125rem; color: var(--text-muted);">&bull; {safe_sym}</span> """
     else:
-        expected_pills_html = '<span style="font-size: 0.75rem; color: var(--text-tertiary); font-family: \'IBM Plex Mono\', monospace;">Any milestone module functions/classes</span>'
+        expected_pills_html = '<span style="font-size: 0.8125rem; color: var(--text-muted); font-family: var(--font-mono);">Any milestone module functions/classes</span>'
 
     # Citations accordion
     citations_html = ""
     if m_citations:
-        c_items = "".join(f'<div style="margin-bottom: 0.35rem; color: var(--text-secondary);">&bull; {sanitize_text(c)}</div>' for c in m_citations)
+        c_items = "".join(f'<div style="margin-bottom: 0.35rem; color: var(--text-muted);">&bull; {sanitize_text(c)}</div>' for c in m_citations)
         citations_html = f"""
         <details style="margin-top: 0.65rem;">
-            <summary style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--text-tertiary); cursor: pointer; user-select: none;">
+            <summary style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--text-muted); cursor: pointer; user-select: none;">
                 <span>&gt; Semantic Citations ({len(m_citations)})</span>
             </summary>
-            <div style="margin-top: 0.4rem; padding: 0.65rem 0.85rem; background: var(--panel-raised); border-left: 2px solid var(--teal); border-radius: 2px; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; line-height: 1.45;">
+            <div style="margin-top: 0.4rem; padding: 0.65rem 0.85rem; background: var(--panel-raised); border-left: 2px solid var(--success); border-radius: 2px; font-family: var(--font-ui); font-size: 0.8125rem; line-height: 1.45;">
                 {c_items}
             </div>
         </details>
@@ -4325,8 +4319,8 @@ def render_milestone_body_fragment(
         p_items = "".join(f'<div style="margin-bottom: 0.25rem;">&bull; {render_user_markdown(p)}</div>' for p in m_pedagogical)
         g_items = "".join(f'<div style="margin-bottom: 0.25rem; color: var(--amber);">&bull; {render_user_markdown(g)}</div>' for g in m_gotchas)
         notes_html = f"""
-        <div style="margin-top: 0.65rem; padding: 0.65rem 0.85rem; background: var(--panel-raised); border: 1px solid var(--hairline-soft); border-radius: 3px; font-size: 0.75rem; color: var(--text-secondary); line-height: 1.45;">
-            {f'<div style="margin-bottom: 0.35rem;"><span style="font-weight: 600; color: var(--text-primary);">Key Architectural Concept:</span> {p_items}</div>' if p_items else ''}
+        <div style="margin-top: 0.65rem; padding: 0.65rem 0.85rem; background: var(--panel-raised); border: 1px solid var(--hairline-soft); border-radius: 3px; font-size: 0.8125rem; color: var(--text-muted); line-height: 1.45;">
+            {f'<div style="margin-bottom: 0.35rem;"><span style="font-weight: 600; color: var(--text);">Key Architectural Concept:</span> {p_items}</div>' if p_items else ''}
             {f'<div><span style="font-weight: 600; color: var(--amber);">Implementation Gotcha:</span> {g_items}</div>' if g_items else ''}
         </div>
         """
@@ -4385,11 +4379,11 @@ def render_milestone_body_fragment(
         f_path_safe = sanitize_text(r_file["path"])
 
         if len(read_files_data) > 1:
-            tab_bg = "var(--panel)" if f_idx == 0 else "transparent"
-            tab_color = "var(--teal)" if f_idx == 0 else "var(--text-secondary)"
-            tab_border = "var(--teal-border)" if f_idx == 0 else "var(--hairline)"
+            tab_bg = "var(--surface-2)" if f_idx == 0 else "transparent"
+            tab_color = "var(--success)" if f_idx == 0 else "var(--text-muted)"
+            tab_border = "var(--teal-border)" if f_idx == 0 else "var(--border)"
             read_file_tabs_html += f"""
-            <button type="button" id="read-tab-btn-{m_tier}-{f_idx}" class="read-file-tab-btn {active_cls}" onclick="switchMilestoneReadFile({m_tier}, {f_idx})" title="{f_path_safe}" style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.25rem 0.6rem; font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem; border-radius: 3px; border: 1px solid {tab_border}; background: {tab_bg}; color: {tab_color}; cursor: pointer; transition: all 120ms ease;">
+            <button type="button" id="read-tab-btn-{m_tier}-{f_idx}" class="read-file-tab-btn {active_cls}" onclick="switchMilestoneReadFile({m_tier}, {f_idx})" title="{f_path_safe}" style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.25rem 0.6rem; font-family: var(--font-mono); font-size: 0.8125rem; border-radius: 3px; border: 1px solid {tab_border}; background: {tab_bg}; color: {tab_color}; cursor: pointer; transition: all 120ms ease;">
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
                     <polyline points="13 2 13 9 20 9"></polyline>
@@ -4403,7 +4397,7 @@ def render_milestone_body_fragment(
         redaction_notice_html = ""
         if is_redacted:
             redaction_notice_html = """
-            <div class="redaction-notice-bar" style="display: flex; align-items: center; gap: 0.35rem; padding: 0.35rem 0.85rem; background: rgba(245, 158, 11, 0.08); border: 1px solid var(--amber-border); border-bottom: none; font-family: 'IBM Plex Mono', monospace; font-size: 0.7rem; color: var(--amber);">
+            <div class="redaction-notice-bar" style="display: flex; align-items: center; gap: 0.35rem; padding: 0.35rem 0.85rem; background: rgba(245, 158, 11, 0.08); border: 1px solid var(--amber-border); border-bottom: none; font-family: var(--font-ui); font-size: 0.8125rem; color: var(--amber);">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
                 </svg>
@@ -4417,19 +4411,19 @@ def render_milestone_body_fragment(
         line_numbers_html = "<br>".join(str(i) for i in range(1, line_count + 1))
         read_file_panes_html += f"""
         <div id="read-file-pane-{m_tier}-{f_idx}" class="read-file-pane" style="display: {pane_display};">
-            <div style="display: flex; justify-content: space-between; align-items: center; background: #12141a; padding: 0.4rem 0.85rem; border: 1px solid var(--hairline); border-bottom: none; border-top-left-radius: 4px; border-top-right-radius: 4px; font-family: 'IBM Plex Mono', monospace; font-size: 0.7rem; color: var(--text-tertiary);">
+            <div style="display: flex; justify-content: space-between; align-items: center; background: #12141a; padding: 0.4rem 0.85rem; border: 1px solid var(--border); border-bottom: none; border-top-left-radius: 4px; border-top-right-radius: 4px; font-family: var(--font-ui); font-size: 0.8125rem; color: var(--text-muted);">
                 <div style="display: flex; align-items: center; gap: 0.4rem;">
                     <span class="chip-dot teal"></span>
-                    <span style="color: var(--text-secondary); font-weight: 500;">{f_path_safe}</span>
+                    <span style="color: var(--text-muted); font-weight: 500;">{f_path_safe}</span>
                 </div>
-                <span class="tag" style="font-size: 0.625rem;">{source_tag_label}</span>
+                <span class="tag" style="font-size: 0.8125rem;">{source_tag_label}</span>
             </div>
             {redaction_notice_html}
-            <div class="code-pane-container" style="height: 60vh; max-height: 60vh; overflow: auto; background: #181a20; border: 1px solid var(--hairline); border-bottom-left-radius: 4px; border-bottom-right-radius: 4px; display: flex;">
-                <div class="line-numbers" style="padding: 1rem 0.65rem; background: #12141a; border-right: 1px solid var(--hairline); color: var(--text-tertiary); font-family: 'IBM Plex Mono', monospace; font-size: 0.8rem; line-height: 1.5; text-align: right; user-select: none; flex-shrink: 0; min-width: 44px;">
+            <div class="code-pane-container" style="height: 60vh; max-height: 60vh; overflow: auto; background: #181a20; border: 1px solid var(--border); border-bottom-left-radius: 4px; border-bottom-right-radius: 4px; display: flex;">
+                <div class="line-numbers" style="padding: 1rem 0.65rem; background: #12141a; border-right: 1px solid var(--border); color: var(--text-muted); font-family: var(--font-mono); font-size: 0.8125rem; line-height: 1.5; text-align: right; user-select: none; flex-shrink: 0; min-width: 44px;">
                     {line_numbers_html}
                 </div>
-                <pre class="read-code-pre" style="margin: 0; padding: 1rem; flex: 1; overflow: visible; background: transparent; border: none;"><code id="read-code-content-{m_tier}-{f_idx}" class="language-python hljs" style="background: transparent !important; padding: 0; font-family: 'IBM Plex Mono', monospace; font-size: 0.8rem; line-height: 1.5; display: block;">{escaped_f_content}</code></pre>
+                <pre class="read-code-pre" style="margin: 0; padding: 1rem; flex: 1; overflow: visible; background: transparent; border: none;"><code id="read-code-content-{m_tier}-{f_idx}" class="language-python hljs" style="background: transparent !important; padding: 0; font-family: var(--font-mono); font-size: 0.8125rem; line-height: 1.5; display: block;">{escaped_f_content}</code></pre>
             </div>
         </div>
         """
@@ -4482,7 +4476,7 @@ def render_milestone_body_fragment(
     guess_disabled_banner_html = ""
     if not has_any_real_source:
         guess_disabled_banner_html = """
-        <div class="guess-disabled-banner" style="margin-bottom: 0.85rem; padding: 0.75rem 1rem; background: rgba(245, 158, 11, 0.08); border-left: 3px solid var(--amber); border-radius: 3px; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; line-height: 1.45; color: var(--amber);">
+        <div class="guess-disabled-banner" style="margin-bottom: 0.85rem; padding: 0.75rem 1rem; background: rgba(245, 158, 11, 0.08); border-left: 3px solid var(--amber); border-radius: 3px; font-family: var(--font-ui); font-size: 0.8125rem; line-height: 1.45; color: var(--amber);">
             <span>⚠️</span> <strong>Try it Disabled:</strong> Reference source files are not available for this milestone. Try re-running the analysis to view and verify against the real implementation.
         </div>
         """
@@ -4496,7 +4490,7 @@ def render_milestone_body_fragment(
 
     starter_notice_display = "display: flex;" if (fill_files_data and not fill_files_data[0].get("has_scaffold", False) and not submitted_code) else "display: none;"
     starter_unavailable_notice_html = f"""
-    <div id="starter-unavailable-notice-{m_tier}" class="starter-unavailable-notice" style="{starter_notice_display}align-items: center; gap: 0.4rem; margin-bottom: 0.65rem; padding: 0.6rem 0.85rem; background: rgba(245, 158, 11, 0.08); border-left: 3px solid var(--amber); border-radius: 3px; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--text-secondary);">
+    <div id="starter-unavailable-notice-{m_tier}" class="starter-unavailable-notice" style="{starter_notice_display}align-items: center; gap: 0.4rem; margin-bottom: 0.65rem; padding: 0.6rem 0.85rem; background: rgba(245, 158, 11, 0.08); border-left: 3px solid var(--amber); border-radius: 3px; font-family: var(--font-ui); font-size: 0.8125rem; color: var(--text-muted);">
         <span>ℹ️</span> <strong>Starter code isn't available for this file.</strong>
     </div>
     """
@@ -4509,11 +4503,11 @@ def render_milestone_body_fragment(
         active_cls = "active" if f_idx == 0 else ""
         f_path_safe = sanitize_text(g_file)
         f_name_safe = sanitize_text(g_file.replace("\\", "/").split("/")[-1])
-        tab_bg = "var(--panel)" if f_idx == 0 else "transparent"
-        tab_color = "var(--brass)" if f_idx == 0 else "var(--text-secondary)"
-        tab_border = "var(--brass-border)" if f_idx == 0 else "var(--hairline)"
+        tab_bg = "var(--surface-2)" if f_idx == 0 else "transparent"
+        tab_color = "var(--accent)" if f_idx == 0 else "var(--text-muted)"
+        tab_border = "var(--brass-border)" if f_idx == 0 else "var(--border)"
         guess_file_tabs_html += f"""
-        <button type="button" id="guess-tab-btn-{m_tier}-{f_idx}" class="guess-file-tab-btn {active_cls}" onclick="switchMilestoneGuessFile({m_tier}, {f_idx}, '{f_path_safe}')" title="{f_path_safe}" style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.25rem 0.6rem; font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem; border-radius: 3px; border: 1px solid {tab_border}; background: {tab_bg}; color: {tab_color}; cursor: pointer; transition: all 120ms ease;">
+        <button type="button" id="guess-tab-btn-{m_tier}-{f_idx}" class="guess-file-tab-btn {active_cls}" onclick="switchMilestoneGuessFile({m_tier}, {f_idx}, '{f_path_safe}')" title="{f_path_safe}" style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.25rem 0.6rem; font-family: var(--font-mono); font-size: 0.8125rem; border-radius: 3px; border: 1px solid {tab_border}; background: {tab_bg}; color: {tab_color}; cursor: pointer; transition: all 120ms ease;">
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
                 <polyline points="13 2 13 9 20 9"></polyline>
@@ -4526,7 +4520,7 @@ def render_milestone_body_fragment(
     if len(m_files) > 1:
         guess_file_picker_container_html = f"""
         <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; flex-wrap: wrap;">
-            <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; font-weight: 600; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.04em;">Target File:</span>
+            <span style="font-family: var(--font-mono); font-size: 0.8125rem; font-weight: 600; color: var(--text-muted); ">Target File:</span>
             <div id="guess-file-tabs-{m_tier}" style="display: flex; gap: 0.35rem; flex-wrap: wrap;">
                 {guess_file_tabs_html}
             </div>
@@ -4537,14 +4531,14 @@ def render_milestone_body_fragment(
     example_io_html = ""
     if example_io_data:
         if isinstance(example_io_data, list):
-            ex_rendered = "".join(f'<div style="font-family: \'IBM Plex Mono\', monospace; font-size: 0.75rem; background: var(--panel); padding: 0.4rem 0.6rem; border-radius: 3px; border: 1px solid var(--hairline-soft); margin-top: 0.25rem;">{sanitize_text(str(ex))}</div>' for ex in example_io_data)
+            ex_rendered = "".join(f'<div style="font-family: var(--font-mono); font-size: 0.8125rem; background: var(--surface-2); padding: 0.4rem 0.6rem; border-radius: 3px; border: 1px solid var(--hairline-soft); margin-top: 0.25rem;">{sanitize_text(str(ex))}</div>' for ex in example_io_data)
         elif isinstance(example_io_data, dict):
-            ex_rendered = f'<pre style="font-family: \'IBM Plex Mono\', monospace; font-size: 0.75rem; background: var(--panel); padding: 0.4rem 0.6rem; border-radius: 3px; border: 1px solid var(--hairline-soft); margin-top: 0.25rem; overflow-x: auto;">{sanitize_text(json.dumps(example_io_data, indent=2))}</pre>'
+            ex_rendered = f'<pre style="font-family: var(--font-mono); font-size: 0.8125rem; background: var(--surface-2); padding: 0.4rem 0.6rem; border-radius: 3px; border: 1px solid var(--hairline-soft); margin-top: 0.25rem; overflow-x: auto;">{sanitize_text(json.dumps(example_io_data, indent=2))}</pre>'
         else:
-            ex_rendered = f'<div style="font-family: \'IBM Plex Mono\', monospace; font-size: 0.75rem; background: var(--panel); padding: 0.4rem 0.6rem; border-radius: 3px; border: 1px solid var(--hairline-soft); margin-top: 0.25rem;">{sanitize_text(str(example_io_data))}</div>'
+            ex_rendered = f'<div style="font-family: var(--font-mono); font-size: 0.8125rem; background: var(--surface-2); padding: 0.4rem 0.6rem; border-radius: 3px; border: 1px solid var(--hairline-soft); margin-top: 0.25rem;">{sanitize_text(str(example_io_data))}</div>'
         example_io_html = f"""
         <div class="brief-example-io-section" style="margin-bottom: 0.65rem;">
-            <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; font-weight: 600; color: var(--text-tertiary); text-transform: uppercase; margin-bottom: 0.2rem;">
+            <div style="font-family: var(--font-mono); font-size: 0.8125rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.2rem;">
                 Example Input / Output:
             </div>
             <div style="margin-top: 0.25rem;">
@@ -4560,12 +4554,12 @@ def render_milestone_body_fragment(
         active_cls = "active" if f_idx == 0 else ""
         f_path_safe = sanitize_text(f_file["path"])
         f_name_safe = sanitize_text(f_file["filename"])
-        tab_bg = "var(--panel)" if f_idx == 0 else "transparent"
-        tab_color = "var(--teal)" if f_idx == 0 else "var(--text-secondary)"
-        tab_border = "var(--teal-border)" if f_idx == 0 else "var(--hairline)"
-        no_blanks_tag = "" if f_file["has_scaffold"] else ' <span class="tag" style="font-size: 0.55rem; padding: 0 0.2rem;">No blanks</span>'
+        tab_bg = "var(--surface-2)" if f_idx == 0 else "transparent"
+        tab_color = "var(--success)" if f_idx == 0 else "var(--text-muted)"
+        tab_border = "var(--teal-border)" if f_idx == 0 else "var(--border)"
+        no_blanks_tag = "" if f_file["has_scaffold"] else ' <span class="tag" style="font-size: 0.8125rem; padding: 0 0.2rem;">No blanks</span>'
         fill_file_tabs_html += f"""
-        <button type="button" id="fill-tab-btn-{m_tier}-{f_idx}" class="fill-file-tab-btn {active_cls}" onclick="switchMilestoneFillFile({m_tier}, {f_idx}, '{f_path_safe}')" title="{f_path_safe}" style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.25rem 0.6rem; font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem; border-radius: 3px; border: 1px solid {tab_border}; background: {tab_bg}; color: {tab_color}; cursor: pointer; transition: all 120ms ease;">
+        <button type="button" id="fill-tab-btn-{m_tier}-{f_idx}" class="fill-file-tab-btn {active_cls}" onclick="switchMilestoneFillFile({m_tier}, {f_idx}, '{f_path_safe}')" title="{f_path_safe}" style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.25rem 0.6rem; font-family: var(--font-mono); font-size: 0.8125rem; border-radius: 3px; border: 1px solid {tab_border}; background: {tab_bg}; color: {tab_color}; cursor: pointer; transition: all 120ms ease;">
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
                 <polyline points="13 2 13 9 20 9"></polyline>
@@ -4578,7 +4572,7 @@ def render_milestone_body_fragment(
     if len(fill_files_data) > 1:
         fill_file_picker_container_html = f"""
         <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; flex-wrap: wrap;">
-            <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; font-weight: 600; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.04em;">Target File:</span>
+            <span style="font-family: var(--font-mono); font-size: 0.8125rem; font-weight: 600; color: var(--text-muted); ">Target File:</span>
             <div id="fill-file-tabs-{m_tier}" style="display: flex; gap: 0.35rem; flex-wrap: wrap;">
                 {fill_file_tabs_html}
             </div>
@@ -4590,15 +4584,15 @@ def render_milestone_body_fragment(
 
     if has_any_scaffold:
         fill_mode_btn_html = f"""
-        <button type="button" id="mode-btn-fill-{m_tier}" class="milestone-mode-tab-btn" onclick="switchMilestoneMode({m_tier}, 'fill')" style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.35rem 0.75rem; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; font-weight: 500; border-radius: 3px; border: none; cursor: pointer; transition: all 120ms ease; background: transparent; color: var(--text-secondary);">
+        <button type="button" id="mode-btn-fill-{m_tier}" class="milestone-mode-tab-btn" onclick="switchMilestoneMode({m_tier}, 'fill')" style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.35rem 0.75rem; font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 500; border-radius: 3px; border: none; cursor: pointer; transition: all 120ms ease; background: transparent; color: var(--text-muted);">
             <span>🧩</span> Fill the gaps
         </button>
         """
     else:
         disable_note = html.escape(first_fill_file.get("reason") or "File contains only constants, type declarations, or exports with no function bodies to scaffold.")
         fill_mode_btn_html = f"""
-        <button type="button" id="mode-btn-fill-{m_tier}" class="milestone-mode-tab-btn disabled" disabled title="{disable_note}" style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.35rem 0.75rem; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; font-weight: 500; border-radius: 3px; border: none; cursor: not-allowed; opacity: 0.45; background: transparent; color: var(--text-tertiary);">
-            <span>🧩</span> Fill the gaps <span class="tag" style="font-size: 0.6rem; padding: 0.05rem 0.3rem;">No Blanks</span>
+        <button type="button" id="mode-btn-fill-{m_tier}" class="milestone-mode-tab-btn disabled" disabled title="{disable_note}" style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.35rem 0.75rem; font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 500; border-radius: 3px; border: none; cursor: not-allowed; opacity: 0.45; background: transparent; color: var(--text-muted);">
+            <span>🧩</span> Fill the gaps <span class="tag" style="font-size: 0.8125rem; padding: 0.05rem 0.3rem;">No Blanks</span>
         </button>
         """
 
@@ -4606,7 +4600,7 @@ def render_milestone_body_fragment(
     if len(read_files_data) > 1:
         read_file_picker_container_html = f"""
         <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.65rem; flex-wrap: wrap;">
-            <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; font-weight: 600; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.04em;">Target File:</span>
+            <span style="font-family: var(--font-mono); font-size: 0.8125rem; font-weight: 600; color: var(--text-muted); ">Target File:</span>
             <div id="read-file-tabs-{m_tier}" style="display: flex; gap: 0.35rem; flex-wrap: wrap;">
                 {read_file_tabs_html}
             </div>
@@ -4623,8 +4617,8 @@ def render_milestone_body_fragment(
         workspace_html = f"""
         <div class="milestone-editor-wrapper" id="milestone-editor-card-{m_tier}" style="margin-top: 1.25rem; border-top: 1px solid var(--hairline-soft); padding-top: 1.15rem;">
             <div id="workspace-read-{m_tier}" class="milestone-mode-workspace read-mode" style="display: block;">
-                <div style="font-family: 'IBM Plex Sans', sans-serif; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.4rem;">
-                    <span style="color: var(--teal); font-weight: 600;">ℹ</span> Architecture Implementation
+                <div style="font-family: 'IBM Plex Sans', sans-serif; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.4rem;">
+                    <span style="color: var(--success); font-weight: 600;">ℹ</span> Architecture Implementation
                 </div>
                 {read_file_picker_container_html}
                 <div class="read-file-panes-container" style="border-radius: 4px; overflow: hidden;">
@@ -4641,16 +4635,16 @@ def render_milestone_body_fragment(
         workspace_html = f"""
         <div class="milestone-editor-wrapper" id="milestone-editor-card-{m_tier}" style="margin-top: 1.25rem; border-top: 1px solid var(--hairline-soft); padding-top: 1.15rem;">
             <div class="milestone-mode-switcher" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; border-bottom: 1px solid var(--hairline-soft); padding-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
-                <div style="display: flex; align-items: center; gap: 0.35rem; background: var(--panel-raised); border: 1px solid var(--hairline); border-radius: 4px; padding: 0.2rem;">
-                    <button type="button" id="mode-btn-read-{m_tier}" class="milestone-mode-tab-btn" onclick="switchMilestoneMode({m_tier}, 'read')" style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.35rem 0.75rem; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; font-weight: 500; border-radius: 3px; border: none; cursor: pointer; transition: all 120ms ease; background: transparent; color: var(--text-secondary);">
+                <div style="display: flex; align-items: center; gap: 0.35rem; background: var(--panel-raised); border: 1px solid var(--border); border-radius: 4px; padding: 0.2rem;">
+                    <button type="button" id="mode-btn-read-{m_tier}" class="milestone-mode-tab-btn" onclick="switchMilestoneMode({m_tier}, 'read')" style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.35rem 0.75rem; font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 500; border-radius: 3px; border: none; cursor: pointer; transition: all 120ms ease; background: transparent; color: var(--text-muted);">
                         <span>📖</span> Read it
                     </button>
                     {fill_mode_btn_html}
-                    <button type="button" id="mode-btn-guess-{m_tier}" class="milestone-mode-tab-btn active" onclick="switchMilestoneMode({m_tier}, 'guess')" style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.35rem 0.75rem; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; font-weight: 600; border-radius: 3px; border: none; cursor: pointer; transition: all 120ms ease; background: var(--panel); color: var(--brass); box-shadow: 0 1px 3px rgba(0,0,0,0.2);">
+                    <button type="button" id="mode-btn-guess-{m_tier}" class="milestone-mode-tab-btn active" onclick="switchMilestoneMode({m_tier}, 'guess')" style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.35rem 0.75rem; font-family: var(--font-mono); font-size: 0.8125rem; font-weight: 600; border-radius: 3px; border: none; cursor: pointer; transition: all 120ms ease; background: var(--surface-2); color: var(--accent); box-shadow: 0 1px 3px rgba(0,0,0,0.2);">
                         <span>✏️</span> Try it
                     </button>
                 </div>
-                <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--text-tertiary);">
+                <div style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--text-muted);">
                     PRACTICE MODE
                 </div>
             </div>
@@ -4658,34 +4652,34 @@ def render_milestone_body_fragment(
             <!-- Mode 1: Guess It -->
             <div id="workspace-guess-{m_tier}" class="milestone-mode-workspace guess-mode">
                 {guess_disabled_banner_html}
-                <div class="guess-instruction-banner" style="margin-bottom: 0.85rem; padding: 0.75rem 1rem; background: var(--panel-raised); border-left: 3px solid var(--brass); border-radius: 3px; font-family: 'IBM Plex Sans', sans-serif; font-size: 0.825rem; line-height: 1.5; color: var(--text-secondary);">
-                    <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.2rem; display: flex; align-items: center; gap: 0.35rem;">
+                <div class="guess-instruction-banner" style="margin-bottom: 0.85rem; padding: 0.75rem 1rem; background: var(--panel-raised); border-left: 3px solid var(--accent); border-radius: 3px; font-family: 'IBM Plex Sans', sans-serif; font-size: 0.825rem; line-height: 1.5; color: var(--text-muted);">
+                    <div style="font-weight: 600; color: var(--text); margin-bottom: 0.2rem; display: flex; align-items: center; gap: 0.35rem;">
                         <span>🎯</span> <strong>Task Instructions:</strong>
                     </div>
                     <div>
-                        Try to reconstruct <span class="mono" id="guess-target-filename-{m_tier}" style="color: var(--brass); font-weight: 600; font-size: 0.8rem; background: var(--panel); padding: 0.1rem 0.4rem; border-radius: 3px; border: 1px solid var(--hairline);">{first_target_file}</span> based on the expected symbols and this milestone's role in the codebase ({role_context}), before seeing the real implementation.
+                        Try to reconstruct <span class="mono" id="guess-target-filename-{m_tier}" style="color: var(--accent); font-weight: 600; font-size: 0.8125rem; background: var(--surface-2); padding: 0.1rem 0.4rem; border-radius: 3px; border: 1px solid var(--border);">{first_target_file}</span> based on the expected symbols and this milestone's role in the codebase ({role_context}), before seeing the real implementation.
                     </div>
                 </div>
 
                 {guess_file_picker_container_html}
 
-                <div class="milestone-brief-card" style="margin-bottom: 0.85rem; padding: 0.85rem 1rem; background: var(--panel-raised); border: 1px solid var(--hairline); border-radius: 4px;">
+                <div class="milestone-brief-card" style="margin-bottom: 0.85rem; padding: 0.85rem 1rem; background: var(--panel-raised); border: 1px solid var(--border); border-radius: 4px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.65rem; border-bottom: 1px solid var(--hairline-soft); padding-bottom: 0.45rem;">
-                        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; font-weight: 600; color: var(--brass); text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; gap: 0.4rem;">
+                        <div style="font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600; color: var(--accent); display: flex; align-items: center; gap: 0.4rem;">
                             <span>📋</span> {track_label} {display_id} Structured Brief
                         </div>
-                        <span class="tag" style="font-size: 0.65rem;">Sourced from Codebase</span>
+                        <span class="tag" style="font-size: 0.8125rem;">Sourced from Codebase</span>
                     </div>
 
                     <div class="brief-objective-section" style="margin-bottom: 0.65rem;">
-                        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; font-weight: 600; color: var(--text-tertiary); text-transform: uppercase; margin-bottom: 0.2rem;">
+                        <div style="font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.2rem;">
                             Objective:
                         </div>
-                        {f'<div style="font-size: 0.825rem; color: var(--text-secondary); line-height: 1.5;">{m_brief_obj}</div>' if m_brief_obj else '<div style="font-size: 0.75rem; color: var(--text-tertiary); font-style: italic;">No objective text available for this milestone.</div>'}
+                        {f'<div style="font-size: 0.825rem; color: var(--text-muted); line-height: 1.5;">{m_brief_obj}</div>' if m_brief_obj else '<div style="font-size: 0.8125rem; color: var(--text-muted); font-style: italic;">No objective text available for this milestone.</div>'}
                     </div>
 
                     <div class="brief-constraints-section" style="margin-bottom: 0.65rem;">
-                        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; font-weight: 600; color: var(--text-tertiary); text-transform: uppercase; margin-bottom: 0.35rem;">
+                        <div style="font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.35rem;">
                             Constraints / Expected Functions &amp; Signatures:
                         </div>
                         <div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">
@@ -4698,33 +4692,33 @@ def render_milestone_body_fragment(
 
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.65rem; flex-wrap: wrap; gap: 0.5rem;">
                     <div style="display: flex; align-items: center; gap: 0.5rem;">
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--brass);">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--accent);">
                             <polyline points="16 18 22 12 16 6"></polyline>
                             <polyline points="8 6 2 12 8 18"></polyline>
                         </svg>
-                        <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; font-weight: 600; color: var(--text-primary); text-transform: uppercase; letter-spacing: 0.05em;">
+                        <span style="font-family: var(--font-mono); font-size: 0.8125rem; font-weight: 600; color: var(--text); ">
                             Milestone {m_tier} Implementation Workspace
                         </span>
                     </div>
-                    <span class="tag" style="font-size: 0.6875rem;">Structure &amp; Execution Verified</span>
+                    <span class="tag" style="font-size: 0.8125rem;">Structure &amp; Execution Verified</span>
                 </div>
 
                 {starter_unavailable_notice_html}
 
-                <div class="editor-surface-container" style="border: 1px solid var(--hairline); border-radius: 4px; overflow: hidden; background: #282a36;">
+                <div class="editor-surface-container" style="border: 1px solid var(--border); border-radius: 4px; overflow: hidden; background: #282a36;">
                     <textarea id="code-editor-{m_tier}" name="code_editor_{m_tier}" style="display: none;">{escaped_code}</textarea>
                 </div>
 
                 <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-top: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
                     <div style="display: flex; align-items: flex-start; gap: 0.5rem; flex-wrap: wrap;">
-                        <button type="button" id="btn-run-{m_tier}" onclick="runMilestoneCode('{job_id}', {m_tier})" {btn_run_disabled} class="btn btn-sm btn-secondary" style="font-family: 'IBM Plex Mono', monospace; letter-spacing: 0.02em; border-color: var(--brass-border); color: var(--brass);">
+                        <button type="button" id="btn-run-{m_tier}" onclick="runMilestoneCode('{job_id}', {m_tier})" {btn_run_disabled} class="btn btn-sm btn-secondary" style="font-family: var(--font-ui); border-color: var(--brass-border); color: var(--accent);">
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none">
                                 <polygon points="5 3 19 12 5 21 5 3"></polygon>
                             </svg>
                             Run Code
                         </button>
                         <div style="display: flex; flex-direction: column;">
-                            <button type="button" id="btn-submit-{m_tier}" onclick="submitMilestoneAttempt('{job_id}', {m_tier})" {btn_submit_disabled} class="btn btn-sm btn-primary" style="font-family: 'IBM Plex Mono', monospace; letter-spacing: 0.02em;">
+                            <button type="button" id="btn-submit-{m_tier}" onclick="submitMilestoneAttempt('{job_id}', {m_tier})" {btn_submit_disabled} class="btn btn-sm btn-primary" style="font-family: var(--font-ui); ">
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                                     <polyline points="20 6 9 17 4 12"></polyline>
                                 </svg>
@@ -4734,37 +4728,37 @@ def render_milestone_body_fragment(
                         </div>
                     </div>
                     <div style="display: flex; align-items: center; gap: 0.5rem;">
-                        <button type="button" id="btn-reveal-{m_tier}" onclick="revealMilestoneImplementation('{job_id}', {m_tier})" class="btn btn-sm btn-secondary" style="{reveal_btn_display} font-family: 'IBM Plex Mono', monospace; color: var(--teal); border-color: var(--teal-border);">
+                        <button type="button" id="btn-reveal-{m_tier}" onclick="revealMilestoneImplementation('{job_id}', {m_tier})" class="btn btn-sm btn-secondary" style="{reveal_btn_display} font-family: var(--font-ui); color: var(--success); border-color: var(--teal-border);">
                             <span id="btn-reveal-text-{m_tier}">{reveal_btn_text}</span>
                         </button>
                     </div>
                 </div>
 
-                <div id="diff-output-container-{m_tier}" style="{diff_initial_display} margin-top: 1rem; border-top: 1px solid var(--hairline); padding-top: 0.75rem;">
+                <div id="diff-output-container-{m_tier}" style="{diff_initial_display} margin-top: 1rem; border-top: 1px solid var(--border); padding-top: 0.75rem;">
                     {diff_rendered_html}
                 </div>
-                <div id="console-output-container-{m_tier}" style="{console_initial_display} margin-top: 1rem; border-top: 1px solid var(--hairline); padding-top: 0.75rem;">
+                <div id="console-output-container-{m_tier}" style="{console_initial_display} margin-top: 1rem; border-top: 1px solid var(--border); padding-top: 0.75rem;">
                     {console_rendered_html}
                 </div>
             </div>
 
             <!-- Mode 2: Read It -->
             <div id="workspace-read-{m_tier}" class="milestone-mode-workspace read-mode" style="display: none;">
-                <div style="font-family: 'IBM Plex Sans', sans-serif; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.4rem;">
-                    <span style="color: var(--teal); font-weight: 600;">ℹ</span> Read through this milestone's actual implementation
+                <div style="font-family: 'IBM Plex Sans', sans-serif; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.4rem;">
+                    <span style="color: var(--success); font-weight: 600;">ℹ</span> Read through this milestone's actual implementation
                 </div>
                 {read_file_picker_container_html}
                 <div class="read-file-panes-container" style="border-radius: 4px; overflow: hidden;">
                     {read_file_panes_html}
                 </div>
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.85rem; flex-wrap: wrap; gap: 0.5rem;">
-                    <button type="button" id="btn-review-{m_tier}" onclick="markMilestoneAsReviewed('{job_id}', {m_tier})" class="btn btn-sm" style="font-family: 'IBM Plex Mono', monospace; letter-spacing: 0.02em; display: inline-flex; align-items: center; gap: 0.4rem; background: var(--teal); color: #0f172a; font-weight: 600; border: 1px solid var(--teal-border); border-radius: 4px; padding: 0.35rem 0.85rem; cursor: pointer;">
+                    <button type="button" id="btn-review-{m_tier}" onclick="markMilestoneAsReviewed('{job_id}', {m_tier})" class="btn btn-sm" style="font-family: var(--font-ui); display: inline-flex; align-items: center; gap: 0.4rem; background: var(--success); color: #0f172a; font-weight: 600; border: 1px solid var(--teal-border); border-radius: 4px; padding: 0.35rem 0.85rem; cursor: pointer;">
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                             <polyline points="20 6 9 17 4 12"></polyline>
                         </svg>
                         <span id="btn-review-text-{m_tier}">{reviewed_btn_text}</span>
                     </button>
-                    <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--text-tertiary);">Read-only exploration &bull; No code grading required</span>
+                    <span style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--text-muted);">Read-only exploration &bull; No code grading required</span>
                 </div>
             </div>
 
@@ -4774,12 +4768,12 @@ def render_milestone_body_fragment(
                 <div id="fill-chips-container-{m_tier}" style="margin-bottom: 0.65rem;">
                     {fill_chips_html}
                 </div>
-                <div class="editor-surface-container" style="border: 1px solid var(--hairline); border-radius: 4px; overflow: hidden; background: #282a36;">
+                <div class="editor-surface-container" style="border: 1px solid var(--border); border-radius: 4px; overflow: hidden; background: #282a36;">
                     <textarea id="fill-code-editor-{m_tier}" name="fill_code_editor_{m_tier}" style="display: none;">{escaped_scaffold_code}</textarea>
                 </div>
                 <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-top: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
                     <div style="display: flex; align-items: flex-start; gap: 0.5rem; flex-wrap: wrap;">
-                        <button type="button" id="btn-submit-fill-{m_tier}" onclick="submitFillBlankAttempt('{job_id}', {m_tier})" {btn_submit_fill_disabled} class="btn btn-sm btn-primary" style="font-family: 'IBM Plex Mono', monospace; letter-spacing: 0.02em;">
+                        <button type="button" id="btn-submit-fill-{m_tier}" onclick="submitFillBlankAttempt('{job_id}', {m_tier})" {btn_submit_fill_disabled} class="btn btn-sm btn-primary" style="font-family: var(--font-ui); ">
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                                 <polyline points="20 6 9 17 4 12"></polyline>
                             </svg>
@@ -4787,7 +4781,7 @@ def render_milestone_body_fragment(
                         </button>
                     </div>
                 </div>
-                <div id="fill-diff-output-container-{m_tier}" style="display: none; margin-top: 1rem; border-top: 1px solid var(--hairline); padding-top: 0.75rem;"></div>
+                <div id="fill-diff-output-container-{m_tier}" style="display: none; margin-top: 1rem; border-top: 1px solid var(--border); padding-top: 0.75rem;"></div>
             </div>
         </div>
         """
@@ -4797,7 +4791,7 @@ def render_milestone_body_fragment(
 
     return f"""
     <div class="milestone-body-content" id="milestone-content-{m_tier}">
-        {f'<div style="font-size: 0.75rem; color: var(--text-tertiary); font-family: \'IBM Plex Mono\', monospace; margin-bottom: 0.5rem;"><span style="color: var(--text-secondary); font-weight: 600;">Composition:</span> {m_comp}</div>' if m_comp else ''}
+        {f'<div style="font-size: 0.8125rem; color: var(--text-muted); font-family: var(--font-ui); margin-bottom: 0.5rem;"><span style="color: var(--text-muted); font-weight: 600;">Composition:</span> {m_comp}</div>' if m_comp else ''}
         {symbols_html}
         {citations_html}
         {notes_html}
@@ -4930,14 +4924,14 @@ def _render_milestone_quiz_card(job_id: Any, m_tier: int, questions: List[Dict[s
         retry_display = "inline-flex"
         passed = score_val >= (total_val * 0.6)
         banner_bg = "rgba(45, 212, 191, 0.15)" if passed else "rgba(244, 63, 94, 0.15)"
-        banner_border = "1px solid var(--teal)" if passed else "1px solid var(--crimson)"
-        banner_color = "var(--teal)" if passed else "var(--crimson)"
+        banner_border = "1px solid var(--success)" if passed else "1px solid var(--crimson)"
+        banner_color = "var(--success)" if passed else "var(--crimson)"
     else:
         score_text = "of 3 correct"
         banner_display = "none"
         retry_display = "none"
         banner_bg = "transparent"
-        banner_border = "1px solid var(--hairline)"
+        banner_border = "1px solid var(--border)"
         banner_color = "inherit"
 
     rendered_qs = ""
@@ -4952,52 +4946,52 @@ def _render_milestone_quiz_card(job_id: Any, m_tier: int, questions: List[Dict[s
             opt_text = render_user_markdown(str(opt))
             opts_html += f"""
             <label class="quiz-option-row" id="quiz-opt-row-{m_tier}-{q_idx}-{opt_idx}" style="min-height: 44px; display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0.85rem; background: var(--panel-raised); border: 1px solid var(--hairline-soft); border-radius: 4px; cursor: pointer; transition: all 120ms ease; margin-bottom: 0.45rem;">
-                <input type="radio" name="m_quiz_{m_tier}_{q_idx}" value="{opt_idx}" style="margin: 0; width: 18px; height: 18px; accent-color: var(--teal); flex-shrink: 0;" />
-                <span class="quiz-opt-text" style="font-size: 0.825rem; color: var(--text-primary); line-height: 1.4;">{opt_text}</span>
+                <input type="radio" name="m_quiz_{m_tier}_{q_idx}" value="{opt_idx}" style="margin: 0; width: 18px; height: 18px; accent-color: var(--success); flex-shrink: 0;" />
+                <span class="quiz-opt-text" style="font-size: 0.825rem; color: var(--text); line-height: 1.4;">{opt_text}</span>
             </label>
             """
 
         rendered_qs += f"""
         <div class="milestone-quiz-q" id="milestone-quiz-q-{m_tier}-{q_idx}" data-question-idx="{q_idx}" data-correct-idx="{correct_idx}" style="margin-bottom: 1.25rem;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
-                <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; font-weight: 700; color: var(--brass); text-transform: uppercase;">Question {q_idx} of 3</span>
-                <span class="quiz-feedback" style="display: none; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; font-weight: 600;"></span>
+                <span style="font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 700; color: var(--accent); ">Question {q_idx} of 3</span>
+                <span class="quiz-feedback" style="display: none; font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600;"></span>
             </div>
-            <div style="font-size: 0.875rem; font-weight: 500; color: var(--text-primary); margin-bottom: 0.65rem; line-height: 1.45;">
+            <div style="font-size: 0.875rem; font-weight: 500; color: var(--text); margin-bottom: 0.65rem; line-height: 1.45;">
                 {q_text}
             </div>
             <div class="quiz-options-list">
                 {opts_html}
             </div>
-            <div class="quiz-explanation" style="display: none; margin-top: 0.5rem; padding: 0.5rem 0.75rem; background: var(--panel-raised); border-left: 2px solid var(--teal); border-radius: 2px; font-size: 0.75rem; color: var(--text-secondary); line-height: 1.45;">
-                <span style="font-weight: 600; color: var(--text-primary);">Concept Invariant:</span> {q_exp}
+            <div class="quiz-explanation" style="display: none; margin-top: 0.5rem; padding: 0.5rem 0.75rem; background: var(--panel-raised); border-left: 2px solid var(--success); border-radius: 2px; font-size: 0.8125rem; color: var(--text-muted); line-height: 1.45;">
+                <span style="font-weight: 600; color: var(--text);">Concept Invariant:</span> {q_exp}
             </div>
         </div>
         """
 
     return f"""
-    <div class="milestone-quiz-card" id="milestone-quiz-card-{m_tier}" style="margin-top: 1.5rem; background: var(--panel); border: 1px solid var(--hairline); border-radius: 4px; padding: 1.25rem 1.5rem;">
+    <div class="milestone-quiz-card" id="milestone-quiz-card-{m_tier}" style="margin-top: 1.5rem; background: var(--surface-2); border: 1px solid var(--border); border-radius: 4px; padding: 1.25rem 1.5rem;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; border-bottom: 1px solid var(--hairline-soft); padding-bottom: 0.5rem;">
             <div style="display: flex; align-items: center; gap: 0.5rem;">
                 <span style="font-size: 1.1rem;">🧠</span>
-                <h4 style="font-size: 1rem; font-weight: 600; color: var(--text-primary); margin: 0; font-family: 'Newsreader', Georgia, serif;">Check your understanding</h4>
+                <h4 style="font-size: 1rem; font-weight: 600; color: var(--text); margin: 0; font-family: var(--font-ui);">Check your understanding</h4>
             </div>
-            <span class="tag" style="font-size: 0.6875rem;">3 Questions</span>
+            <span class="tag" style="font-size: 0.8125rem;">3 Questions</span>
         </div>
-        <p style="color: var(--text-secondary); font-size: 0.825rem; margin-bottom: 1rem; line-height: 1.45;">
+        <p style="color: var(--text-muted); font-size: 0.825rem; margin-bottom: 1rem; line-height: 1.45;">
             Verify your architectural comprehension of this milestone's contracts, invariants, and role before moving ahead.
         </p>
         <div class="milestone-quiz-questions" id="milestone-quiz-questions-{m_tier}">
             {rendered_qs}
         </div>
         <div style="display: flex; align-items: center; gap: 0.75rem; margin-top: 1rem; flex-wrap: wrap;">
-            <button type="button" id="btn-check-quiz-{m_tier}" class="btn btn-sm btn-primary" onclick="checkMilestoneUnderstanding('{job_id}', {m_tier})" style="font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; font-weight: 600;">
+            <button type="button" id="btn-check-quiz-{m_tier}" class="btn btn-sm btn-primary" onclick="checkMilestoneUnderstanding('{job_id}', {m_tier})" style="font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600;">
                 Check answers
             </button>
-            <button type="button" id="btn-retry-quiz-{m_tier}" class="btn btn-sm btn-secondary" onclick="retryMilestoneQuiz('{job_id}', {m_tier})" style="display: {retry_display}; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem;">
+            <button type="button" id="btn-retry-quiz-{m_tier}" class="btn btn-sm btn-secondary" onclick="retryMilestoneQuiz('{job_id}', {m_tier})" style="display: {retry_display}; font-family: var(--font-ui); font-size: 0.8125rem;">
                 Retry
             </button>
-            <div id="quiz-score-banner-{m_tier}" class="quiz-score-banner" style="display: {banner_display}; font-family: 'IBM Plex Mono', monospace; font-size: 0.8rem; font-weight: 600; padding: 0.4rem 0.85rem; border-radius: 4px; background: {banner_bg}; border: {banner_border}; color: {banner_color};" data-score-template="of 3 correct">
+            <div id="quiz-score-banner-{m_tier}" class="quiz-score-banner" style="display: {banner_display}; font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600; padding: 0.4rem 0.85rem; border-radius: 4px; background: {banner_bg}; border: {banner_border}; color: {banner_color};" data-score-template="of 3 correct">
                 <span id="quiz-score-text-{m_tier}">{score_text}</span>
             </div>
         </div>
@@ -5059,7 +5053,7 @@ def report_view(
     no_history_note_html = ""
     if not has_git_history:
         no_history_note_html = """
-        <div id="no-history-note" class="stratum-card" style="background: rgba(245, 158, 11, 0.08); border: 1px solid var(--amber); border-left: 4px solid var(--amber); padding: 0.85rem 1.15rem; margin-bottom: 1.5rem; border-radius: 4px; font-family: 'IBM Plex Sans', sans-serif; font-size: 0.875rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.6rem;">
+        <div id="no-history-note" class="stratum-card" style="background: rgba(245, 158, 11, 0.08); border: 1px solid var(--amber); border-left: 4px solid var(--amber); padding: 0.85rem 1.15rem; margin-bottom: 1.5rem; border-radius: 4px; font-family: 'IBM Plex Sans', sans-serif; font-size: 0.875rem; color: var(--text); display: flex; align-items: center; gap: 0.6rem;">
             <span>Order is estimated from imports (no git history).</span>
         </div>
         """
@@ -5072,8 +5066,8 @@ def report_view(
 
     if is_showcase:
         showcase_banner_html = """
-        <div id="showcase-banner" class="stratum-card" style="background: rgba(45, 212, 191, 0.08); border: 1px solid var(--teal); border-left: 4px solid var(--teal); padding: 1rem 1.25rem; margin-bottom: 1.5rem; border-radius: 4px;">
-            <div style="font-size: 0.875rem; line-height: 1.5; color: var(--text-primary); font-weight: 600;">
+        <div id="showcase-banner" class="stratum-card" style="background: rgba(45, 212, 191, 0.08); border: 1px solid var(--success); border-left: 4px solid var(--success); padding: 1rem 1.25rem; margin-bottom: 1.5rem; border-radius: 4px;">
+            <div style="font-size: 0.875rem; line-height: 1.5; color: var(--text); font-weight: 600;">
                 View-only showcase
             </div>
         </div>
@@ -5081,14 +5075,14 @@ def report_view(
         sandbox_banner_html = ""
     elif not sandbox_enabled:
         video_link_html = (
-            f' <a href="{html.escape(demo_video_url)}" target="_blank" rel="noopener noreferrer" style="color: var(--teal); font-weight: 600; text-decoration: underline;">See the full flow in the video.</a>'
+            f' <a href="{html.escape(demo_video_url)}" target="_blank" rel="noopener noreferrer" style="color: var(--success); font-weight: 600; text-decoration: underline;">See the full flow in the video.</a>'
             if demo_video_url
             else ""
         )
         showcase_banner_html = ""
         sandbox_banner_html = f"""
         <div id="sandbox-disabled-banner" class="stratum-card" style="background: rgba(245, 158, 11, 0.08); border: 1px solid var(--amber); border-left: 4px solid var(--amber); padding: 1rem 1.25rem; margin-bottom: 1.5rem; border-radius: 4px;">
-            <div style="font-size: 0.875rem; line-height: 1.5; color: var(--text-primary);">
+            <div style="font-size: 0.875rem; line-height: 1.5; color: var(--text);">
                 {SANDBOX_DISABLED_BANNER_TEXT}{video_link_html}
             </div>
         </div>
@@ -5169,18 +5163,18 @@ def report_view(
     for ep in start_here_files:
         safe_ep = sanitize_text(ep)
         start_here_items.append(
-            f'<div class="mono" style="font-size: 0.75rem; color: var(--text-primary); text-overflow: ellipsis; overflow: hidden; white-space: nowrap;" title="{safe_ep}">{safe_ep}</div>'
+            f'<div class="mono" style="font-size: 0.8125rem; color: var(--text); text-overflow: ellipsis; overflow: hidden; white-space: nowrap;" title="{safe_ep}">{safe_ep}</div>'
         )
-    start_here_html = "".join(start_here_items) if start_here_items else '<span style="font-size: 0.75rem; color: var(--text-tertiary); font-style: italic;">No application entry points</span>'
+    start_here_html = "".join(start_here_items) if start_here_items else '<span style="font-size: 0.8125rem; color: var(--text-muted); font-style: italic;">No application entry points</span>'
 
     read_first_files = get_read_first_files(nodes, edges, max_n=3)
     read_first_items = []
     for rf in read_first_files:
         safe_rf = sanitize_text(rf)
         read_first_items.append(
-            f'<div class="mono" style="font-size: 0.75rem; color: var(--text-primary); text-overflow: ellipsis; overflow: hidden; white-space: nowrap;" title="{safe_rf}">{safe_rf}</div>'
+            f'<div class="mono" style="font-size: 0.8125rem; color: var(--text); text-overflow: ellipsis; overflow: hidden; white-space: nowrap;" title="{safe_rf}">{safe_rf}</div>'
         )
-    read_first_html = "".join(read_first_items) if read_first_items else '<span style="font-size: 0.75rem; color: var(--text-tertiary); font-style: italic;">No candidate files detected</span>'
+    read_first_html = "".join(read_first_items) if read_first_items else '<span style="font-size: 0.8125rem; color: var(--text-muted); font-style: italic;">No candidate files detected</span>'
 
     # Step 2: Code and Docs counts
     code_count, docs_count = count_code_and_docs_files(nodes, total_files)
@@ -5190,18 +5184,18 @@ def report_view(
     for ep in app_entry_points:
         safe_ep = sanitize_text(ep)
         app_chips_html += f"""
-        <div class="entry-chip" onclick="switchReportTab('graph'); setTimeout(function() {{ selectDagNode('{safe_ep}'); }}, 50);" role="button" tabindex="0" title="{safe_ep}" style="cursor: pointer; display: flex; align-items: center; justify-content: space-between; overflow: hidden; padding: 0.45rem 0.65rem; border-radius: 4px; border: 1px solid var(--hairline); background: var(--panel-raised); margin-bottom: 0.35rem;">
+        <div class="entry-chip" onclick="switchReportTab('graph'); setTimeout(function() {{ selectDagNode('{safe_ep}'); }}, 50);" role="button" tabindex="0" title="{safe_ep}" style="cursor: pointer; display: flex; align-items: center; justify-content: space-between; overflow: hidden; padding: 0.45rem 0.65rem; border-radius: 4px; border: 1px solid var(--border); background: var(--panel-raised); margin-bottom: 0.35rem;">
             <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; margin-right: 0.5rem;" title="{safe_ep}">
-                <span class="mono" style="font-size: 0.78rem; color: var(--text-primary); text-overflow: ellipsis; overflow: hidden; white-space: nowrap; display: block;" title="{safe_ep}">{safe_ep}</span>
+                <span class="mono" style="font-size: 0.8125rem; color: var(--text); text-overflow: ellipsis; overflow: hidden; white-space: nowrap; display: block;" title="{safe_ep}">{safe_ep}</span>
             </div>
             <div style="display: flex; align-items: center; gap: 0.35rem;">
-                <span class="badge badge-teal" style="font-size: 0.58rem; padding: 0.05rem 0.35rem; flex-shrink: 0;">APP</span>
-                <span class="entry-chip-arrow" style="font-size: 0.75rem; color: var(--brass);">&rarr;</span>
+                <span class="badge badge-teal" style="font-size: 0.8125rem; padding: 0.05rem 0.35rem; flex-shrink: 0;">APP</span>
+                <span class="entry-chip-arrow" style="font-size: 0.8125rem; color: var(--accent);">&rarr;</span>
             </div>
         </div>
         """
     if not app_chips_html:
-        app_chips_html = '<span style="font-size: 0.75rem; color: var(--text-tertiary); font-style: italic;">No application entry points detected</span>'
+        app_chips_html = '<span style="font-size: 0.8125rem; color: var(--text-muted); font-style: italic;">No application entry points detected</span>'
 
     legacy_test_chips_html = ""
     for ep in test_entry_points:
@@ -5232,12 +5226,12 @@ def report_view(
         pct_val = float(d["percentage"].replace("%", "")) if "%" in d.get("percentage", "") else 0
         domain_bars_html += f"""
         <div class="subsystem-item" style="margin-bottom: 0.75rem;">
-            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; font-family: 'IBM Plex Mono', monospace; margin-bottom: 0.25rem;">
-                <span style="color: var(--text-primary); font-weight: 600;">{d_name}</span>
-                <span style="color: var(--text-secondary);">{d_count} files</span>
+            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.8125rem; font-family: var(--font-mono); margin-bottom: 0.25rem;">
+                <span style="color: var(--text); font-weight: 600;">{d_name}</span>
+                <span style="color: var(--text-muted);">{d_count} files</span>
             </div>
             <div style="height: 6px; background: var(--surface-2, #1e293b); border-radius: 3px; overflow: hidden; border: 1px solid var(--hairline-soft);">
-                <div style="width: {pct_val}%; height: 100%; background: var(--teal); border-radius: 3px;"></div>
+                <div style="width: {pct_val}%; height: 100%; background: var(--success); border-radius: 3px;"></div>
             </div>
         </div>
         """
@@ -5269,13 +5263,13 @@ def report_view(
     else:
         conf_summary = confidence_summary([])
 
-    overall_conf_color = "var(--teal)" if conf_summary.high_pct >= 50 else ("var(--amber)" if conf_summary.high_pct + conf_summary.medium_pct >= 50 else "var(--brass)")
+    overall_conf_color = "var(--success)" if conf_summary.high_pct >= 50 else ("var(--amber)" if conf_summary.high_pct + conf_summary.medium_pct >= 50 else "var(--accent)")
 
     overview_section_html = f"""
     <div class="stratum-card" id="section-overview" style="margin-bottom: 2rem;">
         <div class="card-header">
             <div>
-                <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--brass); text-transform: uppercase; letter-spacing: 0.05em;">
+                <div style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--accent); ">
                     Section 01 // Codebase Overview
                 </div>
                 <h2 style="font-size: 1.45rem; font-weight: 500; margin-top: 0.15rem;">Codebase Architecture Overview</h2>
@@ -5287,29 +5281,29 @@ def report_view(
         </div>
 
         <!-- Step 1: TL;DR Block (Top of Overview) -->
-        <div class="stratum-card tldr-block" id="overview-tldr-block" style="background: var(--panel-raised); border: 1px solid var(--hairline); border-radius: 6px; padding: 1.25rem 1.5rem; margin-top: 1.25rem; margin-bottom: 0.5rem;">
+        <div class="stratum-card tldr-block" id="overview-tldr-block" style="background: var(--panel-raised); border: 1px solid var(--border); border-radius: 6px; padding: 1.25rem 1.5rem; margin-top: 1.25rem; margin-bottom: 0.5rem;">
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.85rem; border-bottom: 1px solid var(--hairline-soft); padding-bottom: 0.5rem;">
-                <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; font-weight: 600; color: var(--brass); text-transform: uppercase; letter-spacing: 0.05em;">Project Summary // TL;DR</span>
-                <span class="chip" style="font-size: 0.65rem;">ANALYSIS DATA ONLY</span>
+                <span style="font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600; color: var(--accent); ">Project Summary // TL;DR</span>
+                <span class="chip" style="font-size: 0.8125rem;">ANALYSIS DATA ONLY</span>
             </div>
             <div style="display: flex; flex-direction: column; gap: 0.85rem;">
                 <div>
-                    <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.7rem; font-weight: 600; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.25rem;">What this project is</div>
-                    <div style="font-size: 0.9rem; color: var(--text-primary); line-height: 1.5;" id="tldr-what-this-is">{what_this_is_safe}</div>
+                    <div style="font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.25rem;">What this project is</div>
+                    <div style="font-size: 0.9rem; color: var(--text); line-height: 1.5;" id="tldr-what-this-is">{what_this_is_safe}</div>
                 </div>
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; border-top: 1px solid var(--hairline-soft); padding-top: 0.85rem;">
                     <div>
-                        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.7rem; font-weight: 600; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.25rem;">Main language</div>
-                        <div style="font-size: 0.9rem; color: var(--brass); font-weight: 600;" id="tldr-main-language">{main_lang_safe}</div>
+                        <div style="font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.25rem;">Main language</div>
+                        <div style="font-size: 0.9rem; color: var(--accent); font-weight: 600;" id="tldr-main-language">{main_lang_safe}</div>
                     </div>
                     <div>
-                        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.7rem; font-weight: 600; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.25rem;">Start here</div>
+                        <div style="font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.25rem;">Start here</div>
                         <div style="display: flex; flex-direction: column; gap: 0.25rem;" id="tldr-start-here">
                             {start_here_html}
                         </div>
                     </div>
                     <div>
-                        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.7rem; font-weight: 600; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.25rem;">Read these 3 files first</div>
+                        <div style="font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.25rem;">Read these 3 files first</div>
                         <div style="display: flex; flex-direction: column; gap: 0.25rem;" id="tldr-read-first">
                             {read_first_html}
                         </div>
@@ -5319,7 +5313,7 @@ def report_view(
         </div>
 
         <!-- Step 4: One-line note under TL;DR -->
-        <div class="overview-order-note" style="margin-top: 0.5rem; margin-bottom: 1.25rem; font-size: 0.825rem; color: var(--text-secondary); line-height: 1.4;">
+        <div class="overview-order-note" style="margin-top: 0.5rem; margin-bottom: 1.25rem; font-size: 0.825rem; color: var(--text-muted); line-height: 1.4;">
             <span>Order is estimated from imports.</span>
             <span style="display: none;">Verified Architecture Summary &bull; STANDALONE FILES: {isolated_count} &bull; CIRCULAR DEPENDENCIES: {cyclic_count}</span>
         </div>
@@ -5328,21 +5322,21 @@ def report_view(
         <div class="kpi-grid overview-stat-cards">
             <div class="kpi-card">
                 <div class="kpi-label">Files analyzed</div>
-                <div class="kpi-value" style="color: var(--text-primary);">{total_files} files</div>
-                <div class="kpi-sub" style="font-size: 0.75rem; color: var(--text-tertiary);">{code_count} code, {docs_count} docs</div>
+                <div class="kpi-value" style="color: var(--text);">{total_files} files</div>
+                <div class="kpi-sub" style="font-size: 0.8125rem; color: var(--text-muted);">{code_count} code, {docs_count} docs</div>
             </div>
             <div class="kpi-card">
                 <div class="kpi-label">Entry points</div>
                 <div class="kpi-value" style="color: var(--amber);">{len(app_entry_points)}</div>
-                <div class="kpi-sub" style="font-size: 0.75rem; color: var(--text-tertiary);">
+                <div class="kpi-sub" style="font-size: 0.8125rem; color: var(--text-muted);">
                     {len(app_entry_points)} application targets
                     <span style="display: none;">{len(app_entry_points)} App &bull; {len(test_entry_points)} Test/Tools</span>
                 </div>
             </div>
             <div class="kpi-card">
                 <div class="kpi-label">Modules</div>
-                <div class="kpi-value" style="color: var(--brass);">{len(domain_dist)}</div>
-                <div class="kpi-sub" style="font-size: 0.75rem; color: var(--text-tertiary);">{len(domain_dist)} subsystem domains</div>
+                <div class="kpi-value" style="color: var(--accent);">{len(domain_dist)}</div>
+                <div class="kpi-sub" style="font-size: 0.8125rem; color: var(--text-muted);">{len(domain_dist)} subsystem domains</div>
             </div>
             <div class="kpi-card" data-metric="CONFIDENCE SCORE">
                 <div class="kpi-label">Confidence</div>
@@ -5357,12 +5351,12 @@ def report_view(
         <!-- Two Column Breakdown: Entry Points Tray & Domain Distribution -->
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.25rem; margin-top: 1.25rem;">
             <!-- Entry Points Tray -->
-            <div id="overview-entry-points-list" style="background: var(--panel); border: 1px solid var(--hairline); border-radius: 4px; padding: 1.15rem;">
+            <div id="overview-entry-points-list" style="background: var(--surface-2); border: 1px solid var(--border); border-radius: 4px; padding: 1.15rem;">
                 <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
-                    <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">
+                    <span style="font-family: var(--font-mono); font-size: 0.8125rem; font-weight: 600; color: var(--text-muted); ">
                         ENTRY POINTS ({len(app_entry_points)})
                     </span>
-                    <span class="chip" style="font-size: 0.625rem;">APPLICATION TARGETS</span>
+                    <span class="chip" style="font-size: 0.8125rem;">APPLICATION TARGETS</span>
                 </div>
                 <div style="display: flex; flex-direction: column; gap: 0.35rem;">
                     {app_chips_html}
@@ -5371,12 +5365,12 @@ def report_view(
             </div>
 
             <!-- Domain Distribution -->
-            <div style="background: var(--panel); border: 1px solid var(--hairline); border-radius: 4px; padding: 1.15rem;">
+            <div style="background: var(--surface-2); border: 1px solid var(--border); border-radius: 4px; padding: 1.15rem;">
                 <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
-                    <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">
+                    <span style="font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600; color: var(--text-muted); ">
                         Subsystems ({len(domain_dist)})
                     </span>
-                    <span class="chip" style="font-size: 0.625rem;">DOMAINS</span>
+                    <span class="chip" style="font-size: 0.8125rem;">DOMAINS</span>
                 </div>
                 <div class="{subsystem_container_cls}">
                     {domain_bars_html}
@@ -5385,47 +5379,47 @@ def report_view(
         </div>
 
         <!-- Step 6: Confidence Calibration Breakdown -->
-        <div class="stratum-card" id="confidence-breakdown-card" style="background: var(--panel); border: 1px solid var(--hairline); border-radius: 4px; padding: 1.15rem; margin-top: 1.25rem;">
+        <div class="stratum-card" id="confidence-breakdown-card" style="background: var(--surface-2); border: 1px solid var(--border); border-radius: 4px; padding: 1.15rem; margin-top: 1.25rem;">
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
-                <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">
+                <span style="font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600; color: var(--text-muted); ">
                     Confidence Calibration
                 </span>
-                <span class="chip" style="font-size: 0.625rem;">{conf_summary.total_files} SCORED FILES</span>
+                <span class="chip" style="font-size: 0.8125rem;">{conf_summary.total_files} SCORED FILES</span>
             </div>
 
             <!-- One Stacked Horizontal Bar -->
             <div class="confidence-stacked-bar" id="confidence-horizontal-bar" style="display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: var(--surface-2, #1e293b); margin: 0.85rem 0; border: 1px solid var(--hairline-soft);">
-                <div style="width: {conf_summary.high_pct}%; background: var(--teal); height: 100%; transition: width 0.3s ease;"></div>
+                <div style="width: {conf_summary.high_pct}%; background: var(--success); height: 100%; transition: width 0.3s ease;"></div>
                 <div style="width: {conf_summary.medium_pct}%; background: var(--amber); height: 100%; transition: width 0.3s ease;"></div>
                 <div style="width: {conf_summary.low_pct}%; background: #64748b; height: 100%; transition: width 0.3s ease;"></div>
             </div>
 
             <!-- Three Plain Legend Lines with Counts -->
-            <div style="display: flex; flex-direction: column; gap: 0.4rem; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; margin: 0.85rem 0;">
+            <div style="display: flex; flex-direction: column; gap: 0.4rem; font-family: var(--font-ui); font-size: 0.8125rem; margin: 0.85rem 0;">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <span style="display: flex; align-items: center; gap: 0.45rem; color: var(--text-primary);">
-                        <span style="display: inline-block; width: 8px; height: 8px; border-radius: 2px; background: var(--teal);"></span>
+                    <span style="display: flex; align-items: center; gap: 0.45rem; color: var(--text);">
+                        <span style="display: inline-block; width: 8px; height: 8px; border-radius: 2px; background: var(--success);"></span>
                         High
                     </span>
-                    <span style="color: var(--text-secondary);">{conf_summary.high_count} files ({conf_summary.high_pct}%)</span>
+                    <span style="color: var(--text-muted);">{conf_summary.high_count} files ({conf_summary.high_pct}%)</span>
                 </div>
                 <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <span style="display: flex; align-items: center; gap: 0.45rem; color: var(--text-primary);">
+                    <span style="display: flex; align-items: center; gap: 0.45rem; color: var(--text);">
                         <span style="display: inline-block; width: 8px; height: 8px; border-radius: 2px; background: var(--amber);"></span>
                         Medium
                     </span>
-                    <span style="color: var(--text-secondary);">{conf_summary.medium_count} files ({conf_summary.medium_pct}%)</span>
+                    <span style="color: var(--text-muted);">{conf_summary.medium_count} files ({conf_summary.medium_pct}%)</span>
                 </div>
                 <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <span style="display: flex; align-items: center; gap: 0.45rem; color: var(--text-primary);">
+                    <span style="display: flex; align-items: center; gap: 0.45rem; color: var(--text);">
                         <span style="display: inline-block; width: 8px; height: 8px; border-radius: 2px; background: #64748b;"></span>
                         Low
                     </span>
-                    <span style="color: var(--text-secondary);">{conf_summary.low_count} files ({conf_summary.low_pct}%)</span>
+                    <span style="color: var(--text-muted);">{conf_summary.low_count} files ({conf_summary.low_pct}%)</span>
                 </div>
             </div>
 
-            <p style="font-size: 0.8125rem; color: var(--text-secondary); margin-top: 0.75rem; margin-bottom: 0; line-height: 1.45;">
+            <p style="font-size: 0.8125rem; color: var(--text-muted); margin-top: 0.75rem; margin-bottom: 0; line-height: 1.45;">
                 High means the file is imported by many others and has clear structure.
             </p>
         </div>
@@ -5471,9 +5465,9 @@ def report_view(
             # Column header
             svg_columns_html += f"""
             <g class="dag-column" transform="translate({col_x}, 0)">
-                <rect x="0" y="16" width="{col_width}" height="28" rx="4" fill="var(--panel-raised)" stroke="var(--hairline)" />
-                <text x="12" y="34" fill="var(--brass)" font-family="'IBM Plex Mono', monospace" font-size="11" font-weight="600">TIER {t_val}</text>
-                <text x="{col_width - 12}" y="34" fill="var(--text-tertiary)" font-family="'IBM Plex Mono', monospace" font-size="10" text-anchor="end">{len(tier_nodes)} nodes</text>
+                <rect x="0" y="16" width="{col_width}" height="28" rx="4" fill="var(--panel-raised)" stroke="var(--border)" />
+                <text x="12" y="34" fill="var(--accent)" font-family="var(--font-mono)" font-size="11" font-weight="600">TIER {t_val}</text>
+                <text x="{col_width - 12}" y="34" fill="var(--text-muted)" font-family="var(--font-mono)" font-size="10" text-anchor="end">{len(tier_nodes)} nodes</text>
                 <line x1="{col_width // 2}" y1="48" x2="{col_width // 2}" y2="{svg_height - 20}" stroke="var(--hairline-soft)" stroke-dasharray="3,3" opacity="0.4" />
             </g>
             """
@@ -5507,7 +5501,7 @@ def report_view(
                     "examples": ("#84CC16", "Examples & tutorials"),
                     "uncategorized": ("#9CA3AF", "General modules"),
                 }
-                node_color = node.get("color") or domain_color_map.get(raw_domain.lower(), ("var(--brass)", ""))[0]
+                node_color = node.get("color") or domain_color_map.get(raw_domain.lower(), ("var(--accent)", ""))[0]
 
                 # Fix 2: Show file name only (not full path), truncated with ellipsis inside the node
                 file_name = raw_path.split("/")[-1] if raw_path else raw_label
@@ -5529,18 +5523,18 @@ def report_view(
                 svg_nodes_html += f"""
                 <g class="dag-node" id="dag-node-{safe_node_id}" data-node-id="{sanitize_text(node_id)}" data-tier="{t_val}" data-domain="{node_domain}" title="{full_node_path}" onclick="selectDagNode(this.dataset.nodeId)" onmouseenter="hoverDagNode(this.dataset.nodeId)" onmouseleave="unhoverDagNode()" transform="translate({col_x}, {node_y})" style="cursor: pointer; transition: all 150ms ease;">
                     <title>{full_node_path}</title>
-                    <rect width="{col_width}" height="{node_h}" rx="6" fill="var(--panel)" stroke="var(--hairline)" class="dag-node-box" />
+                    <rect width="{col_width}" height="{node_h}" rx="6" fill="var(--surface-2)" stroke="var(--border)" class="dag-node-box" />
                     <!-- Confidence Indicator Dot -->
                     <circle cx="16" cy="20" r="4" fill="{conf_color}" />
                     <!-- Truncated file name only -->
                     <g clip-path="url(#dag-node-text-clip)">
-                        <text x="28" y="24" fill="var(--text-primary)" font-family="'IBM Plex Mono', monospace" font-size="11.5" font-weight="600">{sanitize_text(trunc_fname)}</text>
+                        <text x="28" y="24" fill="var(--text)" font-family="var(--font-mono)" font-size="11.5" font-weight="600">{sanitize_text(trunc_fname)}</text>
                     </g>
                     <!-- Domain Badge -->
                     <rect x="{col_width - 62}" y="11" width="50" height="17" rx="3" fill="var(--panel-raised)" stroke="{node_color}" stroke-opacity="0.4" />
-                    <text x="{col_width - 37}" y="23" fill="{node_color}" font-family="'IBM Plex Mono', monospace" font-size="9" font-weight="600" text-anchor="middle">{node_domain}</text>
+                    <text x="{col_width - 37}" y="23" fill="{node_color}" font-family="var(--font-mono)" font-size="9" font-weight="600" text-anchor="middle">{node_domain}</text>
                     <!-- Invariant / tier metadata -->
-                    <text x="16" y="44" fill="var(--text-tertiary)" font-family="'IBM Plex Mono', monospace" font-size="9.5" title="{full_node_path}"><title>{full_node_path}</title>{node_path}</text>
+                    <text x="16" y="44" fill="var(--text-muted)" font-family="var(--font-mono)" font-size="9.5" title="{full_node_path}"><title>{full_node_path}</title>{node_path}</text>
                 </g>
                 """
 
@@ -5589,13 +5583,13 @@ def report_view(
                 <td>
                     <div style="display: flex; align-items: center; gap: 0.5rem;">
                         <span class="chip-dot {dot_cls}"></span>
-                        <span class="mono" style="font-weight: 600; color: var(--text-primary);">{n_label}</span>
+                        <span class="mono" style="font-weight: 600; color: var(--text);">{n_label}</span>
                     </div>
-                    <div class="mono" style="font-size: 0.6875rem; color: var(--text-tertiary);">{n_path}</div>
+                    <div class="mono" style="font-size: 0.8125rem; color: var(--text-muted);">{n_path}</div>
                 </td>
                 <td><span class="tag">Tier {n_tier}</span></td>
                 <td><span class="chip">{n_domain}</span></td>
-                <td class="mono" style="font-size: 0.75rem; color: var(--text-secondary);">{sanitize_text(n_exports_str)}</td>
+                <td class="mono" style="font-size: 0.8125rem; color: var(--text-muted);">{sanitize_text(n_exports_str)}</td>
             </tr>
             """
 
@@ -5636,8 +5630,8 @@ def report_view(
             legend_domain_chips += f"""
             <div class="legend-chip" title="{dom_tag}: {safe_desc}" style="display: flex; align-items: center; gap: 0.4rem; padding: 0.25rem 0.4rem; background: var(--panel-raised); border-radius: 3px;">
                 <span style="display: inline-block; width: 8px; height: 8px; border-radius: 2px; background: {dom_color}; flex-shrink: 0;"></span>
-                <span style="font-weight: 600; color: var(--text-primary); font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem;">{dom_tag}</span>
-                <span style="color: var(--text-tertiary); font-family: 'IBM Plex Sans', sans-serif; font-size: 0.72rem;">= {safe_desc}</span>
+                <span style="font-weight: 600; color: var(--text); font-family: var(--font-ui); font-size: 0.8125rem;">{dom_tag}</span>
+                <span style="color: var(--text-muted); font-family: 'IBM Plex Sans', sans-serif; font-size: 0.8125rem;">= {safe_desc}</span>
             </div>
             """
 
@@ -5650,8 +5644,8 @@ def report_view(
                 legend_confidence_chips += f"""
                 <div class="legend-chip" title="{conf_lbl} Confidence: {safe_desc}" style="display: flex; align-items: center; gap: 0.4rem; padding: 0.25rem 0.4rem; background: var(--panel-raised); border-radius: 3px;">
                     <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: {conf_color}; flex-shrink: 0;"></span>
-                    <span style="font-weight: 600; color: var(--text-primary); font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem;">{conf_lbl}</span>
-                    <span style="color: var(--text-tertiary); font-family: 'IBM Plex Sans', sans-serif; font-size: 0.72rem;">= {safe_desc}</span>
+                    <span style="font-weight: 600; color: var(--text); font-family: var(--font-ui); font-size: 0.8125rem;">{conf_lbl}</span>
+                    <span style="color: var(--text-muted); font-family: 'IBM Plex Sans', sans-serif; font-size: 0.8125rem;">= {safe_desc}</span>
                 </div>
                 """
 
@@ -5662,7 +5656,7 @@ def report_view(
         <div class="stratum-card dag-graph-wrapper" id="section-graph" style="margin-bottom: 2rem;">
             <div class="card-header">
                 <div>
-                    <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--brass); text-transform: uppercase; letter-spacing: 0.05em;">
+                    <div style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--accent); ">
                         Section 02 // Dependency Roadmap
                     </div>
                     <h2 style="font-size: 1.45rem; font-weight: 500; margin-top: 0.15rem;">Architecture &amp; Dependency Graph</h2>
@@ -5673,13 +5667,13 @@ def report_view(
                 </div>
             </div>
 
-            <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1rem; line-height: 1.5;">
+            <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1rem; line-height: 1.5;">
                 Built from analyzing the code&#39;s structure and how files import each other. Each box is a file, arranged left-to-right from foundational code to code that depends on it.
             </p>
 
             <!-- Fix 5: Node count explainer with real numbers & toggle -->
             <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
-                <div id="dag-count-explainer" style="font-family: 'IBM Plex Mono', monospace; font-size: 0.8125rem; color: var(--text-secondary);">
+                <div id="dag-count-explainer" style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--text-muted);">
                     Showing the {node_count} most connected files of {real_total_files}.
                 </div>
                 <button type="button" class="btn btn-sm btn-secondary" id="toggle-all-files-btn" onclick="toggleAllFiles()">
@@ -5688,17 +5682,17 @@ def report_view(
             </div>
 
             <!-- Graph Interactive Toolbar -->
-            <div style="position: relative; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 0.85rem; padding: 0.65rem 0.85rem; background: var(--panel-raised); border: 1px solid var(--hairline); border-radius: 4px;">
+            <div style="position: relative; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 0.85rem; padding: 0.65rem 0.85rem; background: var(--panel-raised); border: 1px solid var(--border); border-radius: 4px;">
                 <div style="display: flex; align-items: center; gap: 0.5rem; flex: 1; min-width: 200px;">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--text-tertiary);">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--text-muted);">
                         <circle cx="11" cy="11" r="8"></circle>
                         <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                     </svg>
-                    <input type="text" id="dag-search-input" placeholder="Search node or file..." oninput="filterDagNodes(this.value)" style="background: transparent; border: none; color: var(--text-primary); font-family: 'IBM Plex Sans', sans-serif; font-size: 0.8125rem; outline: none; width: 100%;" />
+                    <input type="text" id="dag-search-input" placeholder="Search node or file..." oninput="filterDagNodes(this.value)" style="background: transparent; border: none; color: var(--text); font-family: 'IBM Plex Sans', sans-serif; font-size: 0.8125rem; outline: none; width: 100%;" />
                 </div>
                 <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
                     <!-- Fix 4: Hint "Scroll to zoom, drag to move" and "Fit" button -->
-                    <span class="dag-hint" style="font-size: 0.75rem; color: var(--text-tertiary); margin-right: 0.25rem;">Scroll to zoom, drag to move</span>
+                    <span class="dag-hint" style="font-size: 0.8125rem; color: var(--text-muted); margin-right: 0.25rem;">Scroll to zoom, drag to move</span>
                     <button type="button" class="btn btn-sm btn-secondary" onclick="fitDagGraph()" id="dag-fit-btn" title="Fit to View">
                         Fit
                     </button>
@@ -5720,20 +5714,20 @@ def report_view(
                 </div>
 
                 <!-- Fix 1: Legend collapsed by default into small popup panel -->
-                <div id="dag-legend-panel" style="display: none; position: absolute; right: 0.85rem; top: calc(100% + 6px); z-index: 60; width: 320px; max-width: calc(100vw - 2rem); padding: 0.85rem; background: var(--panel); border: 1px solid var(--hairline-strong); border-radius: 6px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); flex-direction: column; gap: 0.65rem; font-size: 0.75rem;">
+                <div id="dag-legend-panel" style="display: none; position: absolute; right: 0.85rem; top: calc(100% + 6px); z-index: 60; width: 320px; max-width: calc(100vw - 2rem); padding: 0.85rem; background: var(--surface-2); border: 1px solid var(--hairline-strong); border-radius: 6px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); flex-direction: column; gap: 0.65rem; font-size: 0.8125rem;">
                     <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--hairline-soft); padding-bottom: 0.4rem;">
-                        <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.7rem; font-weight: 600; color: var(--text-tertiary); text-transform: uppercase;">Graph Legend</span>
-                        <button type="button" aria-label="Close graph legend" onclick="toggleDagLegend()" style="background: none; border: none; color: var(--text-tertiary); cursor: pointer; font-size: 0.85rem; padding: 0 4px;">✕</button>
+                        <span style="font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600; color: var(--text-muted); ">Graph Legend</span>
+                        <button type="button" aria-label="Close graph legend" onclick="toggleDagLegend()" style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 0.85rem; padding: 0 4px;">✕</button>
                     </div>
                     <div id="dag-legend-content" style="display: flex; flex-direction: column; gap: 0.5rem;">
                         <div>
-                            <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.65rem; font-weight: 600; color: var(--text-tertiary); text-transform: uppercase; margin-bottom: 0.35rem;">Node Domains</div>
+                            <div style="font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.35rem;">Node Domains</div>
                             <div style="display: flex; flex-direction: column; gap: 0.3rem;">
                                 {legend_domain_chips}
                             </div>
                         </div>
                         <div style="border-top: 1px solid var(--hairline-soft); padding-top: 0.45rem;">
-                            <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.65rem; font-weight: 600; color: var(--text-tertiary); text-transform: uppercase; margin-bottom: 0.35rem;">Confidence</div>
+                            <div style="font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.35rem;">Confidence</div>
                             <div style="display: flex; flex-direction: column; gap: 0.3rem;">
                                 {legend_confidence_chips}
                             </div>
@@ -5743,7 +5737,7 @@ def report_view(
             </div>
 
             <!-- Fix 9: Visual Canvas & Docked Side Panel Layout -->
-            <div id="dag-canvas-layout" style="display: flex; position: relative; border: 1px solid var(--hairline); border-radius: 4px; overflow: hidden; background: var(--ink); min-height: 480px; max-height: 560px;">
+            <div id="dag-canvas-layout" style="display: flex; position: relative; border: 1px solid var(--border); border-radius: 4px; overflow: hidden; background: var(--ink); min-height: 480px; max-height: 560px;">
                 <!-- Visual SVG DAG Canvas Container (Fix 4: pan & zoom) -->
                 <div id="dag-visual-container" style="flex: 1 1 auto; overflow: hidden; position: relative; cursor: grab; user-select: none;">
                     <svg id="dag-svg" width="100%" height="100%" viewBox="0 0 {svg_width} {svg_height}" style="display: block; width: 100%; height: 100%;">
@@ -5753,10 +5747,10 @@ def report_view(
                                 <rect x="0" y="0" width="{col_width - 66}" height="{node_h}" rx="6" />
                             </clipPath>
                             <marker id="dag-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                                <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="var(--brass)" opacity="0.6" />
+                                <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="var(--accent)" opacity="0.6" />
                             </marker>
                             <marker id="dag-arrow-active" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-                                <path d="M 0 1 L 9 5 L 0 9 z" fill="var(--teal)" />
+                                <path d="M 0 1 L 9 5 L 0 9 z" fill="var(--success)" />
                             </marker>
                         </defs>
                         <g id="dag-panzoom-layer" transform="translate(0, 0) scale(1)">
@@ -5775,24 +5769,24 @@ def report_view(
                 </div>
 
                 <!-- Fix 9: Interactive Node Side Panel on Node Click -->
-                <aside id="dag-node-inspector" class="dag-side-panel" style="display: none; width: 320px; max-width: 100%; flex-shrink: 0; background: var(--panel-raised); border-left: 1px solid var(--hairline); padding: 1.15rem; overflow-y: auto; z-index: 20; box-sizing: border-box; flex-direction: column; gap: 0.85rem;">
+                <aside id="dag-node-inspector" class="dag-side-panel" style="display: none; width: 320px; max-width: 100%; flex-shrink: 0; background: var(--panel-raised); border-left: 1px solid var(--border); padding: 1.15rem; overflow-y: auto; z-index: 20; box-sizing: border-box; flex-direction: column; gap: 0.85rem;">
                     <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem; border-bottom: 1px solid var(--hairline-soft); padding-bottom: 0.75rem; margin-bottom: 0.85rem;">
                         <div>
                             <div style="display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.25rem;">
                                 <span id="inspect-dot" class="chip-dot" style="background: #10B981;"></span>
-                                <span id="inspect-label" class="mono" style="font-weight: 600; font-size: 0.95rem; color: var(--text-primary); word-break: break-all;">Node Name</span>
+                                <span id="inspect-label" class="mono" style="font-weight: 600; font-size: 0.95rem; color: var(--text); word-break: break-all;">Node Name</span>
                             </div>
                             <div style="display: flex; gap: 0.35rem; align-items: center; margin-top: 0.25rem;">
                                 <span id="inspect-tier" class="tag">Tier 0</span>
                                 <span id="inspect-domain" class="chip">CORE</span>
                             </div>
                         </div>
-                        <button type="button" aria-label="Close side panel" class="btn btn-sm btn-secondary" onclick="closeDagInspector()" title="Close side panel" style="padding: 2px 8px; font-size: 0.8rem; line-height: 1;">✕</button>
+                        <button type="button" aria-label="Close side panel" class="btn btn-sm btn-secondary" onclick="closeDagInspector()" title="Close side panel" style="padding: 2px 8px; font-size: 0.8125rem; line-height: 1;">✕</button>
                     </div>
 
                     <div style="margin-bottom: 0.85rem;">
-                        <div style="font-size: 0.6875rem; font-family: 'IBM Plex Mono', monospace; color: var(--text-tertiary); text-transform: uppercase; margin-bottom: 0.25rem;">File Path</div>
-                        <div id="inspect-path" class="mono" style="font-size: 0.75rem; color: var(--text-primary); background: var(--panel); padding: 0.5rem; border-radius: 3px; border: 1px solid var(--hairline-soft); word-break: break-all;">src/path</div>
+                        <div style="font-size: 0.8125rem; font-family: var(--font-ui); color: var(--text-muted); margin-bottom: 0.25rem;">File Path</div>
+                        <div id="inspect-path" class="mono" style="font-size: 0.8125rem; color: var(--text); background: var(--surface-2); padding: 0.5rem; border-radius: 3px; border: 1px solid var(--hairline-soft); word-break: break-all;">src/path</div>
                     </div>
 
                     <div style="margin-bottom: 0.85rem;">
@@ -5802,24 +5796,24 @@ def report_view(
                     </div>
 
                     <div style="margin-bottom: 0.85rem;">
-                        <div style="font-size: 0.6875rem; font-family: 'IBM Plex Mono', monospace; color: var(--text-tertiary); text-transform: uppercase; margin-bottom: 0.25rem;" id="inspect-imported-by-title">Imported By (0)</div>
-                        <div id="inspect-imported-by" class="mono" style="font-size: 0.75rem; color: var(--text-secondary); background: var(--panel); padding: 0.5rem; border-radius: 3px; border: 1px solid var(--hairline-soft); max-height: 120px; overflow-y: auto;">None (Entry Point)</div>
+                        <div style="font-size: 0.8125rem; font-family: var(--font-ui); color: var(--text-muted); margin-bottom: 0.25rem;" id="inspect-imported-by-title">Imported By (0)</div>
+                        <div id="inspect-imported-by" class="mono" style="font-size: 0.8125rem; color: var(--text-muted); background: var(--surface-2); padding: 0.5rem; border-radius: 3px; border: 1px solid var(--hairline-soft); max-height: 120px; overflow-y: auto;">None (Entry Point)</div>
                     </div>
 
                     <div style="margin-bottom: 0.85rem;">
-                        <div style="font-size: 0.6875rem; font-family: 'IBM Plex Mono', monospace; color: var(--text-tertiary); text-transform: uppercase; margin-bottom: 0.25rem;" id="inspect-imports-title">Imports (0)</div>
-                        <div id="inspect-imports" class="mono" style="font-size: 0.75rem; color: var(--text-secondary); background: var(--panel); padding: 0.5rem; border-radius: 3px; border: 1px solid var(--hairline-soft); max-height: 120px; overflow-y: auto;">None (Leaf Node)</div>
+                        <div style="font-size: 0.8125rem; font-family: var(--font-ui); color: var(--text-muted); margin-bottom: 0.25rem;" id="inspect-imports-title">Imports (0)</div>
+                        <div id="inspect-imports" class="mono" style="font-size: 0.8125rem; color: var(--text-muted); background: var(--surface-2); padding: 0.5rem; border-radius: 3px; border: 1px solid var(--hairline-soft); max-height: 120px; overflow-y: auto;">None (Leaf Node)</div>
                     </div>
 
                     <div>
-                        <div style="font-size: 0.6875rem; font-family: 'IBM Plex Mono', monospace; color: var(--text-tertiary); text-transform: uppercase; margin-bottom: 0.25rem;">Exported Symbols</div>
-                        <div id="inspect-exports" class="mono" style="font-size: 0.75rem; color: var(--text-secondary); background: var(--panel); padding: 0.5rem; border-radius: 3px; border: 1px solid var(--hairline-soft); max-height: 100px; overflow-y: auto;">None</div>
+                        <div style="font-size: 0.8125rem; font-family: var(--font-ui); color: var(--text-muted); margin-bottom: 0.25rem;">Exported Symbols</div>
+                        <div id="inspect-exports" class="mono" style="font-size: 0.8125rem; color: var(--text-muted); background: var(--surface-2); padding: 0.5rem; border-radius: 3px; border: 1px solid var(--hairline-soft); max-height: 100px; overflow-y: auto;">None</div>
                     </div>
                 </aside>
             </div>
 
             <!-- Tabular Node Catalog (List view) -->
-            <div id="dag-table-container" style="display: none; background: var(--panel); border: 1px solid var(--hairline); border-radius: 4px; overflow-x: auto; max-height: 480px;">
+            <div id="dag-table-container" style="display: none; background: var(--surface-2); border: 1px solid var(--border); border-radius: 4px; overflow-x: auto; max-height: 480px;">
                 <table style="width: 100%; border-collapse: collapse;">
                     <thead>
                         <tr>
@@ -5910,7 +5904,7 @@ def report_view(
 
             if att_status == "structurally_verified":
                 status_text = "Done"
-                status_color = "var(--teal)"
+                status_color = "var(--success)"
                 status_icon_svg = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>'
             elif att_status in ("attempting", "in_progress"):
                 status_text = "In progress"
@@ -5918,7 +5912,7 @@ def report_view(
                 status_icon_svg = '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="5"></circle></svg>'
             else:
                 status_text = "Not started"
-                status_color = "var(--text-tertiary)"
+                status_color = "var(--text-muted)"
                 status_icon_svg = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="6"></circle></svg>'
 
             return f"""
@@ -5942,7 +5936,7 @@ def report_view(
         rail_test_section_html = ""
         if test_milestones:
             rail_test_section_html = f"""
-            <div class="rail-group-title" style="margin-top: 1rem; margin-bottom: 0.4rem; font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--brass); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">Test files</div>
+            <div class="rail-group-title" style="margin-top: 1rem; margin-bottom: 0.4rem; font-family: var(--font-ui); font-size: 0.8125rem; color: var(--accent); font-weight: 700; ">Test files</div>
             <div class="rail-list rail-test-list">
                 {rail_test_html}
             </div>
@@ -5950,7 +5944,7 @@ def report_view(
 
         progress_rail_html = f"""
         <div class="milestone-progress-rail" id="milestone-progress-rail">
-            <div class="rail-group-title" style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--brass); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; font-weight: 700;">
+            <div class="rail-group-title" style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--accent); margin-bottom: 0.5rem; font-weight: 700;">
                 Core Milestones
             </div>
             <div class="rail-list rail-core-list">
@@ -6126,7 +6120,7 @@ def report_view(
                         grading_method=att_grad_method,
                     )
                 except Exception as e:
-                    diff_rendered_html = f'<div style="color: var(--crimson); font-family: \'IBM Plex Mono\', monospace; font-size: 0.75rem;">Verification load error: {html.escape(str(e))}</div>'
+                    diff_rendered_html = f'<div style="color: var(--crimson); font-family: var(--font-ui); font-size: 0.8125rem;">Verification load error: {html.escape(str(e))}</div>'
 
             last_run_val = attempt.get("last_run_at") if isinstance(attempt, dict) else getattr(attempt, "last_run_at", None)
             console_initial_display = "display: block;" if (attempt and last_run_val is not None) else "display: none;"
@@ -6136,8 +6130,8 @@ def report_view(
             if m_exports:
                 symbols_rendered = ", ".join(m_exports[:10])
                 symbols_html = f"""
-                <div style="margin-top: 0.65rem; font-size: 0.75rem; font-family: 'IBM Plex Mono', monospace; color: var(--text-secondary);">
-                    <span style="color: var(--text-tertiary); font-weight: 600;">KEY SYMBOLS:</span> {sanitize_text(symbols_rendered)}
+                <div style="margin-top: 0.65rem; font-size: 0.8125rem; font-family: var(--font-ui); color: var(--text-muted);">
+                    <span style="color: var(--text-muted); font-weight: 600;">KEY SYMBOLS:</span> {sanitize_text(symbols_rendered)}
                 </div>
                 """
 
@@ -6145,19 +6139,19 @@ def report_view(
             if m_exports:
                 for exp_sym in m_exports:
                     safe_sym = sanitize_text(exp_sym)
-                    expected_pills_html += f"""<span class="expected-sym-chip" style="display: inline-flex; align-items: center; gap: 0.25rem; background: var(--panel-raised); border: 1px solid var(--hairline); padding: 0.15rem 0.45rem; border-radius: 3px; font-family: 'IBM Plex Mono', monospace; font-size: 0.7rem; color: var(--text-secondary);">&bull; {safe_sym}</span> """
+                    expected_pills_html += f"""<span class="expected-sym-chip" style="display: inline-flex; align-items: center; gap: 0.25rem; background: var(--panel-raised); border: 1px solid var(--border); padding: 0.15rem 0.45rem; border-radius: 3px; font-family: var(--font-mono); font-size: 0.8125rem; color: var(--text-muted);">&bull; {safe_sym}</span> """
             else:
-                expected_pills_html = '<span style="font-size: 0.75rem; color: var(--text-tertiary); font-family: \'IBM Plex Mono\', monospace;">Any milestone module functions/classes</span>'
+                expected_pills_html = '<span style="font-size: 0.8125rem; color: var(--text-muted); font-family: var(--font-mono);">Any milestone module functions/classes</span>'
 
             citations_html = ""
             if m_citations:
-                c_items = "".join(f'<div style="margin-bottom: 0.35rem; color: var(--text-secondary);">&bull; {sanitize_text(c)}</div>' for c in m_citations)
+                c_items = "".join(f'<div style="margin-bottom: 0.35rem; color: var(--text-muted);">&bull; {sanitize_text(c)}</div>' for c in m_citations)
                 citations_html = f"""
                 <details style="margin-top: 0.65rem;">
-                    <summary style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--text-tertiary); cursor: pointer; user-select: none;">
+                    <summary style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--text-muted); cursor: pointer; user-select: none;">
                         <span>&gt; Semantic Citations ({len(m_citations)})</span>
                     </summary>
-                    <div style="margin-top: 0.4rem; padding: 0.65rem 0.85rem; background: var(--panel-raised); border-left: 2px solid var(--teal); border-radius: 2px; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; line-height: 1.45;">
+                    <div style="margin-top: 0.4rem; padding: 0.65rem 0.85rem; background: var(--panel-raised); border-left: 2px solid var(--success); border-radius: 2px; font-family: var(--font-ui); font-size: 0.8125rem; line-height: 1.45;">
                         {c_items}
                     </div>
                 </details>
@@ -6168,8 +6162,8 @@ def report_view(
                 p_items = "".join(f'<div style="margin-bottom: 0.25rem;">&bull; {render_user_markdown(p)}</div>' for p in m_pedagogical)
                 g_items = "".join(f'<div style="margin-bottom: 0.25rem; color: var(--amber);">&bull; {render_user_markdown(g)}</div>' for g in m_gotchas)
                 notes_html = f"""
-                <div style="margin-top: 0.65rem; padding: 0.65rem 0.85rem; background: var(--panel-raised); border: 1px solid var(--hairline-soft); border-radius: 3px; font-size: 0.75rem; color: var(--text-secondary); line-height: 1.45;">
-                    {f'<div style="margin-bottom: 0.35rem;"><span style="font-weight: 600; color: var(--text-primary);">Key Architectural Concept:</span> {p_items}</div>' if p_items else ''}
+                <div style="margin-top: 0.65rem; padding: 0.65rem 0.85rem; background: var(--panel-raised); border: 1px solid var(--hairline-soft); border-radius: 3px; font-size: 0.8125rem; color: var(--text-muted); line-height: 1.45;">
+                    {f'<div style="margin-bottom: 0.35rem;"><span style="font-weight: 600; color: var(--text);">Key Architectural Concept:</span> {p_items}</div>' if p_items else ''}
                     {f'<div><span style="font-weight: 600; color: var(--amber);">Implementation Gotcha:</span> {g_items}</div>' if g_items else ''}
                 </div>
                 """
@@ -6228,11 +6222,11 @@ def report_view(
                 f_path_safe = sanitize_text(r_file["path"])
 
                 if len(read_files_data) > 1:
-                    tab_bg = "var(--panel)" if f_idx == 0 else "transparent"
-                    tab_color = "var(--teal)" if f_idx == 0 else "var(--text-secondary)"
-                    tab_border = "var(--teal-border)" if f_idx == 0 else "var(--hairline)"
+                    tab_bg = "var(--surface-2)" if f_idx == 0 else "transparent"
+                    tab_color = "var(--success)" if f_idx == 0 else "var(--text-muted)"
+                    tab_border = "var(--teal-border)" if f_idx == 0 else "var(--border)"
                     read_file_tabs_html += f"""
-                    <button type="button" id="read-tab-btn-{m_tier}-{f_idx}" class="read-file-tab-btn {active_cls}" onclick="switchMilestoneReadFile({m_tier}, {f_idx})" title="{f_path_safe}" style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.25rem 0.6rem; font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem; border-radius: 3px; border: 1px solid {tab_border}; background: {tab_bg}; color: {tab_color}; cursor: pointer; transition: all 120ms ease;">
+                    <button type="button" id="read-tab-btn-{m_tier}-{f_idx}" class="read-file-tab-btn {active_cls}" onclick="switchMilestoneReadFile({m_tier}, {f_idx})" title="{f_path_safe}" style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.25rem 0.6rem; font-family: var(--font-mono); font-size: 0.8125rem; border-radius: 3px; border: 1px solid {tab_border}; background: {tab_bg}; color: {tab_color}; cursor: pointer; transition: all 120ms ease;">
                         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
                             <polyline points="13 2 13 9 20 9"></polyline>
@@ -6246,7 +6240,7 @@ def report_view(
                 redaction_notice_html = ""
                 if is_redacted:
                     redaction_notice_html = """
-                    <div class="redaction-notice-bar" style="display: flex; align-items: center; gap: 0.35rem; padding: 0.35rem 0.85rem; background: rgba(245, 158, 11, 0.08); border: 1px solid var(--amber-border); border-bottom: none; font-family: 'IBM Plex Mono', monospace; font-size: 0.7rem; color: var(--amber);">
+                    <div class="redaction-notice-bar" style="display: flex; align-items: center; gap: 0.35rem; padding: 0.35rem 0.85rem; background: rgba(245, 158, 11, 0.08); border: 1px solid var(--amber-border); border-bottom: none; font-family: var(--font-ui); font-size: 0.8125rem; color: var(--amber);">
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
                         </svg>
@@ -6260,19 +6254,19 @@ def report_view(
                 line_numbers_html = "<br>".join(str(i) for i in range(1, line_count + 1))
                 read_file_panes_html += f"""
                 <div id="read-file-pane-{m_tier}-{f_idx}" class="read-file-pane" style="display: {r_pane_display};">
-                    <div style="display: flex; justify-content: space-between; align-items: center; background: #12141a; padding: 0.4rem 0.85rem; border: 1px solid var(--hairline); border-bottom: none; border-top-left-radius: 4px; border-top-right-radius: 4px; font-family: 'IBM Plex Mono', monospace; font-size: 0.7rem; color: var(--text-tertiary);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; background: #12141a; padding: 0.4rem 0.85rem; border: 1px solid var(--border); border-bottom: none; border-top-left-radius: 4px; border-top-right-radius: 4px; font-family: var(--font-ui); font-size: 0.8125rem; color: var(--text-muted);">
                         <div style="display: flex; align-items: center; gap: 0.4rem;">
                             <span class="chip-dot teal"></span>
-                            <span style="color: var(--text-secondary); font-weight: 500;">{f_path_safe}</span>
+                            <span style="color: var(--text-muted); font-weight: 500;">{f_path_safe}</span>
                         </div>
-                        <span class="tag" style="font-size: 0.625rem;">{source_tag_label}</span>
+                        <span class="tag" style="font-size: 0.8125rem;">{source_tag_label}</span>
                     </div>
                     {redaction_notice_html}
-                    <div class="code-pane-container" style="height: 60vh; max-height: 60vh; overflow: auto; background: #181a20; border: 1px solid var(--hairline); border-bottom-left-radius: 4px; border-bottom-right-radius: 4px; display: flex;">
-                        <div class="line-numbers" style="padding: 1rem 0.65rem; background: #12141a; border-right: 1px solid var(--hairline); color: var(--text-tertiary); font-family: 'IBM Plex Mono', monospace; font-size: 0.8rem; line-height: 1.5; text-align: right; user-select: none; flex-shrink: 0; min-width: 44px;">
+                    <div class="code-pane-container" style="height: 60vh; max-height: 60vh; overflow: auto; background: #181a20; border: 1px solid var(--border); border-bottom-left-radius: 4px; border-bottom-right-radius: 4px; display: flex;">
+                        <div class="line-numbers" style="padding: 1rem 0.65rem; background: #12141a; border-right: 1px solid var(--border); color: var(--text-muted); font-family: var(--font-mono); font-size: 0.8125rem; line-height: 1.5; text-align: right; user-select: none; flex-shrink: 0; min-width: 44px;">
                             {line_numbers_html}
                         </div>
-                        <pre class="read-code-pre" style="margin: 0; padding: 1rem; flex: 1; overflow: visible; background: transparent; border: none;"><code id="read-code-content-{m_tier}-{f_idx}" class="language-python hljs" style="background: transparent !important; padding: 0; font-family: 'IBM Plex Mono', monospace; font-size: 0.8rem; line-height: 1.5; display: block;">{escaped_f_content}</code></pre>
+                        <pre class="read-code-pre" style="margin: 0; padding: 1rem; flex: 1; overflow: visible; background: transparent; border: none;"><code id="read-code-content-{m_tier}-{f_idx}" class="language-python hljs" style="background: transparent !important; padding: 0; font-family: var(--font-mono); font-size: 0.8125rem; line-height: 1.5; display: block;">{escaped_f_content}</code></pre>
                     </div>
                 </div>
                 """
@@ -6329,7 +6323,7 @@ def report_view(
             btn_submit_disabled = ""
             if not has_any_real_source:
                 guess_disabled_banner_html = """
-                <div class="guess-disabled-banner" style="margin-bottom: 0.85rem; padding: 0.75rem 1rem; background: rgba(245, 158, 11, 0.08); border-left: 3px solid var(--amber); border-radius: 3px; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; line-height: 1.45; color: var(--amber);">
+                <div class="guess-disabled-banner" style="margin-bottom: 0.85rem; padding: 0.75rem 1rem; background: rgba(245, 158, 11, 0.08); border-left: 3px solid var(--amber); border-radius: 3px; font-family: var(--font-ui); font-size: 0.8125rem; line-height: 1.45; color: var(--amber);">
                     <span>⚠️</span> <strong>Try it Disabled:</strong> Reference source files are not available for this milestone.
                 </div>
                 """
@@ -6350,14 +6344,14 @@ def report_view(
                 btn_run_disabled = 'disabled title="Code execution is turned off on this demo" style="display: none;"'
                 btn_run_fill_disabled = 'disabled title="Code execution is turned off on this demo" style="display: none;"'
                 run_note_html = ""
-                submit_fill_note_html = '<div class="demo-submit-note" style="font-family: \'IBM Plex Mono\', monospace; font-size: 0.6875rem; color: var(--text-tertiary); margin-top: 0.25rem;">No points are awarded on this demo.</div>'
+                submit_fill_note_html = '<div class="demo-submit-note" style="font-family: var(--font-mono); font-size: 0.8125rem; color: var(--text-muted); margin-top: 0.25rem;">No points are awarded on this demo.</div>'
 
                 if requires_execution:
                     btn_submit_disabled = 'disabled title="Grading this milestone needs code execution, which is off on this demo" style="cursor: not-allowed; opacity: 0.5;"'
-                    submit_note_html = '<div class="demo-submit-note" style="font-family: \'IBM Plex Mono\', monospace; font-size: 0.6875rem; color: var(--text-tertiary); margin-top: 0.25rem;">Grading this milestone needs code execution, which is off on this demo.</div>'
+                    submit_note_html = '<div class="demo-submit-note" style="font-family: var(--font-mono); font-size: 0.8125rem; color: var(--text-muted); margin-top: 0.25rem;">Grading this milestone needs code execution, which is off on this demo.</div>'
                 else:
                     btn_submit_label = "Check answer"
-                    submit_note_html = '<div class="demo-submit-note" style="font-family: \'IBM Plex Mono\', monospace; font-size: 0.6875rem; color: var(--text-tertiary); margin-top: 0.25rem;">Check structure: Structure check only. No points are awarded on this demo.</div>'
+                    submit_note_html = '<div class="demo-submit-note" style="font-family: var(--font-mono); font-size: 0.8125rem; color: var(--text-muted); margin-top: 0.25rem;">Check structure: Structure check only. No points are awarded on this demo.</div>'
                     if not has_any_real_source:
                         btn_submit_disabled = 'disabled title="Reference source unavailable" style="cursor: not-allowed; opacity: 0.45;"'
 
@@ -6371,7 +6365,7 @@ def report_view(
 
             starter_notice_display = "display: flex;" if (fill_files_data and not fill_files_data[0].get("has_scaffold", False) and not submitted_code) else "display: none;"
             starter_unavailable_notice_html = f"""
-            <div id="starter-unavailable-notice-{m_tier}" class="starter-unavailable-notice" style="{starter_notice_display}align-items: center; gap: 0.4rem; margin-bottom: 0.65rem; padding: 0.6rem 0.85rem; background: rgba(245, 158, 11, 0.08); border-left: 3px solid var(--amber); border-radius: 3px; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--text-secondary);">
+            <div id="starter-unavailable-notice-{m_tier}" class="starter-unavailable-notice" style="{starter_notice_display}align-items: center; gap: 0.4rem; margin-bottom: 0.65rem; padding: 0.6rem 0.85rem; background: rgba(245, 158, 11, 0.08); border-left: 3px solid var(--amber); border-radius: 3px; font-family: var(--font-ui); font-size: 0.8125rem; color: var(--text-muted);">
                 <span>ℹ️</span> <strong>Starter code isn't available for this file.</strong>
             </div>
             """
@@ -6384,11 +6378,11 @@ def report_view(
                 active_cls = "active" if f_idx == 0 else ""
                 f_path_safe = sanitize_text(g_file)
                 f_name_safe = sanitize_text(g_file.replace("\\", "/").split("/")[-1])
-                tab_bg = "var(--panel)" if f_idx == 0 else "transparent"
-                tab_color = "var(--brass)" if f_idx == 0 else "var(--text-secondary)"
-                tab_border = "var(--brass-border)" if f_idx == 0 else "var(--hairline)"
+                tab_bg = "var(--surface-2)" if f_idx == 0 else "transparent"
+                tab_color = "var(--accent)" if f_idx == 0 else "var(--text-muted)"
+                tab_border = "var(--brass-border)" if f_idx == 0 else "var(--border)"
                 guess_file_tabs_html += f"""
-                <button type="button" id="guess-tab-btn-{m_tier}-{f_idx}" class="guess-file-tab-btn {active_cls}" onclick="switchMilestoneGuessFile({m_tier}, {f_idx}, '{f_path_safe}')" title="{f_path_safe}" style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.25rem 0.6rem; font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem; border-radius: 3px; border: 1px solid {tab_border}; background: {tab_bg}; color: {tab_color}; cursor: pointer; transition: all 120ms ease;">
+                <button type="button" id="guess-tab-btn-{m_tier}-{f_idx}" class="guess-file-tab-btn {active_cls}" onclick="switchMilestoneGuessFile({m_tier}, {f_idx}, '{f_path_safe}')" title="{f_path_safe}" style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.25rem 0.6rem; font-family: var(--font-mono); font-size: 0.8125rem; border-radius: 3px; border: 1px solid {tab_border}; background: {tab_bg}; color: {tab_color}; cursor: pointer; transition: all 120ms ease;">
                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
                         <polyline points="13 2 13 9 20 9"></polyline>
@@ -6401,7 +6395,7 @@ def report_view(
             if len(m_files) > 1:
                 guess_file_picker_container_html = f"""
                 <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; flex-wrap: wrap;">
-                    <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; font-weight: 600; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.04em;">Target File:</span>
+                    <span style="font-family: var(--font-mono); font-size: 0.8125rem; font-weight: 600; color: var(--text-muted); ">Target File:</span>
                     <div id="guess-file-tabs-{m_tier}" style="display: flex; gap: 0.35rem; flex-wrap: wrap;">
                         {guess_file_tabs_html}
                     </div>
@@ -6412,14 +6406,14 @@ def report_view(
             example_io_html = ""
             if example_io_data:
                 if isinstance(example_io_data, list):
-                    ex_rendered = "".join(f'<div style="font-family: \'IBM Plex Mono\', monospace; font-size: 0.75rem; background: var(--panel); padding: 0.4rem 0.6rem; border-radius: 3px; border: 1px solid var(--hairline-soft); margin-top: 0.25rem;">{sanitize_text(str(ex))}</div>' for ex in example_io_data)
+                    ex_rendered = "".join(f'<div style="font-family: var(--font-mono); font-size: 0.8125rem; background: var(--surface-2); padding: 0.4rem 0.6rem; border-radius: 3px; border: 1px solid var(--hairline-soft); margin-top: 0.25rem;">{sanitize_text(str(ex))}</div>' for ex in example_io_data)
                 elif isinstance(example_io_data, dict):
-                    ex_rendered = f'<pre style="font-family: \'IBM Plex Mono\', monospace; font-size: 0.75rem; background: var(--panel); padding: 0.4rem 0.6rem; border-radius: 3px; border: 1px solid var(--hairline-soft); margin-top: 0.25rem; overflow-x: auto;">{sanitize_text(json.dumps(example_io_data, indent=2))}</pre>'
+                    ex_rendered = f'<pre style="font-family: var(--font-mono); font-size: 0.8125rem; background: var(--surface-2); padding: 0.4rem 0.6rem; border-radius: 3px; border: 1px solid var(--hairline-soft); margin-top: 0.25rem; overflow-x: auto;">{sanitize_text(json.dumps(example_io_data, indent=2))}</pre>'
                 else:
-                    ex_rendered = f'<div style="font-family: \'IBM Plex Mono\', monospace; font-size: 0.75rem; background: var(--panel); padding: 0.4rem 0.6rem; border-radius: 3px; border: 1px solid var(--hairline-soft); margin-top: 0.25rem;">{sanitize_text(str(example_io_data))}</div>'
+                    ex_rendered = f'<div style="font-family: var(--font-mono); font-size: 0.8125rem; background: var(--surface-2); padding: 0.4rem 0.6rem; border-radius: 3px; border: 1px solid var(--hairline-soft); margin-top: 0.25rem;">{sanitize_text(str(example_io_data))}</div>'
                 example_io_html = f"""
                 <div class="brief-example-io-section" style="margin-bottom: 0.65rem;">
-                    <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; font-weight: 600; color: var(--text-tertiary); text-transform: uppercase; margin-bottom: 0.2rem;">
+                    <div style="font-family: var(--font-mono); font-size: 0.8125rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.2rem;">
                         Example Input / Output:
                     </div>
                     <div style="margin-top: 0.25rem;">
@@ -6438,12 +6432,12 @@ def report_view(
                 active_cls = "active" if f_idx == 0 else ""
                 f_path_safe = sanitize_text(f_file["path"])
                 f_name_safe = sanitize_text(f_file["filename"])
-                tab_bg = "var(--panel)" if f_idx == 0 else "transparent"
-                tab_color = "var(--teal)" if f_idx == 0 else "var(--text-secondary)"
-                tab_border = "var(--teal-border)" if f_idx == 0 else "var(--hairline)"
-                no_blanks_tag = "" if f_file["has_scaffold"] else ' <span class="tag" style="font-size: 0.55rem; padding: 0 0.2rem;">No blanks</span>'
+                tab_bg = "var(--surface-2)" if f_idx == 0 else "transparent"
+                tab_color = "var(--success)" if f_idx == 0 else "var(--text-muted)"
+                tab_border = "var(--teal-border)" if f_idx == 0 else "var(--border)"
+                no_blanks_tag = "" if f_file["has_scaffold"] else ' <span class="tag" style="font-size: 0.8125rem; padding: 0 0.2rem;">No blanks</span>'
                 fill_file_tabs_html += f"""
-                <button type="button" id="fill-tab-btn-{m_tier}-{f_idx}" class="fill-file-tab-btn {active_cls}" onclick="switchMilestoneFillFile({m_tier}, {f_idx}, '{f_path_safe}')" title="{f_path_safe}" style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.25rem 0.6rem; font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem; border-radius: 3px; border: 1px solid {tab_border}; background: {tab_bg}; color: {tab_color}; cursor: pointer; transition: all 120ms ease;">
+                <button type="button" id="fill-tab-btn-{m_tier}-{f_idx}" class="fill-file-tab-btn {active_cls}" onclick="switchMilestoneFillFile({m_tier}, {f_idx}, '{f_path_safe}')" title="{f_path_safe}" style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.25rem 0.6rem; font-family: var(--font-mono); font-size: 0.8125rem; border-radius: 3px; border: 1px solid {tab_border}; background: {tab_bg}; color: {tab_color}; cursor: pointer; transition: all 120ms ease;">
                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
                         <polyline points="13 2 13 9 20 9"></polyline>
@@ -6456,7 +6450,7 @@ def report_view(
             if len(fill_files_data) > 1:
                 fill_file_picker_container_html = f"""
                 <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; flex-wrap: wrap;">
-                    <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; font-weight: 600; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.04em;">Target File:</span>
+                    <span style="font-family: var(--font-mono); font-size: 0.8125rem; font-weight: 600; color: var(--text-muted); ">Target File:</span>
                     <div id="fill-file-tabs-{m_tier}" style="display: flex; gap: 0.35rem; flex-wrap: wrap;">
                         {fill_file_tabs_html}
                     </div>
@@ -6468,15 +6462,15 @@ def report_view(
 
             if has_any_scaffold:
                 fill_mode_btn_html = f"""
-                <button type="button" id="mode-btn-fill-{m_tier}" class="milestone-mode-tab-btn" onclick="switchMilestoneMode({m_tier}, 'fill')" style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.35rem 0.75rem; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; font-weight: 500; border-radius: 3px; border: none; cursor: pointer; transition: all 120ms ease; background: transparent; color: var(--text-secondary);">
+                <button type="button" id="mode-btn-fill-{m_tier}" class="milestone-mode-tab-btn" onclick="switchMilestoneMode({m_tier}, 'fill')" style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.35rem 0.75rem; font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 500; border-radius: 3px; border: none; cursor: pointer; transition: all 120ms ease; background: transparent; color: var(--text-muted);">
                     <span>🧩</span> Fill the gaps
                 </button>
                 """
             else:
                 disable_note = html.escape(first_fill_file.get("reason") or "File contains only constants, type declarations, or exports with no function bodies to scaffold.")
                 fill_mode_btn_html = f"""
-                <button type="button" id="mode-btn-fill-{m_tier}" class="milestone-mode-tab-btn disabled" disabled title="{disable_note}" style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.35rem 0.75rem; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; font-weight: 500; border-radius: 3px; border: none; cursor: not-allowed; opacity: 0.45; background: transparent; color: var(--text-tertiary);">
-                    <span>🧩</span> Fill the gaps <span class="tag" style="font-size: 0.6rem; padding: 0.05rem 0.3rem;">No Blanks</span>
+                <button type="button" id="mode-btn-fill-{m_tier}" class="milestone-mode-tab-btn disabled" disabled title="{disable_note}" style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.35rem 0.75rem; font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 500; border-radius: 3px; border: none; cursor: not-allowed; opacity: 0.45; background: transparent; color: var(--text-muted);">
+                    <span>🧩</span> Fill the gaps <span class="tag" style="font-size: 0.8125rem; padding: 0.05rem 0.3rem;">No Blanks</span>
                 </button>
                 """
 
@@ -6484,7 +6478,7 @@ def report_view(
             if len(read_files_data) > 1:
                 read_file_picker_container_html = f"""
                 <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.65rem; flex-wrap: wrap;">
-                    <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; font-weight: 600; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.04em;">Target File:</span>
+                    <span style="font-family: var(--font-mono); font-size: 0.8125rem; font-weight: 600; color: var(--text-muted); ">Target File:</span>
                     <div id="read-file-tabs-{m_tier}" style="display: flex; gap: 0.35rem; flex-wrap: wrap;">
                         {read_file_tabs_html}
                     </div>
@@ -6511,51 +6505,51 @@ def report_view(
             panes_html += f"""
             <div class="milestone-pane{' active' if is_pane_open else ''}" id="milestone-pane-{m_tier}" style="display: {pane_display};" data-tier="{m_tier}">
                 <!-- Header -->
-                <div class="milestone-pane-header" style="background: var(--panel); border: 1px solid var(--hairline); border-radius: 4px; padding: 1.25rem 1.55rem; margin-bottom: 1.25rem; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
+                <div class="milestone-pane-header" style="background: var(--surface-2); border: 1px solid var(--border); border-radius: 4px; padding: 1.25rem 1.55rem; margin-bottom: 1.25rem; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
                     <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 0.5rem;">
                         <div>
                             <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-                                <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--brass); font-weight: 600; letter-spacing: 0.05em;">{track_label.upper()} {display_id}</span>
-                                <span style="color: var(--hairline);">/</span>
-                                <h3 style="font-size: 1.25rem; font-weight: 600; color: var(--text-primary); margin: 0; font-family: 'Newsreader', Georgia, serif;">{m_title}</h3>
+                                <span style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--accent); font-weight: 600; ">{track_label.upper()} {display_id}</span>
+                                <span style="color: var(--border);">/</span>
+                                <h3 style="font-size: 1.25rem; font-weight: 600; color: var(--text); margin: 0; font-family: var(--font-ui);">{m_title}</h3>
                             </div>
-                            {f'<div class="milestone-role" style="font-size: 0.8125rem; font-style: italic; color: var(--text-secondary); margin-top: 0.2rem;">{m_role}</div>' if m_role else ''}
+                            {f'<div class="milestone-role" style="font-size: 0.8125rem; font-style: italic; color: var(--text-muted); margin-top: 0.2rem;">{m_role}</div>' if m_role else ''}
                         </div>
                         <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
                             {status_badge_html}
                             {conf_badge_html}
-                            <button type="button" id="btn-start-here-{m_tier}" class="btn btn-sm btn-primary btn-start-here" onclick="startHereMilestone({m_tier})" style="display: {start_here_display}; align-items: center; gap: 0.4rem; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; font-weight: 600;">
+                            <button type="button" id="btn-start-here-{m_tier}" class="btn btn-sm btn-primary btn-start-here" onclick="startHereMilestone({m_tier})" style="display: {start_here_display}; align-items: center; gap: 0.4rem; font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600;">
                                 <span>🚀</span> Start here
                             </button>
-                            <button type="button" id="btn-next-milestone-{m_tier}" class="btn btn-sm btn-secondary btn-next-milestone" onclick="goToNextMilestone({m_tier})" style="display: {next_btn_display}; align-items: center; gap: 0.4rem; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; font-weight: 600;">
+                            <button type="button" id="btn-next-milestone-{m_tier}" class="btn btn-sm btn-secondary btn-next-milestone" onclick="goToNextMilestone({m_tier})" style="display: {next_btn_display}; align-items: center; gap: 0.4rem; font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600;">
                                 Next milestone ➔
                             </button>
                         </div>
                     </div>
 
                     <!-- One-sentence Goal -->
-                    {f'<div class="milestone-goal-box" style="margin: 0.75rem 0 0.5rem 0; padding: 0.65rem 0.9rem; background: var(--panel-raised); border-left: 3px solid var(--teal); border-radius: 3px; font-size: 0.825rem; color: var(--text-secondary); line-height: 1.5;"><strong style="color: var(--text-primary); font-family: \'IBM Plex Mono\', monospace; font-size: 0.72rem; text-transform: uppercase; margin-right: 0.35rem;">Goal:</strong> {m_brief_obj}</div>' if m_brief_obj else ''}
+                    {f'<div class="milestone-goal-box" style="margin: 0.75rem 0 0.5rem 0; padding: 0.65rem 0.9rem; background: var(--panel-raised); border-left: 3px solid var(--success); border-radius: 3px; font-size: 0.825rem; color: var(--text-muted); line-height: 1.5;"><strong style="color: var(--text); font-family: var(--font-ui); font-size: 0.8125rem; margin-right: 0.35rem;">Goal:</strong> {m_brief_obj}</div>' if m_brief_obj else ''}
 
-                    {f'<div style="font-size: 0.75rem; color: var(--text-tertiary); font-family: \'IBM Plex Mono\', monospace; margin-top: 0.4rem;"><span style="color: var(--text-secondary); font-weight: 600;">Composition:</span> {m_comp}</div>' if m_comp else ''}
+                    {f'<div style="font-size: 0.8125rem; color: var(--text-muted); font-family: var(--font-ui); margin-top: 0.4rem;"><span style="color: var(--text-muted); font-weight: 600;">Composition:</span> {m_comp}</div>' if m_comp else ''}
                     {symbols_html}
                     {citations_html}
                     {notes_html}
                 </div>
 
                 <!-- Milestone Workspace Surface -->
-                <div class="milestone-editor-wrapper" id="milestone-editor-card-{m_tier}" style="background: var(--panel); border: 1px solid var(--hairline); border-radius: 4px; padding: 1.25rem 1.55rem; margin-bottom: 1.25rem; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
+                <div class="milestone-editor-wrapper" id="milestone-editor-card-{m_tier}" style="background: var(--surface-2); border: 1px solid var(--border); border-radius: 4px; padding: 1.25rem 1.55rem; margin-bottom: 1.25rem; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
                     <!-- Practice Mode Switcher (Read it, Fill the gaps, Try it) -->
                     <div class="milestone-mode-switcher" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; border-bottom: 1px solid var(--hairline-soft); padding-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
-                        <div style="display: flex; align-items: center; gap: 0.35rem; background: var(--panel-raised); border: 1px solid var(--hairline); border-radius: 4px; padding: 0.2rem;">
-                            <button type="button" id="mode-btn-read-{m_tier}" class="milestone-mode-tab-btn" onclick="switchMilestoneMode({m_tier}, 'read')" style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.35rem 0.75rem; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; font-weight: 500; border-radius: 3px; border: none; cursor: pointer; transition: all 120ms ease; background: transparent; color: var(--text-secondary);">
+                        <div style="display: flex; align-items: center; gap: 0.35rem; background: var(--panel-raised); border: 1px solid var(--border); border-radius: 4px; padding: 0.2rem;">
+                            <button type="button" id="mode-btn-read-{m_tier}" class="milestone-mode-tab-btn" onclick="switchMilestoneMode({m_tier}, 'read')" style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.35rem 0.75rem; font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 500; border-radius: 3px; border: none; cursor: pointer; transition: all 120ms ease; background: transparent; color: var(--text-muted);">
                                 <span>📖</span> Read it
                             </button>
                             {fill_mode_btn_html}
-                            <button type="button" id="mode-btn-guess-{m_tier}" class="milestone-mode-tab-btn active" onclick="switchMilestoneMode({m_tier}, 'guess')" style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.35rem 0.75rem; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; font-weight: 600; border-radius: 3px; border: none; cursor: pointer; transition: all 120ms ease; background: var(--panel); color: var(--brass); box-shadow: 0 1px 3px rgba(0,0,0,0.2);">
+                            <button type="button" id="mode-btn-guess-{m_tier}" class="milestone-mode-tab-btn active" onclick="switchMilestoneMode({m_tier}, 'guess')" style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.35rem 0.75rem; font-family: var(--font-mono); font-size: 0.8125rem; font-weight: 600; border-radius: 3px; border: none; cursor: pointer; transition: all 120ms ease; background: var(--surface-2); color: var(--accent); box-shadow: 0 1px 3px rgba(0,0,0,0.2);">
                                 <span>✏️</span> Try it
                             </button>
                         </div>
-                        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--text-tertiary);">
+                        <div style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--text-muted);">
                             PRACTICE MODE
                         </div>
                     </div>
@@ -6563,34 +6557,34 @@ def report_view(
                     <!-- Mode 1 Workspace: Try it (Guess Mode) -->
                     <div id="workspace-guess-{m_tier}" class="milestone-mode-workspace guess-mode" style="display: block;">
                         {guess_disabled_banner_html}
-                        <div class="guess-instruction-banner" style="margin-bottom: 0.85rem; padding: 0.75rem 1rem; background: var(--panel-raised); border-left: 3px solid var(--brass); border-radius: 3px; font-family: 'IBM Plex Sans', sans-serif; font-size: 0.825rem; line-height: 1.5; color: var(--text-secondary);">
-                            <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.2rem; display: flex; align-items: center; gap: 0.35rem;">
+                        <div class="guess-instruction-banner" style="margin-bottom: 0.85rem; padding: 0.75rem 1rem; background: var(--panel-raised); border-left: 3px solid var(--accent); border-radius: 3px; font-family: 'IBM Plex Sans', sans-serif; font-size: 0.825rem; line-height: 1.5; color: var(--text-muted);">
+                            <div style="font-weight: 600; color: var(--text); margin-bottom: 0.2rem; display: flex; align-items: center; gap: 0.35rem;">
                                 <span>🎯</span> <strong>Task Instructions:</strong>
                             </div>
                             <div>
-                                Try to reconstruct <span class="mono" id="guess-target-filename-{m_tier}" style="color: var(--brass); font-weight: 600; font-size: 0.8rem; background: var(--panel); padding: 0.1rem 0.4rem; border-radius: 3px; border: 1px solid var(--hairline);">{first_target_file}</span> based on expected contracts ({role_context}) before seeing the solution.
+                                Try to reconstruct <span class="mono" id="guess-target-filename-{m_tier}" style="color: var(--accent); font-weight: 600; font-size: 0.8125rem; background: var(--surface-2); padding: 0.1rem 0.4rem; border-radius: 3px; border: 1px solid var(--border);">{first_target_file}</span> based on expected contracts ({role_context}) before seeing the solution.
                             </div>
                         </div>
 
                         {guess_file_picker_container_html}
 
-                        <div class="milestone-brief-card" style="margin-bottom: 0.85rem; padding: 0.85rem 1rem; background: var(--panel-raised); border: 1px solid var(--hairline); border-radius: 4px;">
+                        <div class="milestone-brief-card" style="margin-bottom: 0.85rem; padding: 0.85rem 1rem; background: var(--panel-raised); border: 1px solid var(--border); border-radius: 4px;">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.65rem; border-bottom: 1px solid var(--hairline-soft); padding-bottom: 0.45rem;">
-                                <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; font-weight: 600; color: var(--brass); text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; gap: 0.4rem;">
+                                <div style="font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600; color: var(--accent); display: flex; align-items: center; gap: 0.4rem;">
                                     <span>📋</span> {track_label} {display_id} Structured Brief
                                 </div>
-                                <span class="tag" style="font-size: 0.65rem;">Sourced from Codebase</span>
+                                <span class="tag" style="font-size: 0.8125rem;">Sourced from Codebase</span>
                             </div>
 
                             <div class="brief-objective-section" style="margin-bottom: 0.65rem;">
-                                <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; font-weight: 600; color: var(--text-tertiary); text-transform: uppercase; margin-bottom: 0.2rem;">
+                                <div style="font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.2rem;">
                                     Objective:
                                 </div>
-                                {f'<div style="font-size: 0.825rem; color: var(--text-secondary); line-height: 1.5;">{m_brief_obj}</div>' if m_brief_obj else '<div style="font-size: 0.75rem; color: var(--text-tertiary); font-style: italic;">No objective text available for this milestone.</div>'}
+                                {f'<div style="font-size: 0.825rem; color: var(--text-muted); line-height: 1.5;">{m_brief_obj}</div>' if m_brief_obj else '<div style="font-size: 0.8125rem; color: var(--text-muted); font-style: italic;">No objective text available for this milestone.</div>'}
                             </div>
 
                             <div class="brief-constraints-section" style="margin-bottom: 0.65rem;">
-                                <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; font-weight: 600; color: var(--text-tertiary); text-transform: uppercase; margin-bottom: 0.35rem;">
+                                <div style="font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.35rem;">
                                     Constraints / Expected Functions &amp; Signatures:
                                 </div>
                                 <div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">
@@ -6603,27 +6597,27 @@ def report_view(
 
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.65rem; flex-wrap: wrap; gap: 0.5rem;">
                             <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--brass);">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--accent);">
                                     <polyline points="16 18 22 12 16 6"></polyline>
                                     <polyline points="8 6 2 12 8 18"></polyline>
                                 </svg>
-                                <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; font-weight: 600; color: var(--text-primary); text-transform: uppercase; letter-spacing: 0.05em;">
+                                <span style="font-family: var(--font-mono); font-size: 0.8125rem; font-weight: 600; color: var(--text); ">
                                     Milestone {m_tier} Implementation Workspace
                                 </span>
                             </div>
-                            <span class="tag" style="font-size: 0.6875rem;">Structure &amp; Execution Verified</span>
+                            <span class="tag" style="font-size: 0.8125rem;">Structure &amp; Execution Verified</span>
                         </div>
 
                         {starter_unavailable_notice_html}
 
-                        <div class="editor-surface-container" style="border: 1px solid var(--hairline); border-radius: 4px; overflow: hidden; background: #282a36; height: 60vh; max-height: 60vh;">
+                        <div class="editor-surface-container" style="border: 1px solid var(--border); border-radius: 4px; overflow: hidden; background: #282a36; height: 60vh; max-height: 60vh;">
                             <textarea id="code-editor-{m_tier}" name="code_editor_{m_tier}" style="display: none;">{escaped_code}</textarea>
                         </div>
 
                         <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-top: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
                             <div style="display: flex; align-items: flex-start; gap: 0.5rem; flex-wrap: wrap;">
                                 <div style="display: flex; flex-direction: column; align-items: flex-start;">
-                                    <button type="button" id="btn-run-{m_tier}" onclick="runMilestoneCode('{job_id}', {m_tier})" {btn_run_disabled} class="btn btn-sm btn-secondary" style="font-family: 'IBM Plex Mono', monospace; letter-spacing: 0.02em; border-color: var(--brass-border); color: var(--brass);">
+                                    <button type="button" id="btn-run-{m_tier}" onclick="runMilestoneCode('{job_id}', {m_tier})" {btn_run_disabled} class="btn btn-sm btn-secondary" style="font-family: var(--font-ui); border-color: var(--brass-border); color: var(--accent);">
                                         <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none">
                                             <polygon points="5 3 19 12 5 21 5 3"></polygon>
                                         </svg>
@@ -6633,7 +6627,7 @@ def report_view(
                                 </div>
 
                                 <div style="display: flex; flex-direction: column; align-items: flex-start;">
-                                    <button type="button" id="btn-submit-{m_tier}" onclick="submitMilestoneCode('{job_id}', {m_tier})" {btn_submit_disabled} class="btn btn-sm btn-primary" style="font-family: 'IBM Plex Mono', monospace; letter-spacing: 0.02em;">
+                                    <button type="button" id="btn-submit-{m_tier}" onclick="submitMilestoneCode('{job_id}', {m_tier})" {btn_submit_disabled} class="btn btn-sm btn-primary" style="font-family: var(--font-ui); ">
                                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                             <polyline points="20 6 9 17 4 12"></polyline>
                                         </svg>
@@ -6642,15 +6636,15 @@ def report_view(
                                     {submit_note_html}
                                 </div>
 
-                                <button type="button" id="btn-hint-{m_tier}" data-hint-level="{hint_level}" onclick="openHintConfirmModal('{job_id}', {m_tier})" class="btn btn-sm btn-secondary" style="{hint_btn_display} font-family: 'IBM Plex Mono', monospace; font-size: 0.8rem; border-color: var(--brass-border); color: var(--brass);" {hint_btn_disabled}>
+                                <button type="button" id="btn-hint-{m_tier}" data-hint-level="{hint_level}" onclick="openHintConfirmModal('{job_id}', {m_tier})" class="btn btn-sm btn-secondary" style="{hint_btn_display} font-family: var(--font-ui); font-size: 0.8125rem; border-color: var(--brass-border); color: var(--accent);" {hint_btn_disabled}>
                                     💡 <span id="btn-hint-text-{m_tier}">{hint_btn_text}</span>
                                 </button>
 
-                                <button type="button" id="btn-reveal-{m_tier}" onclick="openRevealConfirmModal('{job_id}', {m_tier})" class="btn btn-sm btn-ghost" style="{reveal_btn_display} font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--text-tertiary); text-decoration: underline;">
+                                <button type="button" id="btn-reveal-{m_tier}" onclick="openRevealConfirmModal('{job_id}', {m_tier})" class="btn btn-sm btn-ghost" style="{reveal_btn_display} font-family: var(--font-ui); font-size: 0.8125rem; color: var(--text-muted); text-decoration: underline;">
                                     <span id="btn-reveal-text-{m_tier}">{reveal_btn_text}</span>
                                 </button>
 
-                                <span id="hint-locked-notice-{m_tier}" style="{locked_notice_display} font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem; color: var(--text-tertiary); align-items: center; gap: 0.3rem;">
+                                <span id="hint-locked-notice-{m_tier}" style="{locked_notice_display} font-family: var(--font-ui); font-size: 0.8125rem; color: var(--text-muted); align-items: center; gap: 0.3rem;">
                                     🔒 Submit first attempt to unlock hints
                                 </span>
                             </div>
@@ -6660,12 +6654,12 @@ def report_view(
                             {console_rendered_html}
                         </div>
 
-                        <div id="diff-output-panel-{m_tier}" class="diff-output-panel" style="{diff_initial_display} margin-top: 0.85rem; padding: 0.85rem 1rem; background: var(--panel-raised); border: 1px solid var(--hairline); border-radius: 4px;">
+                        <div id="diff-output-panel-{m_tier}" class="diff-output-panel" style="{diff_initial_display} margin-top: 0.85rem; padding: 0.85rem 1rem; background: var(--panel-raised); border: 1px solid var(--border); border-radius: 4px;">
                             {diff_rendered_html}
                         </div>
 
-                        <div id="hint-confirm-box-{m_tier}" class="hint-confirm-box" style="display: none; margin-top: 0.85rem; padding: 1rem 1.25rem; background: var(--panel); border: 1px solid var(--brass-border); border-radius: 4px;">
-                            <p id="hint-confirm-text-{m_tier}" style="font-size: 0.875rem; color: var(--text-primary); line-height: 1.5; margin-bottom: 1rem;">
+                        <div id="hint-confirm-box-{m_tier}" class="hint-confirm-box" style="display: none; margin-top: 0.85rem; padding: 1rem 1.25rem; background: var(--surface-2); border: 1px solid var(--brass-border); border-radius: 4px;">
+                            <p id="hint-confirm-text-{m_tier}" style="font-size: 0.875rem; color: var(--text); line-height: 1.5; margin-bottom: 1rem;">
                                 {HintEngine.SELECTED_HINT_1_CONFIRM}
                             </p>
                             <div style="display: flex; align-items: center; gap: 0.65rem;">
@@ -6674,8 +6668,8 @@ def report_view(
                             </div>
                         </div>
 
-                        <div id="reveal-confirm-box-{m_tier}" class="reveal-confirm-box" style="display: none; margin-top: 0.85rem; padding: 1rem 1.25rem; background: var(--panel); border: 1px solid var(--crimson); border-radius: 4px;">
-                            <p style="font-size: 0.875rem; color: var(--text-primary); line-height: 1.5; margin-bottom: 1rem;">
+                        <div id="reveal-confirm-box-{m_tier}" class="reveal-confirm-box" style="display: none; margin-top: 0.85rem; padding: 1rem 1.25rem; background: var(--surface-2); border: 1px solid var(--crimson); border-radius: 4px;">
+                            <p style="font-size: 0.875rem; color: var(--text); line-height: 1.5; margin-bottom: 1rem;">
                                 Show the solution? This ends your attempt.
                             </p>
                             <div style="display: flex; align-items: center; gap: 0.65rem;">
@@ -6684,34 +6678,34 @@ def report_view(
                             </div>
                         </div>
 
-                        <div id="hint-1-panel-{m_tier}" class="hint-panel" style="{h1_style} margin-top: 0.85rem; padding: 0.85rem 1rem; background: var(--panel-raised); border-left: 3px solid var(--brass); border-radius: 2px;">
-                            <div id="hint-1-text-{m_tier}" style="font-size: 0.8125rem; color: var(--text-primary); line-height: 1.55;">{sanitize_text(h1_text)}</div>
+                        <div id="hint-1-panel-{m_tier}" class="hint-panel" style="{h1_style} margin-top: 0.85rem; padding: 0.85rem 1rem; background: var(--panel-raised); border-left: 3px solid var(--accent); border-radius: 2px;">
+                            <div id="hint-1-text-{m_tier}" style="font-size: 0.8125rem; color: var(--text); line-height: 1.55;">{sanitize_text(h1_text)}</div>
                         </div>
 
                         <div id="hint-2-panel-{m_tier}" class="hint-panel" style="{h2_style} margin-top: 0.85rem; padding: 0.85rem 1rem; background: var(--panel-raised); border-left: 3px solid var(--amber); border-radius: 2px;">
-                            <div id="hint-2-text-{m_tier}" style="font-size: 0.8125rem; color: var(--text-primary); line-height: 1.55;">{sanitize_text(h2_text)}</div>
+                            <div id="hint-2-text-{m_tier}" style="font-size: 0.8125rem; color: var(--text); line-height: 1.55;">{sanitize_text(h2_text)}</div>
                         </div>
 
-                        <div id="reference-panel-{m_tier}" class="reference-panel" style="{ref_style} margin-top: 0.85rem; padding: 0.85rem 1rem; background: var(--panel-raised); border-left: 3px solid var(--teal); border-radius: 2px;">
-                            <pre style="background: #181a20; padding: 0.75rem 1rem; border-radius: 4px; overflow-x: auto; border: 1px solid var(--hairline); margin: 0;"><code id="reference-code-{m_tier}" class="mono" style="font-size: 0.78rem; color: var(--text-primary);">{ref_code_rendered}</code></pre>
+                        <div id="reference-panel-{m_tier}" class="reference-panel" style="{ref_style} margin-top: 0.85rem; padding: 0.85rem 1rem; background: var(--panel-raised); border-left: 3px solid var(--success); border-radius: 2px;">
+                            <pre style="background: #181a20; padding: 0.75rem 1rem; border-radius: 4px; overflow-x: auto; border: 1px solid var(--border); margin: 0;"><code id="reference-code-{m_tier}" class="mono" style="font-size: 0.8125rem; color: var(--text);">{ref_code_rendered}</code></pre>
                         </div>
                     </div>
 
                     <!-- Mode 2 Workspace: Fill the gaps (Fill Mode) -->
                     <div id="workspace-fill-{m_tier}" class="milestone-mode-workspace fill-mode" style="display: none;">
-                        <div class="fill-instruction-banner" style="margin-bottom: 0.85rem; padding: 0.75rem 1rem; background: var(--panel-raised); border-left: 3px solid var(--teal); border-radius: 3px; font-family: 'IBM Plex Sans', sans-serif; font-size: 0.825rem; line-height: 1.5; color: var(--text-secondary);">
-                            <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.2rem; display: flex; align-items: center; gap: 0.35rem;">
+                        <div class="fill-instruction-banner" style="margin-bottom: 0.85rem; padding: 0.75rem 1rem; background: var(--panel-raised); border-left: 3px solid var(--success); border-radius: 3px; font-family: 'IBM Plex Sans', sans-serif; font-size: 0.825rem; line-height: 1.5; color: var(--text-muted);">
+                            <div style="font-weight: 600; color: var(--text); margin-bottom: 0.2rem; display: flex; align-items: center; gap: 0.35rem;">
                                 <span>🧩</span> <strong>Fill the gaps Instructions:</strong>
                             </div>
                             <div>
-                                Fill in missing function/method implementations for <span class="mono" id="fill-target-filename-{m_tier}" style="color: var(--teal); font-weight: 600; font-size: 0.8rem; background: var(--panel); padding: 0.1rem 0.4rem; border-radius: 3px; border: 1px solid var(--hairline);">{first_fill_name}</span>.
+                                Fill in missing function/method implementations for <span class="mono" id="fill-target-filename-{m_tier}" style="color: var(--success); font-weight: 600; font-size: 0.8125rem; background: var(--surface-2); padding: 0.1rem 0.4rem; border-radius: 3px; border: 1px solid var(--border);">{first_fill_name}</span>.
                             </div>
                         </div>
 
                         {fill_file_picker_container_html}
 
                         <div style="margin-bottom: 0.75rem; background: var(--panel-raised); border: 1px solid var(--hairline-soft); border-radius: 4px; padding: 0.6rem 0.85rem;">
-                            <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--text-tertiary); margin-bottom: 0.35rem; font-weight: 600; text-transform: uppercase;">
+                            <div style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--text-muted); margin-bottom: 0.35rem; font-weight: 600; ">
                                 Functions To Implement:
                             </div>
                             <div id="fill-blanked-chips-{m_tier}" style="display: flex; flex-direction: column; gap: 0.35rem;">
@@ -6719,14 +6713,14 @@ def report_view(
                             </div>
                         </div>
 
-                        <div class="editor-surface-container" style="border: 1px solid var(--hairline); border-radius: 4px; overflow: hidden; background: #282a36; height: 60vh; max-height: 60vh;">
+                        <div class="editor-surface-container" style="border: 1px solid var(--border); border-radius: 4px; overflow: hidden; background: #282a36; height: 60vh; max-height: 60vh;">
                             <textarea id="code-editor-fill-{m_tier}" name="code_editor_fill_{m_tier}" style="display: none;">{escaped_scaffold_code}</textarea>
                         </div>
 
                         <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-top: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
                             <div style="display: flex; align-items: flex-start; gap: 0.5rem; flex-wrap: wrap;">
                                 <div style="display: flex; flex-direction: column; align-items: flex-start;">
-                                    <button type="button" id="btn-run-fill-{m_tier}" onclick="runMilestoneFillCode('{job_id}', {m_tier})" {btn_run_fill_disabled} class="btn btn-sm btn-secondary" style="font-family: 'IBM Plex Mono', monospace; letter-spacing: 0.02em; border-color: var(--teal-border); color: var(--teal);">
+                                    <button type="button" id="btn-run-fill-{m_tier}" onclick="runMilestoneFillCode('{job_id}', {m_tier})" {btn_run_fill_disabled} class="btn btn-sm btn-secondary" style="font-family: var(--font-ui); border-color: var(--teal-border); color: var(--success);">
                                         <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none">
                                             <polygon points="5 3 19 12 5 21 5 3"></polygon>
                                         </svg>
@@ -6736,7 +6730,7 @@ def report_view(
                                 </div>
 
                                 <div style="display: flex; flex-direction: column; align-items: flex-start;">
-                                    <button type="button" id="btn-submit-fill-{m_tier}" onclick="submitMilestoneFillCode('{job_id}', {m_tier})" {btn_submit_fill_disabled} class="btn btn-sm btn-primary" style="font-family: 'IBM Plex Mono', monospace; letter-spacing: 0.02em; background: var(--teal); color: #0f172a; border-color: var(--teal-border);">
+                                    <button type="button" id="btn-submit-fill-{m_tier}" onclick="submitMilestoneFillCode('{job_id}', {m_tier})" {btn_submit_fill_disabled} class="btn btn-sm btn-primary" style="font-family: var(--font-ui); background: var(--success); color: #0f172a; border-color: var(--teal-border);">
                                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                             <polyline points="20 6 9 17 4 12"></polyline>
                                         </svg>
@@ -6745,24 +6739,24 @@ def report_view(
                                     {submit_fill_note_html}
                                 </div>
 
-                                <button type="button" id="btn-hint-fill-{m_tier}" data-hint-level="{hint_level}" onclick="openHintConfirmModal('{job_id}', {m_tier}, 'fill')" class="btn btn-sm btn-secondary" style="display: inline-flex; font-family: 'IBM Plex Mono', monospace; font-size: 0.8rem; border-color: var(--brass-border); color: var(--brass);">
+                                <button type="button" id="btn-hint-fill-{m_tier}" data-hint-level="{hint_level}" onclick="openHintConfirmModal('{job_id}', {m_tier}, 'fill')" class="btn btn-sm btn-secondary" style="display: inline-flex; font-family: var(--font-ui); font-size: 0.8125rem; border-color: var(--brass-border); color: var(--accent);">
                                     💡 <span id="btn-hint-fill-text-{m_tier}">Request Architectural Hint</span>
                                 </button>
 
-                                <button type="button" id="btn-reveal-fill-{m_tier}" onclick="openRevealConfirmModal('{job_id}', {m_tier}, 'fill')" class="btn btn-sm btn-ghost" style="display: inline-flex; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--text-tertiary); text-decoration: underline;">
+                                <button type="button" id="btn-reveal-fill-{m_tier}" onclick="openRevealConfirmModal('{job_id}', {m_tier}, 'fill')" class="btn btn-sm btn-ghost" style="display: inline-flex; font-family: var(--font-ui); font-size: 0.8125rem; color: var(--text-muted); text-decoration: underline;">
                                     <span id="btn-reveal-fill-text-{m_tier}">{reveal_btn_text}</span>
                                 </button>
                             </div>
                         </div>
 
                         <div id="console-output-panel-fill-{m_tier}" class="console-output-panel" style="display: none; margin-top: 0.85rem; padding: 0.85rem 1rem; background: #0e1015; border: 1px solid var(--hairline-soft); border-radius: 4px;"></div>
-                        <div id="diff-output-panel-fill-{m_tier}" class="diff-output-panel" style="display: none; margin-top: 0.85rem; padding: 0.85rem 1rem; background: var(--panel-raised); border: 1px solid var(--hairline); border-radius: 4px;"></div>
+                        <div id="diff-output-panel-fill-{m_tier}" class="diff-output-panel" style="display: none; margin-top: 0.85rem; padding: 0.85rem 1rem; background: var(--panel-raised); border: 1px solid var(--border); border-radius: 4px;"></div>
                     </div>
 
                     <!-- Mode 3 Workspace: Read it (Read-Only Real File Implementation View) -->
                     <div id="workspace-read-{m_tier}" class="milestone-mode-workspace read-mode" style="display: none;">
-                        <div style="font-family: 'IBM Plex Sans', sans-serif; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.4rem;">
-                            <span style="color: var(--teal); font-weight: 600;">ℹ</span> {read_intro_label}
+                        <div style="font-family: 'IBM Plex Sans', sans-serif; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.4rem;">
+                            <span style="color: var(--success); font-weight: 600;">ℹ</span> {read_intro_label}
                         </div>
 
                         {read_file_picker_container_html}
@@ -6772,13 +6766,13 @@ def report_view(
                         </div>
 
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.85rem; flex-wrap: wrap; gap: 0.5rem;">
-                            <button type="button" id="btn-review-{m_tier}" onclick="markMilestoneAsReviewed('{job_id}', {m_tier})" class="btn btn-sm" style="font-family: 'IBM Plex Mono', monospace; letter-spacing: 0.02em; display: inline-flex; align-items: center; gap: 0.4rem; background: var(--teal); color: #0f172a; font-weight: 600; border: 1px solid var(--teal-border); border-radius: 4px; padding: 0.35rem 0.85rem; cursor: pointer;">
+                            <button type="button" id="btn-review-{m_tier}" onclick="markMilestoneAsReviewed('{job_id}', {m_tier})" class="btn btn-sm" style="font-family: var(--font-ui); display: inline-flex; align-items: center; gap: 0.4rem; background: var(--success); color: #0f172a; font-weight: 600; border: 1px solid var(--teal-border); border-radius: 4px; padding: 0.35rem 0.85rem; cursor: pointer;">
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                                     <polyline points="20 6 9 17 4 12"></polyline>
                                 </svg>
                                 <span id="btn-review-text-{m_tier}">{reviewed_btn_text}</span>
                             </button>
-                            <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--text-tertiary);">Read-only exploration &bull; No code grading required</span>
+                            <span style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--text-muted);">Read-only exploration &bull; No code grading required</span>
                         </div>
                     </div>
                 </div>
@@ -6792,7 +6786,7 @@ def report_view(
         <div class="stratum-card" id="section-milestones" style="margin-bottom: 2rem;">
             <div class="card-header" style="margin-bottom: 1.25rem;">
                 <div>
-                    <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--brass); text-transform: uppercase; letter-spacing: 0.05em;">
+                    <div style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--accent); ">
                         Section 03 // Guided Architectural Milestones
                     </div>
                     <h2 style="font-size: 1.45rem; font-weight: 500; margin-top: 0.15rem;">Guided Flow Walkthrough</h2>
@@ -6802,7 +6796,7 @@ def report_view(
                     <span class="chip"><span class="chip-dot brass"></span> {len(milestones_data)} Milestones</span>
                 </div>
             </div>
-            <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1.5rem; line-height: 1.5;">
+            <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1.5rem; line-height: 1.5;">
                 Follow the guided pedagogical progression from leaf primitives upwards to entry-point orchestration.
             </p>
             <div class="milestones-guided-flow" id="milestones-guided-flow">
@@ -6818,7 +6812,7 @@ def report_view(
         <div class="stratum-card" id="section-milestones" style="margin-bottom: 2rem;">
             <div class="card-header">
                 <div>
-                    <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--brass); text-transform: uppercase; letter-spacing: 0.05em;">
+                    <div style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--accent); ">
                         Section 03 // Guided Architectural Milestones
                     </div>
                     <h2 style="font-size: 1.45rem; font-weight: 500; margin-top: 0.15rem;">Guided Flow Walkthrough</h2>
@@ -6827,7 +6821,7 @@ def report_view(
                     {narration_badge_html}
                 </div>
             </div>
-            <p style="color: var(--text-secondary); font-size: 0.85rem;">No structured milestone steps found in this report.</p>
+            <p style="color: var(--text-muted); font-size: 0.85rem;">No structured milestone steps found in this report.</p>
         </div>
         """
 
@@ -6849,7 +6843,7 @@ def report_view(
         <div class="stratum-card" id="section-quiz" style="margin-bottom: 2rem;">
             <div class="card-header">
                 <div>
-                    <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--brass); text-transform: uppercase; letter-spacing: 0.05em;">
+                    <div style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--accent); ">
                         Section 04 // Interactive Validation
                     </div>
                     <h2 style="font-size: 1.45rem; font-weight: 500; margin-top: 0.15rem;">Codebase Architecture Comprehension Quiz &bull; All Milestone Quizzes</h2>
@@ -6858,7 +6852,7 @@ def report_view(
                     <span class="chip"><span class="chip-dot teal"></span> {len(milestones_data) * 3} Validation Questions</span>
                 </div>
             </div>
-            <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1.25rem; line-height: 1.5;">
+            <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1.25rem; line-height: 1.5;">
                 All Milestone Quizzes &bull; Test and verify architectural comprehension of key contracts and boundary transitions across all decomposed tiers.
             </p>
             <div class="quiz-all-milestones-container">
@@ -6873,7 +6867,7 @@ def report_view(
         <div class="stratum-card" id="section-quiz" style="margin-bottom: 2rem;">
             <div class="card-header">
                 <div>
-                    <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--brass); text-transform: uppercase; letter-spacing: 0.05em;">
+                    <div style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--accent); ">
                         Section 04 // Interactive Validation
                     </div>
                     <h2 style="font-size: 1.45rem; font-weight: 500; margin-top: 0.15rem;">Codebase Architecture Comprehension Quiz &bull; All Milestone Quizzes</h2>
@@ -6882,7 +6876,7 @@ def report_view(
                     <span class="chip"><span class="chip-dot teal"></span> {len(questions)} Validation Questions</span>
                 </div>
             </div>
-            <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1.25rem; line-height: 1.5;">
+            <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1.25rem; line-height: 1.5;">
                 All Milestone Quizzes &bull; Test and verify architectural comprehension of key contracts and boundary transitions across all decomposed tiers.
             </p>
             <div class="quiz-all-milestones-container">
@@ -6895,13 +6889,13 @@ def report_view(
         <div class="stratum-card" id="section-quiz" style="margin-bottom: 2rem;">
             <div class="card-header">
                 <div>
-                    <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--brass); text-transform: uppercase; letter-spacing: 0.05em;">
+                    <div style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--accent); ">
                         Section 04 // Interactive Validation
                     </div>
                     <h2 style="font-size: 1.45rem; font-weight: 500; margin-top: 0.15rem;">Codebase Architecture Comprehension Quiz &bull; All Milestone Quizzes</h2>
                 </div>
             </div>
-            <p style="color: var(--text-secondary); font-size: 0.85rem;">No quiz questions available for this analysis report.</p>
+            <p style="color: var(--text-muted); font-size: 0.85rem;">No quiz questions available for this analysis report.</p>
         </div>
         """
 
@@ -6911,11 +6905,11 @@ def report_view(
     raw_markdown_drawer = f"""
     <div class="stratum-card" id="section-raw-markdown" style="margin-bottom: 2rem;">
         <details>
-            <summary style="font-family: 'IBM Plex Mono', monospace; font-size: 0.8125rem; font-weight: 600; color: var(--text-secondary); cursor: pointer; user-select: none; display: flex; align-items: center; justify-content: space-between;">
+            <summary style="font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600; color: var(--text-muted); cursor: pointer; user-select: none; display: flex; align-items: center; justify-content: space-between;">
                 <span>&gt; Complete Raw Synthesis Markdown Transcript</span>
-                <span class="chip" style="font-size: 0.625rem;">GITHUB FLAVORED MARKDOWN</span>
+                <span class="chip" style="font-size: 0.8125rem;">GITHUB FLAVORED MARKDOWN</span>
             </summary>
-            <div class="markdown-body" style="margin-top: 1.25rem; padding-top: 1.25rem; border-top: 1px solid var(--hairline);">
+            <div class="markdown-body" style="margin-top: 1.25rem; padding-top: 1.25rem; border-top: 1px solid var(--border);">
                 {safe_markdown_html}
             </div>
         </details>
@@ -6946,15 +6940,15 @@ def report_view(
                 const tabs = document.querySelectorAll('[id^="read-tab-btn-' + tier + '-"]');
                 tabs.forEach(t => {{
                     t.style.background = 'transparent';
-                    t.style.color = 'var(--text-secondary)';
-                    t.style.borderColor = 'var(--hairline)';
+                    t.style.color = 'var(--text-muted)';
+                    t.style.borderColor = 'var(--border)';
                     t.classList.remove('active');
                 }});
 
                 const activeTab = document.getElementById('read-tab-btn-' + tier + '-' + fileIdx);
                 if (activeTab) {{
-                    activeTab.style.background = 'var(--panel)';
-                    activeTab.style.color = 'var(--teal)';
+                    activeTab.style.background = 'var(--surface-2)';
+                    activeTab.style.color = 'var(--success)';
                     activeTab.style.borderColor = 'var(--teal-border)';
                     activeTab.classList.add('active');
                 }}
@@ -6988,7 +6982,7 @@ def report_view(
                     const t = (e.getAttribute('data-target') || '').toLowerCase();
                     if (matchedIds.has(s) && matchedIds.has(t)) {{
                         e.style.opacity = '0.9';
-                        e.setAttribute('stroke', 'var(--brass)');
+                        e.setAttribute('stroke', 'var(--accent)');
                     }} else {{
                         e.style.opacity = '0.08';
                     }}
@@ -7018,7 +7012,7 @@ def report_view(
                 allNodes.forEach(n => {{
                     const box = n.querySelector('.dag-node-box');
                     if (box) {{
-                        box.setAttribute('stroke', n.getAttribute('data-node-id') === nodeId ? 'var(--brass)' : 'var(--hairline)');
+                        box.setAttribute('stroke', n.getAttribute('data-node-id') === nodeId ? 'var(--accent)' : 'var(--border)');
                         box.setAttribute('stroke-width', n.getAttribute('data-node-id') === nodeId ? '2' : '1');
                     }}
                 }});
@@ -7060,7 +7054,7 @@ def report_view(
                     if (feedback) {{
                         feedback.style.display = 'inline-block';
                         feedback.style.background = 'rgba(45, 212, 191, 0.15)';
-                        feedback.style.color = 'var(--teal)';
+                        feedback.style.color = 'var(--success)';
                         feedback.textContent = '✓ Correct Answer';
                     }}
                 }} else {{
@@ -7119,7 +7113,7 @@ def report_view(
             targetPanel.textContent = '';
             const bannerBox = document.createElement('div');
             bannerBox.className = 'stratum-card sandbox-503-banner';
-            bannerBox.style.cssText = 'background: rgba(245, 158, 11, 0.08); border: 1px solid var(--amber); border-left: 4px solid var(--amber); padding: 1rem 1.25rem; margin: 0.75rem 0; border-radius: 4px; font-size: 0.875rem; line-height: 1.5; color: var(--text-primary);';
+            bannerBox.style.cssText = 'background: rgba(245, 158, 11, 0.08); border: 1px solid var(--amber); border-left: 4px solid var(--amber); padding: 1rem 1.25rem; margin: 0.75rem 0; border-radius: 4px; font-size: 0.875rem; line-height: 1.5; color: var(--text);';
 
             const textSpan = document.createElement('span');
             textSpan.textContent = SANDBOX_DISABLED_BANNER_TEXT;
@@ -7130,7 +7124,7 @@ def report_view(
                 link.href = demoVideoUrl;
                 link.target = '_blank';
                 link.rel = 'noopener noreferrer';
-                link.style.cssText = 'color: var(--teal); font-weight: 600; text-decoration: underline; margin-left: 0.35rem;';
+                link.style.cssText = 'color: var(--success); font-weight: 600; text-decoration: underline; margin-left: 0.35rem;';
                 link.textContent = 'Watch the video';
                 bannerBox.appendChild(link);
             }}
@@ -7226,7 +7220,7 @@ def report_view(
 
         function renderGroupedFillChips(blankedFunctions, reason) {{
             if (!blankedFunctions || blankedFunctions.length === 0) {{
-                return '<span style="font-size: 0.75rem; color: var(--text-tertiary); font-style: italic;">' + escapeHtml(reason || 'File contains no function bodies to blank.') + '</span>';
+                return '<span style="font-size: 0.8125rem; color: var(--text-muted); font-style: italic;">' + escapeHtml(reason || 'File contains no function bodies to blank.') + '</span>';
             }}
 
             const totalCount = Number(blankedFunctions.length) || 0;
@@ -7261,14 +7255,14 @@ def report_view(
                 g.items.forEach(function(bf) {{
                     const fnName = escapeHtml(bf.name || bf.full_name || '');
                     const fullFnName = escapeHtml((bf.full_name || bf.name || '') + '()');
-                    chipsHtml += '<span class="mono" title="' + fullFnName + '" style="display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.15rem 0.45rem; background: var(--panel-raised); border: 1px solid var(--hairline); border-radius: 3px; font-size: 0.72rem; color: var(--teal);">🧩 ' + fnName + '()</span> ';
+                    chipsHtml += '<span class="mono" title="' + fullFnName + '" style="display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.15rem 0.45rem; background: var(--panel-raised); border: 1px solid var(--border); border-radius: 3px; font-size: 0.8125rem; color: var(--success);">🧩 ' + fnName + '()</span> ';
                 }});
 
                 const openAttr = shouldCollapse ? '' : ' open';
-                html += '<details' + openAttr + ' class="fill-chip-group" style="margin-bottom: 0.4rem; background: var(--panel); border: 1px solid var(--hairline); border-radius: 4px; padding: 0.35rem 0.6rem;">' +
-                    '<summary style="cursor: pointer; font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.72rem; font-weight: 600; color: var(--text-secondary); user-select: none; display: flex; align-items: center; justify-content: space-between;">' +
-                        '<span>' + icon + ' ' + groupTitle + ' <span style="opacity: 0.7; font-weight: normal; font-size: 0.6875rem;">(' + groupCountLabel + ')</span></span>' +
-                        '<span style="font-size: 0.65rem; color: var(--text-tertiary);">▾</span>' +
+                html += '<details' + openAttr + ' class="fill-chip-group" style="margin-bottom: 0.4rem; background: var(--surface-2); border: 1px solid var(--border); border-radius: 4px; padding: 0.35rem 0.6rem;">' +
+                    '<summary style="cursor: pointer; font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600; color: var(--text-muted); user-select: none; display: flex; align-items: center; justify-content: space-between;">' +
+                        '<span>' + icon + ' ' + groupTitle + ' <span style="opacity: 0.7; font-weight: normal; font-size: 0.8125rem;">(' + groupCountLabel + ')</span></span>' +
+                        '<span style="font-size: 0.8125rem; color: var(--text-muted);">▾</span>' +
                     '</summary>' +
                     '<div style="display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.4rem; padding-top: 0.35rem; border-top: 1px solid var(--hairline-soft);">' +
                         chipsHtml +
@@ -7280,20 +7274,20 @@ def report_view(
         }}
 
         function renderDiffHtmlInJs(result, isVerified, errorMsg, gradingMethod) {{
-            let tierTag = '<span class="badge badge-brass" style="font-size: 0.65rem; letter-spacing: 0.04em;">TIER 3 // Structure Comparison</span>';
+            let tierTag = '<span class="badge badge-brass" style="font-size: 0.8125rem; ">TIER 3 // Structure Comparison</span>';
             if (gradingMethod === 'real_tests') {{
-                tierTag = '<span class="badge badge-teal" style="font-size: 0.65rem; letter-spacing: 0.04em;">TIER 1 // REAL REPO TEST SUITE</span>';
+                tierTag = '<span class="badge badge-teal" style="font-size: 0.8125rem; ">TIER 1 // REAL REPO TEST SUITE</span>';
             }} else if (gradingMethod === 'expected_output') {{
-                tierTag = '<span class="badge badge-amber" style="font-size: 0.65rem; letter-spacing: 0.04em;">TIER 2 // EXPECTED OUTPUT</span>';
+                tierTag = '<span class="badge badge-amber" style="font-size: 0.8125rem; ">TIER 2 // EXPECTED OUTPUT</span>';
             }} else if (gradingMethod === 'fill_the_blanks') {{
-                tierTag = '<span class="badge badge-teal" style="font-size: 0.65rem; letter-spacing: 0.04em;">TIER 3 // FILL THE GAPS (SCOPED EVALUATION)</span>';
+                tierTag = '<span class="badge badge-teal" style="font-size: 0.8125rem; ">TIER 3 // FILL THE GAPS (SCOPED EVALUATION)</span>';
             }}
 
             let banner = '';
             if (isVerified) {{
-                banner = '<div class="diff-banner success" style="background: rgba(45, 212, 191, 0.12); border: 1px solid var(--teal-border); color: var(--teal); padding: 0.65rem 0.85rem; border-radius: 4px; font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.75rem; font-weight: 600; margin-bottom: 0.65rem; display: flex; justify-content: space-between; align-items: center; gap: 0.4rem; flex-wrap: wrap;"><div style="display: flex; align-items: center; gap: 0.4rem;"><span>✓</span> VERIFIED: Milestone requirements fulfilled</div>' + tierTag + '</div>';
+                banner = '<div class="diff-banner success" style="background: rgba(45, 212, 191, 0.12); border: 1px solid var(--teal-border); color: var(--success); padding: 0.65rem 0.85rem; border-radius: 4px; font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600; margin-bottom: 0.65rem; display: flex; justify-content: space-between; align-items: center; gap: 0.4rem; flex-wrap: wrap;"><div style="display: flex; align-items: center; gap: 0.4rem;"><span>✓</span> VERIFIED: Milestone requirements fulfilled</div>' + tierTag + '</div>';
             }} else {{
-                banner = '<div class="diff-banner failure" style="background: rgba(244, 63, 94, 0.12); border: 1px solid rgba(244, 63, 94, 0.35); color: var(--crimson); padding: 0.65rem 0.85rem; border-radius: 4px; font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.75rem; font-weight: 600; margin-bottom: 0.65rem; display: flex; justify-content: space-between; align-items: center; gap: 0.4rem; flex-wrap: wrap;"><div style="display: flex; align-items: center; gap: 0.4rem;"><span>⚠</span> VERIFICATION GAPS: Requirements not yet satisfied</div>' + tierTag + '</div>';
+                banner = '<div class="diff-banner failure" style="background: rgba(244, 63, 94, 0.12); border: 1px solid rgba(244, 63, 94, 0.35); color: var(--crimson); padding: 0.65rem 0.85rem; border-radius: 4px; font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600; margin-bottom: 0.65rem; display: flex; justify-content: space-between; align-items: center; gap: 0.4rem; flex-wrap: wrap;"><div style="display: flex; align-items: center; gap: 0.4rem;"><span>⚠</span> VERIFICATION GAPS: Requirements not yet satisfied</div>' + tierTag + '</div>';
             }}
 
             const diff = (result && result.diff) ? result.diff : (result || {{}});
@@ -7301,7 +7295,7 @@ def report_view(
 
             let errHtml = '';
             if (err) {{
-                errHtml = '<div style="color: var(--crimson); font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.75rem; margin-bottom: 0.5rem; background: rgba(244,63,94,0.08); padding: 0.5rem; border-radius: 3px;">' + escapeHtml(err) + '</div>';
+                errHtml = '<div style="color: var(--crimson); font-family: var(--font-ui); font-size: 0.8125rem; margin-bottom: 0.5rem; background: rgba(244,63,94,0.08); padding: 0.5rem; border-radius: 3px;">' + escapeHtml(err) + '</div>';
             }}
 
             // Handle Fill the Blanks grading results specially
@@ -7316,27 +7310,27 @@ def report_view(
                 blankDetails.forEach(function(b) {{
                     const name = escapeHtml(b.name || 'function');
                     if (b.status === 'implemented') {{
-                        implementedPills += '<span style="display: inline-flex; align-items: center; gap: 0.3rem; background: rgba(45, 212, 191, 0.12); border: 1px solid var(--teal-border); color: var(--teal); padding: 0.2rem 0.5rem; border-radius: 3px; font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.75rem;">✓ ' + name + '() <span style="opacity: 0.75; font-size: 0.6875rem;">(implemented)</span></span> ';
+                        implementedPills += '<span style="display: inline-flex; align-items: center; gap: 0.3rem; background: rgba(45, 212, 191, 0.12); border: 1px solid var(--teal-border); color: var(--success); padding: 0.2rem 0.5rem; border-radius: 3px; font-family: var(--font-ui); font-size: 0.8125rem;">✓ ' + name + '() <span style="opacity: 0.75; font-size: 0.8125rem;">(implemented)</span></span> ';
                     }} else {{
                         const reason = escapeHtml(b.reason || 'unimplemented stub');
-                        stubPills += '<span style="display: inline-flex; align-items: center; gap: 0.3rem; background: rgba(244, 63, 94, 0.12); border: 1px solid rgba(244, 63, 94, 0.35); color: var(--crimson); padding: 0.2rem 0.5rem; border-radius: 3px; font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.75rem;">✗ ' + name + '() <span style="opacity: 0.75; font-size: 0.6875rem;">(' + reason + ')</span></span> ';
+                        stubPills += '<span style="display: inline-flex; align-items: center; gap: 0.3rem; background: rgba(244, 63, 94, 0.12); border: 1px solid rgba(244, 63, 94, 0.35); color: var(--crimson); padding: 0.2rem 0.5rem; border-radius: 3px; font-family: var(--font-ui); font-size: 0.8125rem;">✗ ' + name + '() <span style="opacity: 0.75; font-size: 0.8125rem;">(' + reason + ')</span></span> ';
                     }}
                 }});
 
-                let fillSectionsHtml = '<div style="font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.4rem;">Scoped blanks evaluated: <strong>' + implementedCount + ' / ' + blankedCount + '</strong> completed.</div>';
+                let fillSectionsHtml = '<div style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--text-muted); margin-bottom: 0.4rem;">Scoped blanks evaluated: <strong>' + implementedCount + ' / ' + blankedCount + '</strong> completed.</div>';
                 if (implementedPills) {{
                     const isAllDone = (implementedCount === blankedCount && blankedCount > 0);
                     const fillSummary = implementedCount + '/' + blankedCount + ' functions completed' + (isAllDone ? ' ✓' : '');
-                    fillSectionsHtml += '<details class="matched-symbols-collapse" style="background: var(--panel); border: 1px solid var(--teal-border); border-radius: 4px; padding: 0.45rem 0.75rem; margin-bottom: 0.4rem;">' +
-                        '<summary style="cursor: pointer; font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.72rem; font-weight: 600; color: var(--teal); display: flex; align-items: center; justify-content: space-between; user-select: none;">' +
+                    fillSectionsHtml += '<details class="matched-symbols-collapse" style="background: var(--surface-2); border: 1px solid var(--teal-border); border-radius: 4px; padding: 0.45rem 0.75rem; margin-bottom: 0.4rem;">' +
+                        '<summary style="cursor: pointer; font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600; color: var(--success); display: flex; align-items: center; justify-content: space-between; user-select: none;">' +
                             '<span>IMPLEMENTED BLANKS (' + fillSummary + '):</span>' +
-                            '<span style="font-size: 0.6875rem; opacity: 0.85; font-weight: normal;">View list ▾</span>' +
+                            '<span style="font-size: 0.8125rem; opacity: 0.85; font-weight: normal;">View list ▾</span>' +
                         '</summary>' +
                         '<div style="display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.5rem; padding-top: 0.4rem; border-top: 1px solid var(--hairline-soft);">' + implementedPills + '</div>' +
                     '</details>';
                 }}
                 if (stubPills) {{
-                    fillSectionsHtml += '<div style="background: rgba(244, 63, 94, 0.06); border: 1px solid rgba(244, 63, 94, 0.25); border-radius: 4px; padding: 0.45rem 0.75rem; margin-bottom: 0.4rem;"><div style="font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.6875rem; color: var(--crimson); font-weight: 600; margin-bottom: 0.35rem;">UNIMPLEMENTED / STUB BLANKS:</div><div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">' + stubPills + '</div></div>';
+                    fillSectionsHtml += '<div style="background: rgba(244, 63, 94, 0.06); border: 1px solid rgba(244, 63, 94, 0.25); border-radius: 4px; padding: 0.45rem 0.75rem; margin-bottom: 0.4rem;"><div style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--crimson); font-weight: 600; margin-bottom: 0.35rem;">UNIMPLEMENTED / STUB BLANKS:</div><div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">' + stubPills + '</div></div>';
                 }}
 
                 return banner + errHtml + '<div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem;">' + fillSectionsHtml + '</div>';
@@ -7353,7 +7347,7 @@ def report_view(
                 const name = escapeHtml(typeof mat === 'object' ? (mat.name || '') : String(mat));
                 const kind = escapeHtml(typeof mat === 'object' ? (mat.kind || 'symbol') : 'symbol');
                 const argsStr = mat.args && mat.args.length ? '(' + mat.args.map(escapeHtml).join(', ') + ')' : '';
-                presentPills += '<span style="display: inline-flex; align-items: center; gap: 0.3rem; background: rgba(45, 212, 191, 0.12); border: 1px solid var(--teal-border); color: var(--teal); padding: 0.2rem 0.5rem; border-radius: 3px; font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.75rem;">✓ ' + name + argsStr + ' <span style="opacity: 0.75; font-size: 0.6875rem;">(' + kind + ')</span></span> ';
+                presentPills += '<span style="display: inline-flex; align-items: center; gap: 0.3rem; background: rgba(45, 212, 191, 0.12); border: 1px solid var(--teal-border); color: var(--success); padding: 0.2rem 0.5rem; border-radius: 3px; font-family: var(--font-ui); font-size: 0.8125rem;">✓ ' + name + argsStr + ' <span style="opacity: 0.75; font-size: 0.8125rem;">(' + kind + ')</span></span> ';
             }});
 
             let missingPills = '';
@@ -7361,7 +7355,7 @@ def report_view(
                 const mat = s.expected || s || {{}};
                 const name = escapeHtml(typeof mat === 'object' ? (mat.name || '') : String(mat));
                 const kind = escapeHtml(typeof mat === 'object' ? (mat.kind || 'required') : 'required');
-                missingPills += '<span style="display: inline-flex; align-items: center; gap: 0.3rem; background: rgba(244, 63, 94, 0.12); border: 1px solid rgba(244, 63, 94, 0.35); color: var(--crimson); padding: 0.2rem 0.5rem; border-radius: 3px; font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.75rem;">✗ ' + name + ' <span style="opacity: 0.75; font-size: 0.6875rem;">(' + kind + ')</span></span> ';
+                missingPills += '<span style="display: inline-flex; align-items: center; gap: 0.3rem; background: rgba(244, 63, 94, 0.12); border: 1px solid rgba(244, 63, 94, 0.35); color: var(--crimson); padding: 0.2rem 0.5rem; border-radius: 3px; font-family: var(--font-ui); font-size: 0.8125rem;">✗ ' + name + ' <span style="opacity: 0.75; font-size: 0.8125rem;">(' + kind + ')</span></span> ';
             }});
 
             let extraPills = '';
@@ -7369,7 +7363,7 @@ def report_view(
                 const mat = s.matched || s || {{}};
                 const name = escapeHtml(typeof mat === 'object' ? (mat.name || '') : String(mat));
                 const kind = escapeHtml(typeof mat === 'object' ? (mat.kind || 'extra') : 'extra');
-                extraPills += '<span style="display: inline-flex; align-items: center; gap: 0.3rem; background: var(--panel-raised); border: 1px solid var(--hairline); color: var(--text-secondary); padding: 0.2rem 0.5rem; border-radius: 3px; font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.75rem;">+ ' + name + ' <span style="opacity: 0.75; font-size: 0.6875rem;">(' + kind + ')</span></span> ';
+                extraPills += '<span style="display: inline-flex; align-items: center; gap: 0.3rem; background: var(--panel-raised); border: 1px solid var(--border); color: var(--text-muted); padding: 0.2rem 0.5rem; border-radius: 3px; font-family: var(--font-ui); font-size: 0.8125rem;">+ ' + name + ' <span style="opacity: 0.75; font-size: 0.8125rem;">(' + kind + ')</span></span> ';
             }});
 
             const totalExpected = Number(present.length + missing.length) || 0;
@@ -7378,19 +7372,19 @@ def report_view(
 
             let sectionsHtml = '';
             if (presentPills) {{
-                sectionsHtml += '<details class="matched-symbols-collapse" style="background: var(--panel); border: 1px solid var(--teal-border); border-radius: 4px; padding: 0.45rem 0.75rem; margin-bottom: 0.4rem;">' +
-                    '<summary style="cursor: pointer; font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.72rem; font-weight: 600; color: var(--teal); display: flex; align-items: center; justify-content: space-between; user-select: none;">' +
+                sectionsHtml += '<details class="matched-symbols-collapse" style="background: var(--surface-2); border: 1px solid var(--teal-border); border-radius: 4px; padding: 0.45rem 0.75rem; margin-bottom: 0.4rem;">' +
+                    '<summary style="cursor: pointer; font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600; color: var(--success); display: flex; align-items: center; justify-content: space-between; user-select: none;">' +
                         '<span>PRESENT &amp; MATCHED SYMBOLS (' + matchSummary + '):</span>' +
-                        '<span style="font-size: 0.6875rem; opacity: 0.85; font-weight: normal;">View list ▾</span>' +
+                        '<span style="font-size: 0.8125rem; opacity: 0.85; font-weight: normal;">View list ▾</span>' +
                     '</summary>' +
                     '<div style="display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.5rem; padding-top: 0.4rem; border-top: 1px solid var(--hairline-soft);">' + presentPills + '</div>' +
                 '</details>';
             }}
             if (missingPills) {{
-                sectionsHtml += '<div style="background: rgba(244, 63, 94, 0.06); border: 1px solid rgba(244, 63, 94, 0.25); border-radius: 4px; padding: 0.45rem 0.75rem; margin-bottom: 0.4rem;"><div style="font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.6875rem; color: var(--crimson); font-weight: 600; margin-bottom: 0.35rem;">MISSING EXPECTED SYMBOLS (' + missing.length + '):</div><div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">' + missingPills + '</div></div>';
+                sectionsHtml += '<div style="background: rgba(244, 63, 94, 0.06); border: 1px solid rgba(244, 63, 94, 0.25); border-radius: 4px; padding: 0.45rem 0.75rem; margin-bottom: 0.4rem;"><div style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--crimson); font-weight: 600; margin-bottom: 0.35rem;">MISSING EXPECTED SYMBOLS (' + missing.length + '):</div><div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">' + missingPills + '</div></div>';
             }}
             if (extraPills) {{
-                sectionsHtml += '<div style="background: var(--panel); border: 1px solid var(--hairline); border-radius: 4px; padding: 0.45rem 0.75rem; margin-bottom: 0.4rem;"><div style="font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.6875rem; color: var(--text-tertiary); font-weight: 600; margin-bottom: 0.35rem;">EXTRA / AUXILIARY SYMBOLS (' + extra.length + '):</div><div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">' + extraPills + '</div></div>';
+                sectionsHtml += '<div style="background: var(--surface-2); border: 1px solid var(--border); border-radius: 4px; padding: 0.45rem 0.75rem; margin-bottom: 0.4rem;"><div style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--text-muted); font-weight: 600; margin-bottom: 0.35rem;">EXTRA / AUXILIARY SYMBOLS (' + extra.length + '):</div><div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">' + extraPills + '</div></div>';
             }}
 
             return banner + errHtml + '<div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem;">' + sectionsHtml + '</div>';
@@ -7416,19 +7410,19 @@ def report_view(
                 content += '<div style="color: var(--crimson); white-space: pre-wrap; word-break: break-all; margin-top: 0.25rem;">' + escapeHtml(stderr) + '</div>';
             }}
             if (!stdout && !stderr) {{
-                content = '<div style="color: var(--text-tertiary); font-style: italic;">(Process completed with no output)</div>';
+                content = '<div style="color: var(--text-muted); font-style: italic;">(Process completed with no output)</div>';
             }}
 
-            return '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; border-bottom: 1px solid var(--hairline); padding-bottom: 0.4rem;">' +
+            return '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; border-bottom: 1px solid var(--border); padding-bottom: 0.4rem;">' +
                 '<div style="display: flex; align-items: center; gap: 0.5rem;">' +
                     '<span class="chip-dot ' + dotColor + '"></span>' +
-                    '<span style="font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.72rem; font-weight: 600; color: var(--text-primary); text-transform: uppercase;">Execution Console</span>' +
-                    '<span class="badge ' + exitBadgeClass + '" style="font-size: 0.65rem;">' + exitBadgeText + '</span>' +
-                    (execMs ? '<span class="tag" style="font-size: 0.65rem;">' + execMs + '</span>' : '') +
+                    '<span style="font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600; color: var(--text); ">Execution Console</span>' +
+                    '<span class="badge ' + exitBadgeClass + '" style="font-size: 0.8125rem;">' + exitBadgeText + '</span>' +
+                    (execMs ? '<span class="tag" style="font-size: 0.8125rem;">' + execMs + '</span>' : '') +
                 '</div>' +
-                '<span style="font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.65rem; color: var(--text-tertiary);">UNMETERED PLAYGROUND</span>' +
+                '<span style="font-family: var(--font-mono); font-size: 0.8125rem; color: var(--text-muted);">UNMETERED PLAYGROUND</span>' +
             '</div>' +
-            '<pre style="background: #0d0e12; padding: 0.75rem; border-radius: 3px; border: 1px solid var(--hairline-soft); font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.78rem; line-height: 1.45; overflow-x: auto; margin: 0;"><code>' + content + '</code></pre>';
+            '<pre style="background: #0d0e12; padding: 0.75rem; border-radius: 3px; border: 1px solid var(--hairline-soft); font-family: var(--font-mono); font-size: 0.8125rem; line-height: 1.45; overflow-x: auto; margin: 0;"><code>' + content + '</code></pre>';
         }}
 
         async function runMilestoneCode(jobId, tier) {{
@@ -7471,7 +7465,7 @@ def report_view(
                         consolePanel.style.display = 'block';
                         consolePanel.textContent = '';
                         const errBox = document.createElement('div');
-                        errBox.style.cssText = "color: var(--crimson); font-family: 'IBM Plex Mono', monospace; font-size: 0.8125rem;";
+                        errBox.style.cssText = "color: var(--crimson); font-family: var(--font-ui); font-size: 0.8125rem;";
                         errBox.textContent = 'Execution Error: ' + msg;
                         consolePanel.appendChild(errBox);
                     }}
@@ -7489,7 +7483,7 @@ def report_view(
                     consolePanel.style.display = 'block';
                     consolePanel.textContent = '';
                     const errBox = document.createElement('div');
-                    errBox.style.cssText = "color: var(--crimson); font-family: 'IBM Plex Mono', monospace; font-size: 0.8125rem;";
+                    errBox.style.cssText = "color: var(--crimson); font-family: var(--font-ui); font-size: 0.8125rem;";
                     errBox.textContent = 'Execution Network Error: ' + e.message;
                     consolePanel.appendChild(errBox);
                 }}
@@ -7542,7 +7536,7 @@ def report_view(
                         diffPanel.style.display = 'block';
                         diffPanel.textContent = '';
                         const errBox = document.createElement('div');
-                        errBox.style.cssText = "color: var(--crimson); font-family: 'IBM Plex Mono', monospace; font-size: 0.8125rem;";
+                        errBox.style.cssText = "color: var(--crimson); font-family: var(--font-ui); font-size: 0.8125rem;";
                         errBox.textContent = 'Verification Error: ' + msg;
                         diffPanel.appendChild(errBox);
                     }}
@@ -7600,7 +7594,7 @@ def report_view(
                 console.error('Submission failed', e);
                 if (diffPanel) {{
                     diffPanel.style.display = 'block';
-                    diffPanel.innerHTML = '<div style="color: var(--crimson); font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.8125rem;">Network Error: ' + escapeHtml(e.message) + '</div>';
+                    diffPanel.innerHTML = '<div style="color: var(--crimson); font-family: var(--font-ui); font-size: 0.8125rem;">Network Error: ' + escapeHtml(e.message) + '</div>';
                 }}
             }} finally {{
                 if (btn) btn.disabled = false;
@@ -7648,7 +7642,7 @@ def report_view(
                         consolePanel.style.display = 'block';
                         consolePanel.textContent = '';
                         const errBox = document.createElement('div');
-                        errBox.style.cssText = "color: var(--crimson); font-family: 'IBM Plex Mono', monospace; font-size: 0.8125rem;";
+                        errBox.style.cssText = "color: var(--crimson); font-family: var(--font-ui); font-size: 0.8125rem;";
                         errBox.textContent = 'Execution Error: ' + msg;
                         consolePanel.appendChild(errBox);
                     }}
@@ -7666,7 +7660,7 @@ def report_view(
                     consolePanel.style.display = 'block';
                     consolePanel.textContent = '';
                     const errBox = document.createElement('div');
-                    errBox.style.cssText = "color: var(--crimson); font-family: 'IBM Plex Mono', monospace; font-size: 0.8125rem;";
+                    errBox.style.cssText = "color: var(--crimson); font-family: var(--font-ui); font-size: 0.8125rem;";
                     errBox.textContent = 'Execution Network Error: ' + e.message;
                     consolePanel.appendChild(errBox);
                 }}
@@ -7725,7 +7719,7 @@ def report_view(
                         diffPanel.style.display = 'block';
                         diffPanel.textContent = '';
                         const errBox = document.createElement('div');
-                        errBox.style.cssText = "color: var(--crimson); font-family: 'IBM Plex Mono', monospace; font-size: 0.8125rem;";
+                        errBox.style.cssText = "color: var(--crimson); font-family: var(--font-ui); font-size: 0.8125rem;";
                         errBox.textContent = "Couldn't check your answer. Try again.";
                         diffPanel.appendChild(errBox);
                     }}
@@ -7743,8 +7737,8 @@ def report_view(
                 if (diffPanel) {{
                     diffPanel.style.display = 'block';
                     const feedbackBanner = passed
-                        ? '<div class="fill-feedback-banner correct" style="margin-bottom: 0.75rem; padding: 0.6rem 0.85rem; background: rgba(20, 184, 166, 0.1); border-left: 3px solid var(--teal); border-radius: 3px; font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.8125rem; font-weight: 600; color: var(--teal); display: flex; align-items: center; gap: 0.4rem;"><span>✓</span> Correct</div>'
-                        : '<div class="fill-feedback-banner incorrect" style="margin-bottom: 0.75rem; padding: 0.6rem 0.85rem; background: rgba(239, 68, 68, 0.1); border-left: 3px solid var(--crimson); border-radius: 3px; font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.8125rem; font-weight: 600; color: var(--crimson); display: flex; align-items: center; gap: 0.4rem;"><span>✗</span> Not quite, try again</div>';
+                        ? '<div class="fill-feedback-banner correct" style="margin-bottom: 0.75rem; padding: 0.6rem 0.85rem; background: rgba(20, 184, 166, 0.1); border-left: 3px solid var(--success); border-radius: 3px; font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600; color: var(--success); display: flex; align-items: center; gap: 0.4rem;"><span>✓</span> Correct</div>'
+                        : '<div class="fill-feedback-banner incorrect" style="margin-bottom: 0.75rem; padding: 0.6rem 0.85rem; background: rgba(239, 68, 68, 0.1); border-left: 3px solid var(--crimson); border-radius: 3px; font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600; color: var(--crimson); display: flex; align-items: center; gap: 0.4rem;"><span>✗</span> Not quite, try again</div>';
                     diffPanel.innerHTML = feedbackBanner + renderDiffHtmlInJs(diff, isVerified, err, gradingMethod);
                 }}
 
@@ -7779,7 +7773,7 @@ def report_view(
                 console.error('Fill submission failed', e);
                 if (diffPanel) {{
                     diffPanel.style.display = 'block';
-                    diffPanel.innerHTML = '<div style="color: var(--crimson); font-family: \\'IBM Plex Mono\\', monospace; font-size: 0.8125rem;">Couldn\\'t check your answer. Try again.</div>';
+                    diffPanel.innerHTML = '<div style="color: var(--crimson); font-family: var(--font-ui); font-size: 0.8125rem;">Couldn\\'t check your answer. Try again.</div>';
                 }}
             }} finally {{
                 clearTimeout(timeoutId);
@@ -8025,7 +8019,7 @@ def report_view(
             [guessBtn, fillBtn, readBtn].forEach(b => {{
                 if (b && !b.disabled) {{
                     b.style.background = 'transparent';
-                    b.style.color = 'var(--text-secondary)';
+                    b.style.color = 'var(--text-muted)';
                     b.style.boxShadow = 'none';
                     b.classList.remove('active');
                 }}
@@ -8036,8 +8030,8 @@ def report_view(
                 if (fillWorkspace) fillWorkspace.style.display = 'none';
                 if (readWorkspace) readWorkspace.style.display = 'block';
                 if (readBtn) {{
-                    readBtn.style.background = 'var(--panel)';
-                    readBtn.style.color = 'var(--teal)';
+                    readBtn.style.background = 'var(--surface-2)';
+                    readBtn.style.color = 'var(--success)';
                     readBtn.style.boxShadow = '0 1px 3px rgba(0,0,0,0.2)';
                     readBtn.classList.add('active');
                 }}
@@ -8046,8 +8040,8 @@ def report_view(
                 if (readWorkspace) readWorkspace.style.display = 'none';
                 if (fillWorkspace) fillWorkspace.style.display = 'block';
                 if (fillBtn) {{
-                    fillBtn.style.background = 'var(--panel)';
-                    fillBtn.style.color = 'var(--teal)';
+                    fillBtn.style.background = 'var(--surface-2)';
+                    fillBtn.style.color = 'var(--success)';
                     fillBtn.style.boxShadow = '0 1px 3px rgba(0,0,0,0.2)';
                     fillBtn.classList.add('active');
                 }}
@@ -8059,8 +8053,8 @@ def report_view(
                 if (fillWorkspace) fillWorkspace.style.display = 'none';
                 if (guessWorkspace) guessWorkspace.style.display = 'block';
                 if (guessBtn) {{
-                    guessBtn.style.background = 'var(--panel)';
-                    guessBtn.style.color = 'var(--brass)';
+                    guessBtn.style.background = 'var(--surface-2)';
+                    guessBtn.style.color = 'var(--accent)';
                     guessBtn.style.boxShadow = '0 1px 3px rgba(0,0,0,0.2)';
                     guessBtn.classList.add('active');
                 }}
@@ -8088,15 +8082,15 @@ def report_view(
             const tabs = document.querySelectorAll('[id^="guess-tab-btn-' + tier + '-"]');
             tabs.forEach(t => {{
                 t.style.background = 'transparent';
-                t.style.color = 'var(--text-secondary)';
-                t.style.borderColor = 'var(--hairline)';
+                t.style.color = 'var(--text-muted)';
+                t.style.borderColor = 'var(--border)';
                 t.classList.remove('active');
             }});
 
             const activeTab = document.getElementById('guess-tab-btn-' + tier + '-' + fileIdx);
             if (activeTab) {{
-                activeTab.style.background = 'var(--panel)';
-                activeTab.style.color = 'var(--brass)';
+                activeTab.style.background = 'var(--surface-2)';
+                activeTab.style.color = 'var(--accent)';
                 activeTab.style.borderColor = 'var(--brass-border)';
                 activeTab.classList.add('active');
             }}
@@ -8156,15 +8150,15 @@ def report_view(
             const tabs = document.querySelectorAll('[id^="fill-tab-btn-' + tier + '-"]');
             tabs.forEach(t => {{
                 t.style.background = 'transparent';
-                t.style.color = 'var(--text-secondary)';
-                t.style.borderColor = 'var(--hairline)';
+                t.style.color = 'var(--text-muted)';
+                t.style.borderColor = 'var(--border)';
                 t.classList.remove('active');
             }});
 
             const activeTab = document.getElementById('fill-tab-btn-' + tier + '-' + fileIdx);
             if (activeTab) {{
-                activeTab.style.background = 'var(--panel)';
-                activeTab.style.color = 'var(--teal)';
+                activeTab.style.background = 'var(--surface-2)';
+                activeTab.style.color = 'var(--success)';
                 activeTab.style.borderColor = 'var(--teal-border)';
                 activeTab.classList.add('active');
             }}
@@ -8212,15 +8206,15 @@ def report_view(
             const tabs = document.querySelectorAll('[id^="read-tab-btn-' + tier + '-"]');
             tabs.forEach(t => {{
                 t.style.background = 'transparent';
-                t.style.color = 'var(--text-secondary)';
-                t.style.borderColor = 'var(--hairline)';
+                t.style.color = 'var(--text-muted)';
+                t.style.borderColor = 'var(--border)';
                 t.classList.remove('active');
             }});
 
             const activeTab = document.getElementById('read-tab-btn-' + tier + '-' + fileIdx);
             if (activeTab) {{
-                activeTab.style.background = 'var(--panel)';
-                activeTab.style.color = 'var(--teal)';
+                activeTab.style.background = 'var(--surface-2)';
+                activeTab.style.color = 'var(--success)';
                 activeTab.style.borderColor = 'var(--teal-border)';
                 activeTab.classList.add('active');
             }}
@@ -8378,7 +8372,7 @@ def report_view(
                 const tgt = e.getAttribute('data-target');
                 if (matchedIds.has(src) || matchedIds.has(tgt)) {{
                     e.style.opacity = '0.9';
-                    e.setAttribute('stroke', 'var(--brass)');
+                    e.setAttribute('stroke', 'var(--accent)');
                     e.setAttribute('stroke-width', '2');
                     e.setAttribute('marker-end', 'url(#dag-arrow-active)');
                 }} else {{
@@ -8405,13 +8399,13 @@ def report_view(
                 if (src === nodeId) {{
                     connectedTargets.add(tgt);
                     e.style.opacity = '1';
-                    e.setAttribute('stroke', 'var(--brass)');
+                    e.setAttribute('stroke', 'var(--accent)');
                     e.setAttribute('stroke-width', '2');
                     e.setAttribute('marker-end', 'url(#dag-arrow-active)');
                 }} else if (tgt === nodeId) {{
                     connectedSources.add(src);
                     e.style.opacity = '1';
-                    e.setAttribute('stroke', 'var(--teal)');
+                    e.setAttribute('stroke', 'var(--success)');
                     e.setAttribute('stroke-width', '2');
                     e.setAttribute('marker-end', 'url(#dag-arrow-active)');
                 }} else {{
@@ -8527,11 +8521,11 @@ def report_view(
             const inEl = document.getElementById('inspect-imported-by');
             if (inEl) {{
                 if (!inDeps.length) {{
-                    inEl.innerHTML = '<span style="color: var(--text-tertiary);">None (Entry Point)</span>';
+                    inEl.innerHTML = '<span style="color: var(--text-muted);">None (Entry Point)</span>';
                 }} else {{
                     inEl.innerHTML = inDeps.map(dep => {{
                         const fname = dep.split('\\\\').join('/').split('/').pop();
-                        return '<div style="cursor: pointer; padding: 2px 0; color: var(--text-primary); text-decoration: underline; text-underline-offset: 2px;" data-dep="' + dep + '" onclick="selectDagNode(this.dataset.dep)" title="' + dep + '">' + fname + '</div>';
+                        return '<div style="cursor: pointer; padding: 2px 0; color: var(--text); text-decoration: underline; text-underline-offset: 2px;" data-dep="' + dep + '" onclick="selectDagNode(this.dataset.dep)" title="' + dep + '">' + fname + '</div>';
                     }}).join('');
                 }}
             }}
@@ -8541,11 +8535,11 @@ def report_view(
             const outEl = document.getElementById('inspect-imports');
             if (outEl) {{
                 if (!outDeps.length) {{
-                    outEl.innerHTML = '<span style="color: var(--text-tertiary);">None (Leaf Node)</span>';
+                    outEl.innerHTML = '<span style="color: var(--text-muted);">None (Leaf Node)</span>';
                 }} else {{
                     outEl.innerHTML = outDeps.map(dep => {{
                         const fname = dep.split('\\\\').join('/').split('/').pop();
-                        return '<div style="cursor: pointer; padding: 2px 0; color: var(--text-primary); text-decoration: underline; text-underline-offset: 2px;" data-dep="' + dep + '" onclick="selectDagNode(this.dataset.dep)" title="' + dep + '">' + fname + '</div>';
+                        return '<div style="cursor: pointer; padding: 2px 0; color: var(--text); text-decoration: underline; text-underline-offset: 2px;" data-dep="' + dep + '" onclick="selectDagNode(this.dataset.dep)" title="' + dep + '">' + fname + '</div>';
                     }}).join('');
                 }}
             }}
@@ -8559,12 +8553,12 @@ def report_view(
                 const tgt = e.getAttribute('data-target');
                 if (src === nodeId) {{
                     e.style.opacity = '1.0';
-                    e.setAttribute('stroke', 'var(--brass)');
+                    e.setAttribute('stroke', 'var(--accent)');
                     e.setAttribute('stroke-width', '2');
                     e.setAttribute('marker-end', 'url(#dag-arrow-active)');
                 }} else if (tgt === nodeId) {{
                     e.style.opacity = '1.0';
-                    e.setAttribute('stroke', 'var(--teal)');
+                    e.setAttribute('stroke', 'var(--success)');
                     e.setAttribute('stroke-width', '2');
                     e.setAttribute('marker-end', 'url(#dag-arrow-active)');
                 }} else {{
@@ -8581,7 +8575,7 @@ def report_view(
                 if (id === nodeId) {{
                     n.style.opacity = '1.0';
                     if (box) {{
-                        box.setAttribute('stroke', 'var(--brass)');
+                        box.setAttribute('stroke', 'var(--accent)');
                         box.setAttribute('stroke-width', '2');
                     }}
                 }} else if (inDepsSet.has(id) || outDepsSet.has(id)) {{
@@ -8593,7 +8587,7 @@ def report_view(
                 }} else {{
                     n.style.opacity = '0.25';
                     if (box) {{
-                        box.setAttribute('stroke', 'var(--hairline)');
+                        box.setAttribute('stroke', 'var(--border)');
                         box.setAttribute('stroke-width', '1');
                     }}
                 }}
@@ -8612,7 +8606,7 @@ def report_view(
                 n.style.opacity = '1.0';
                 const box = n.querySelector('.dag-node-box');
                 if (box) {{
-                    box.setAttribute('stroke', 'var(--hairline)');
+                    box.setAttribute('stroke', 'var(--border)');
                     box.setAttribute('stroke-width', '1');
                 }}
             }});
@@ -8770,7 +8764,7 @@ def report_view(
 
             if (selectedVal === correctIdx) {{
                 feedback.style.background = 'var(--teal-soft)';
-                feedback.style.color = 'var(--teal)';
+                feedback.style.color = 'var(--success)';
                 feedback.style.border = '1px solid var(--teal-border)';
                 feedback.textContent = '✓ Correct — Verified Invariant';
             }} else {{
@@ -8876,7 +8870,7 @@ def report_view(
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
     <style>
         .CodeMirror {
-            font-family: 'IBM Plex Mono', monospace !important;
+            font-family: var(--font-mono) !important;
             font-size: 0.8125rem !important;
             height: 200px !important;
             border-radius: 4px;
@@ -8884,10 +8878,10 @@ def report_view(
         }
         .CodeMirror-gutters {
             background: #121318 !important;
-            border-right: 1px solid var(--hairline) !important;
+            border-right: 1px solid var(--border) !important;
         }
         .CodeMirror-linenumber {
-            color: var(--text-tertiary) !important;
+            color: var(--text-muted) !important;
         }
     </style>
 """
@@ -8897,7 +8891,7 @@ def report_view(
         .report-tabs-nav {
             display: flex;
             gap: 0.5rem;
-            border-bottom: 1px solid var(--hairline);
+            border-bottom: 1px solid var(--border);
             margin-bottom: 1.75rem;
             overflow-x: auto;
             padding-bottom: 0.25rem;
@@ -8907,9 +8901,9 @@ def report_view(
             display: inline-flex;
             align-items: center;
             padding: 0.65rem 1.15rem;
-            background: var(--panel);
-            color: var(--text-secondary);
-            border: 1px solid var(--hairline);
+            background: var(--surface-2);
+            color: var(--text-muted);
+            border: 1px solid var(--border);
             border-radius: 4px;
             font-family: 'IBM Plex Sans', sans-serif;
             font-size: 0.875rem;
@@ -8919,15 +8913,15 @@ def report_view(
             white-space: nowrap;
         }
         .report-tab-btn:hover {
-            color: var(--text-primary);
+            color: var(--text);
             background: var(--panel-raised);
             border-color: var(--brass-border);
         }
         .report-tab-btn.active {
-            color: var(--brass);
+            color: var(--accent);
             background: var(--panel-raised);
-            border-color: var(--brass);
-            box-shadow: 0 0 0 1px var(--brass);
+            border-color: var(--accent);
+            box-shadow: 0 0 0 1px var(--accent);
             font-weight: 600;
         }
         .report-tab-pane {
@@ -8940,23 +8934,23 @@ def report_view(
 
         /* Milestone Mode Switcher & Read-Only Viewer Styles */
         .milestone-mode-tab-btn:hover:not(:disabled) {
-            color: var(--text-primary) !important;
+            color: var(--text) !important;
             background: var(--panel-raised) !important;
         }
         .read-file-tab-btn:hover {
-            border-color: var(--teal) !important;
-            color: var(--teal) !important;
+            border-color: var(--success) !important;
+            color: var(--success) !important;
         }
         .read-file-tab-btn.active {
             border-color: var(--teal-border) !important;
-            background: var(--panel) !important;
-            color: var(--teal) !important;
+            background: var(--surface-2) !important;
+            color: var(--success) !important;
             box-shadow: 0 0 0 1px var(--teal-border);
         }
 
         .kpi-card {
             background: var(--panel-raised);
-            border: 1px solid var(--hairline);
+            border: 1px solid var(--border);
             border-radius: 4px;
             padding: 0.85rem 1rem;
             transition: all 120ms ease;
@@ -8966,24 +8960,22 @@ def report_view(
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
         .kpi-label {
-            font-family: 'IBM Plex Mono', monospace;
-            font-size: 0.6875rem;
+            font-family: var(--font-mono);
+            font-size: 0.8125rem;
             font-weight: 600;
-            color: var(--text-tertiary);
-            letter-spacing: 0.05em;
-            text-transform: uppercase;
+            color: var(--text-muted);
             margin-bottom: 0.2rem;
         }
         .kpi-value {
-            font-family: 'IBM Plex Mono', monospace;
+            font-family: var(--font-ui);
             font-size: 1.25rem;
             font-weight: 700;
             line-height: 1.2;
             margin-bottom: 0.15rem;
         }
         .kpi-sub {
-            font-size: 0.6875rem;
-            color: var(--text-secondary);
+            font-size: 0.8125rem;
+            color: var(--text-muted);
         }
         .entry-chip {
             display: inline-flex;
@@ -8999,7 +8991,7 @@ def report_view(
             touch-action: manipulation;
         }
         .entry-chip:hover {
-            border-color: var(--brass);
+            border-color: var(--accent);
             background: var(--panel-overlay);
         }
         .entry-chip .entry-chip-arrow {
@@ -9020,7 +9012,7 @@ def report_view(
             transition: stroke 150ms ease, fill 150ms ease, filter 150ms ease;
         }
         .dag-node:hover .dag-node-box {
-            stroke: var(--brass);
+            stroke: var(--accent);
             stroke-width: 2px;
             filter: drop-shadow(0 0 6px rgba(212, 163, 89, 0.25));
         }
@@ -9085,7 +9077,7 @@ def report_view(
             #dag-node-inspector {
                 width: 100% !important;
                 border-left: none !important;
-                border-top: 1px solid var(--hairline) !important;
+                border-top: 1px solid var(--border) !important;
                 max-height: 300px !important;
             }
             .dag-hint {
@@ -9100,7 +9092,7 @@ def report_view(
         .milestone-vessel.not-started {
             background: var(--panel-raised) !important;
             border: 1px solid var(--hairline-strong) !important;
-            color: var(--text-tertiary) !important;
+            color: var(--text-muted) !important;
             box-shadow: none !important;
         }
         .milestone-vessel.attempting {
@@ -9112,8 +9104,8 @@ def report_view(
         }
         .milestone-vessel.verified {
             background: rgba(45, 212, 191, 0.15) !important;
-            border: 2px solid var(--teal) !important;
-            color: var(--teal) !important;
+            border: 2px solid var(--success) !important;
+            color: var(--success) !important;
             box-shadow: 0 0 14px rgba(45, 212, 191, 0.35) !important;
         }
         @keyframes pulse-amber {
@@ -9124,10 +9116,10 @@ def report_view(
     """
 
     back_link_html = """
-                <a href="/showcase" style="display: inline-flex; align-items: center; gap: 0.4rem; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
+                <a href="/showcase" style="display: inline-flex; align-items: center; gap: 0.4rem; font-family: var(--font-ui); font-size: 0.8125rem; color: var(--text-muted); margin-bottom: 0.5rem;">
                     &larr; BACK TO SHOWCASE DIRECTORY
                 </a>""" if is_showcase else """
-                <a href="/dashboard" style="display: inline-flex; align-items: center; gap: 0.4rem; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
+                <a href="/dashboard" style="display: inline-flex; align-items: center; gap: 0.4rem; font-family: var(--font-ui); font-size: 0.8125rem; color: var(--text-muted); margin-bottom: 0.5rem;">
                     &larr; BACK TO DASHBOARD LEDGER
                 </a>"""
 
@@ -9160,13 +9152,13 @@ def report_view(
             <div>
                 {back_link_html}
                 <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
-                    <h1 style="font-size: 2.15rem; font-weight: 500; letter-spacing: -0.02em;">Architecture Report: <span style="font-style: italic; color: var(--brass);">{repo_name}</span></h1>
+                    <h1 style="font-size: 2.15rem; font-weight: 500; letter-spacing: -0.02em;">Architecture Report: <span style="font-style: italic; color: var(--accent);">{repo_name}</span></h1>
                 </div>
-                <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.2rem;">
+                <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.2rem;">
                     Codebase Intelligence Report &bull; Structural Syntax Tree &amp; Dependency Reconstruction
                 </div>
-                <div style="display: flex; align-items: center; gap: 0.75rem; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--text-tertiary); margin-top: 0.35rem; flex-wrap: wrap;">
-                    <span>TARGET: <a href="{repo_url}" target="_blank" rel="noopener noreferrer" style="color: var(--text-secondary);">{repo_url}</a></span>
+                <div style="display: flex; align-items: center; gap: 0.75rem; font-family: var(--font-mono); font-size: 0.8125rem; color: var(--text-muted); margin-top: 0.35rem; flex-wrap: wrap;">
+                    <span>TARGET: <a href="{repo_url}" target="_blank" rel="noopener noreferrer" style="color: var(--text-muted);">{repo_url}</a></span>
                     <span>&bull;</span>
                     <span>SYNTHESIZED: {created_at}</span>
                     <span>&bull;</span>
@@ -9238,7 +9230,7 @@ def report_view(
     </div>
     """
     return page_shell(
-        f"Architecture Report: {repo_name}",
+        repo_name,
         content,
         current_user=None if is_showcase else current_user,
         active_route="/showcase" if is_showcase else "/report",
@@ -9310,10 +9302,10 @@ def settings_view(
     else:
         error_html = ""
 
-    success_html = f'<div style="background: rgba(45, 212, 191, 0.1); border: 1px solid var(--teal); color: var(--teal); padding: 0.75rem 1rem; border-radius: 4px; margin-bottom: 1.5rem; font-size: 0.875rem;">{sanitize_text(success)}</div>' if success else ""
+    success_html = f'<div style="background: rgba(45, 212, 191, 0.1); border: 1px solid var(--success); color: var(--success); padding: 0.75rem 1rem; border-radius: 4px; margin-bottom: 1.5rem; font-size: 0.875rem;">{sanitize_text(success)}</div>' if success else ""
 
-    avatar_markup = f'<img src="{user_avatar}" alt="@{username}" style="width: 52px; height: 52px; border-radius: 4px; object-fit: cover; border: 1px solid var(--hairline);">' if user_avatar else f'''
-    <div style="width: 52px; height: 52px; border-radius: 4px; background: var(--brass-soft); border: 1px solid var(--brass-border); display: flex; align-items: center; justify-content: center; color: var(--brass);">
+    avatar_markup = f'<img src="{user_avatar}" alt="@{username}" style="width: 52px; height: 52px; border-radius: 4px; object-fit: cover; border: 1px solid var(--border);">' if user_avatar else f'''
+    <div style="width: 52px; height: 52px; border-radius: 4px; background: var(--brass-soft); border: 1px solid var(--brass-border); display: flex; align-items: center; justify-content: center; color: var(--accent);">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
             <circle cx="12" cy="7" r="4"></circle>
@@ -9332,23 +9324,23 @@ def settings_view(
                 {tier_badge}
             </div>
 
-            <div style="background: var(--panel-inset); padding: 1.25rem; border-radius: 4px; border: 1px solid var(--hairline); margin-bottom: 1.25rem;">
+            <div style="background: var(--panel-inset); padding: 1.25rem; border-radius: 4px; border: 1px solid var(--border); margin-bottom: 1.25rem;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                    <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase;">Active Subscription</span>
-                    <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.8125rem; font-weight: 600; color: var(--teal);">UNLIMITED ANALYSIS JOBS</span>
+                    <span style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--text-muted); ">Active Subscription</span>
+                    <span style="font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600; color: var(--success);">UNLIMITED ANALYSIS JOBS</span>
                 </div>
                 <div class="meter" style="margin-bottom: 0.75rem;">
                     <div class="meter-fill high" style="width: 100%;"></div>
                 </div>
-                <div style="display: flex; justify-content: space-between; font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--text-tertiary);">
+                <div style="display: flex; justify-content: space-between; font-family: var(--font-ui); font-size: 0.8125rem; color: var(--text-muted);">
                     <span>BILLING CYCLE:</span>
                     <span>PERIOD ENDS {renewal_str}</span>
                 </div>
             </div>
 
-            <div style="background: var(--panel-raised); border: 1px solid var(--hairline); border-radius: 4px; padding: 1.25rem;">
-                <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.35rem;">Test files</div>
-                <p style="color: var(--text-secondary); font-size: 0.85rem; line-height: 1.45; margin-bottom: 1rem;">
+            <div style="background: var(--panel-raised); border: 1px solid var(--border); border-radius: 4px; padding: 1.25rem;">
+                <div style="font-weight: 600; color: var(--text); margin-bottom: 0.35rem;">Test files</div>
+                <p style="color: var(--text-muted); font-size: 0.85rem; line-height: 1.45; margin-bottom: 1rem;">
                     Your account has unlimited access to repository analysis and interactive dependency graphs.
                 </p>
                 <a href="/api/billing/portal" class="btn btn-secondary" style="width: 100%; justify-content: center; padding: 0.75rem;">
@@ -9365,7 +9357,7 @@ def settings_view(
             <div style="background: var(--panel-raised); border: 1px solid var(--brass-border); border-radius: 4px; padding: 1.5rem; position: relative; overflow: hidden; margin-top: 1.25rem;">
                 <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem;">
                     <div>
-                        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--brass); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;">
+                        <div style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--accent); font-weight: 600;">
                             TEST FILES
                         </div>
                         <div style="display: flex; align-items: baseline; gap: 0.4rem; margin-top: 0.35rem;">
@@ -9373,12 +9365,12 @@ def settings_view(
                             {f'<span style="font-family: var(--font-mono); font-size: 13px; color: var(--text-muted);">/ {pricing_details.get("interval", "month")}</span>' if "/ " not in pro_price_display else ''}
                         </div>
                     </div>
-                    <span class="badge" style="background: var(--brass-soft); color: var(--brass); border-color: var(--brass-border);">RECOMMENDED</span>
+                    <span class="badge" style="background: var(--brass-soft); color: var(--accent); border-color: var(--brass-border);">RECOMMENDED</span>
                 </div>
 
-                <div style="display: flex; flex-direction: column; gap: 0.6rem; margin-bottom: 1.5rem; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.4;">
+                <div style="display: flex; flex-direction: column; gap: 0.6rem; margin-bottom: 1.5rem; font-size: 0.85rem; color: var(--text-muted); line-height: 1.4;">
                     <div style="display: flex; align-items: center; gap: 0.5rem;">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
                         <span>More analyses per month ({pro_limit} instead of {free_limit})</span>
                     </div>
                 </div>
@@ -9397,15 +9389,15 @@ def settings_view(
             </div>
 
             <!-- Quota Meter Box -->
-            <div style="background: var(--panel-inset); padding: 1.25rem; border-radius: 4px; border: 1px solid var(--hairline);">
+            <div style="background: var(--panel-inset); padding: 1.25rem; border-radius: 4px; border: 1px solid var(--border);">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                    <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase;">Billing Cycle Allocation</span>
-                    <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.8125rem; font-weight: 600; color: var(--brass);">{monthly_usage} / {monthly_quota} CONSUMED ({pct}%)</span>
+                    <span style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--text-muted); ">Billing Cycle Allocation</span>
+                    <span style="font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600; color: var(--accent);">{monthly_usage} / {monthly_quota} CONSUMED ({pct}%)</span>
                 </div>
                 <div class="meter" style="margin-bottom: 0.75rem;">
                     <div class="meter-fill {meter_class}" style="width: {pct}%;"></div>
                 </div>
-                <div style="display: flex; justify-content: space-between; font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--text-tertiary);">
+                <div style="display: flex; justify-content: space-between; font-family: var(--font-ui); font-size: 0.8125rem; color: var(--text-muted);">
                     <span>AUTOMATIC RESET:</span>
                     <span>{renewal_str}</span>
                 </div>
@@ -9417,18 +9409,18 @@ def settings_view(
 
     content = f"""
     <!-- Settings Top Archival Header -->
-    <div style="display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 1.5rem; margin-bottom: 2rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--hairline);">
+    <div style="display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 1.5rem; margin-bottom: 2rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--border);">
         <div>
             <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem;">
                 <span class="chip-dot brass"></span>
-                <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--brass); text-transform: uppercase; letter-spacing: 0.05em;">
+                <span style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--accent); ">
                     ANALYSIS HISTORY // SETTINGS
                 </span>
             </div>
             <h1 style="font-size: 2.25rem; font-weight: 500; letter-spacing: -0.02em; margin-bottom: 0.4rem;">
                 Account &amp; Workspace Ledger
             </h1>
-            <p style="color: var(--text-secondary); font-size: 0.9375rem; max-width: 620px; line-height: 1.5;">
+            <p style="color: var(--text-muted); font-size: 0.9375rem; max-width: 620px; line-height: 1.5;">
                 Manage your connected GitHub identity, community preferences, and subscription allocations.
             </p>
         </div>
@@ -9448,19 +9440,19 @@ def settings_view(
                     <h2 style="font-size: 1.25rem; font-weight: 500; margin: 0;">Institutional Identity</h2>
                 </div>
 
-                <div style="display: flex; align-items: center; gap: 1.25rem; background: var(--panel-inset); padding: 1.25rem; border-radius: 4px; border: 1px solid var(--hairline); margin-bottom: 1rem;">
+                <div style="display: flex; align-items: center; gap: 1.25rem; background: var(--panel-inset); padding: 1.25rem; border-radius: 4px; border: 1px solid var(--border); margin-bottom: 1rem;">
                     {avatar_markup}
                     <div>
                         <div style="display: flex; align-items: center; gap: 0.5rem;">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;">
                                 <polyline points="20 6 9 17 4 12"></polyline>
                             </svg>
-                            <span style="font-weight: 600; color: var(--text-primary); font-size: 1.05rem;">
-                                GitHub connected: <span style="font-family: 'IBM Plex Mono', monospace;">@{username}</span>
+                            <span style="font-weight: 600; color: var(--text); font-size: 1.05rem;">
+                                GitHub connected: <span style="font-family: var(--font-mono);">@{username}</span>
                             </span>
                         </div>
-                        <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.2rem;">{email}</div>
-                        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--text-tertiary); margin-top: 0.35rem;">
+                        <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.2rem;">{email}</div>
+                        <div style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--text-muted); margin-top: 0.35rem;">
                             Connected: {created_at}
                         </div>
                     </div>
@@ -9468,8 +9460,8 @@ def settings_view(
 
                 <!-- Leaderboard Username Visibility Checkbox -->
                 <form method="POST" action="/settings" style="margin-top: 1rem; padding-top: 0.85rem; border-top: 1px solid var(--hairline-soft);">
-                    <label style="display: flex; align-items: center; gap: 0.65rem; cursor: pointer; font-size: 0.875rem; color: var(--text-primary);">
-                        <input type="checkbox" id="show_on_leaderboard" name="show_on_leaderboard" value="true" {'checked' if getattr(current_user, 'show_on_leaderboard', False) else ''} onchange="this.form.submit()" style="width: 17px; height: 17px; accent-color: var(--teal); cursor: pointer;">
+                    <label style="display: flex; align-items: center; gap: 0.65rem; cursor: pointer; font-size: 0.875rem; color: var(--text);">
+                        <input type="checkbox" id="show_on_leaderboard" name="show_on_leaderboard" value="true" {'checked' if getattr(current_user, 'show_on_leaderboard', False) else ''} onchange="this.form.submit()" style="width: 17px; height: 17px; accent-color: var(--success); cursor: pointer;">
                         <span style="font-weight: 500;">Show my username on the leaderboard</span>
                     </label>
                     <noscript>
@@ -9477,7 +9469,7 @@ def settings_view(
                     </noscript>
                 </form>
 
-                <div style="font-size: 0.8125rem; color: var(--text-tertiary); line-height: 1.45; background: var(--panel-raised); padding: 0.75rem 1rem; border-radius: 4px; border: 1px dashed var(--hairline-soft); margin-top: 1rem;">
+                <div style="font-size: 0.8125rem; color: var(--text-muted); line-height: 1.45; background: var(--panel-raised); padding: 0.75rem 1rem; border-radius: 4px; border: 1px dashed var(--hairline-soft); margin-top: 1rem;">
                     Profile information and notification email are synced directly from GitHub OAuth. Profile modifications must be made within your GitHub account.
                 </div>
             </div>
@@ -9486,47 +9478,47 @@ def settings_view(
             <div class="stratum-card" style="margin-bottom: 1.5rem;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
                     <h2 style="font-size: 1.25rem; font-weight: 500;">Theme</h2>
-                    <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--text-tertiary);">RUNTIME: DATA-THEME</span>
+                    <span style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--text-muted);">RUNTIME: DATA-THEME</span>
                 </div>
-                <p style="color: var(--text-secondary); font-size: 0.85rem; line-height: 1.5; margin-bottom: 1.25rem;">
+                <p style="color: var(--text-muted); font-size: 0.85rem; line-height: 1.5; margin-bottom: 1.25rem;">
                     Select visual contrast protocol for parsing call graphs and code diffs. Settings persist across browser sessions in local storage.
                 </p>
 
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
                     <!-- Dark Option -->
-                    <button type="button" id="theme-card-dark" onclick="applyThemePreference('dark')" style="text-align: left; padding: 1rem; border-radius: 4px; background: var(--panel-inset); border: 2px solid var(--brass); cursor: pointer; transition: all 150ms ease;">
+                    <button type="button" id="theme-card-dark" onclick="applyThemePreference('dark')" style="text-align: left; padding: 1rem; border-radius: 4px; background: var(--panel-inset); border: 2px solid var(--accent); cursor: pointer; transition: all 150ms ease;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                            <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; font-weight: 600; color: var(--brass); text-transform: uppercase;">Dark Architecture Report</span>
-                            <span id="theme-check-dark" style="color: var(--brass); font-weight: bold; font-size: 0.875rem;">✓</span>
+                            <span style="font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600; color: var(--accent); ">Dark Architecture Report</span>
+                            <span id="theme-check-dark" style="color: var(--accent); font-weight: bold; font-size: 0.875rem;">✓</span>
                         </div>
                         <div style="height: 24px; background: #0c0e11; border-radius: 2px; border: 1px solid #282a2d; margin-bottom: 0.5rem; display: flex; align-items: center; padding: 0 0.5rem; gap: 0.35rem;">
                             <div style="width: 8px; height: 8px; border-radius: 50%; background: #6ee7b7;"></div>
                             <div style="width: 24px; height: 4px; border-radius: 2px; background: #333538;"></div>
                         </div>
-                        <div style="font-size: 0.75rem; color: var(--text-tertiary); line-height: 1.35;">
+                        <div style="font-size: 0.8125rem; color: var(--text-muted); line-height: 1.35;">
                             Pitch-dark substrate with high-density sage & mint highlights.
                         </div>
                     </button>
 
                     <!-- Light Option -->
-                    <button type="button" id="theme-card-light" onclick="applyThemePreference('light')" style="text-align: left; padding: 1rem; border-radius: 4px; background: var(--panel-inset); border: 2px solid var(--hairline); cursor: pointer; transition: all 150ms ease;">
+                    <button type="button" id="theme-card-light" onclick="applyThemePreference('light')" style="text-align: left; padding: 1rem; border-radius: 4px; background: var(--panel-inset); border: 2px solid var(--border); cursor: pointer; transition: all 150ms ease;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                            <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; font-weight: 600; color: var(--text-primary); text-transform: uppercase;">Light Archival</span>
-                            <span id="theme-check-light" style="color: var(--brass); font-weight: bold; font-size: 0.875rem; display: none;">✓</span>
+                            <span style="font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600; color: var(--text); ">Light Archival</span>
+                            <span id="theme-check-light" style="color: var(--accent); font-weight: bold; font-size: 0.875rem; display: none;">✓</span>
                         </div>
                         <div style="height: 24px; background: #fbfbfd; border-radius: 2px; border: 1px solid #d3c4b3; margin-bottom: 0.5rem; display: flex; align-items: center; padding: 0 0.5rem; gap: 0.35rem;">
                             <div style="width: 8px; height: 8px; border-radius: 50%; background: #1b6d4b;"></div>
                             <div style="width: 24px; height: 4px; border-radius: 2px; background: #9c8f7f;"></div>
                         </div>
-                        <div style="font-size: 0.75rem; color: var(--text-tertiary); line-height: 1.35;">
+                        <div style="font-size: 0.8125rem; color: var(--text-muted); line-height: 1.35;">
                             High-readability paper print mode optimized for daylight.
                         </div>
                     </button>
                 </div>
 
                 <div style="display: flex; justify-content: space-between; align-items: center; background: var(--panel-raised); padding: 0.65rem 1rem; border-radius: 4px; font-size: 0.8125rem;">
-                    <span style="color: var(--text-secondary);">Editor shortcuts:</span>
-                    <button type="button" class="btn btn-sm btn-ghost" onclick="applyThemePreference('system')" style="font-size: 0.75rem;">
+                    <span style="color: var(--text-muted);">Editor shortcuts:</span>
+                    <button type="button" class="btn btn-sm btn-ghost" onclick="applyThemePreference('system')" style="font-size: 0.8125rem;">
                         Detect my system
                     </button>
                 </div>
@@ -9536,9 +9528,9 @@ def settings_view(
             <div class="stratum-card" style="margin-bottom: 1.5rem;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
                     <h2 style="font-size: 1.25rem; font-weight: 500;">Account Data &amp; Privacy</h2>
-                    <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--text-tertiary);">GDPR // PORTABILITY</span>
+                    <span style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--text-muted);">GDPR // PORTABILITY</span>
                 </div>
-                <p style="color: var(--text-secondary); font-size: 0.85rem; line-height: 1.5; margin-bottom: 1.25rem;">
+                <p style="color: var(--text-muted); font-size: 0.85rem; line-height: 1.5; margin-bottom: 1.25rem;">
                     Download a full JSON archive of your analyzed jobs, milestone progress, and quiz scores, or permanently delete your account.
                 </p>
 
@@ -9582,14 +9574,14 @@ def settings_view(
                 </svg>
                 <h3 style="margin: 0; font-size: 1.25rem; font-weight: 600;">Delete Account</h3>
             </div>
-            <p style="font-size: 0.875rem; color: var(--text-secondary); line-height: 1.5; margin-bottom: 1rem;">
+            <p style="font-size: 0.875rem; color: var(--text-muted); line-height: 1.5; margin-bottom: 1rem;">
                 This action is <strong>permanent</strong> and cannot be undone. All of your analyzed repositories, milestone progress, quiz scores, points history, and active sessions will be permanently purged.
             </p>
-            <p style="font-size: 0.875rem; color: var(--text-primary); margin-bottom: 0.75rem;">
-                Please type your GitHub username <code style="background: var(--panel-inset); padding: 0.2rem 0.4rem; border-radius: 3px; font-weight: bold; color: var(--brass);">@{username}</code> to confirm:
+            <p style="font-size: 0.875rem; color: var(--text); margin-bottom: 0.75rem;">
+                Please type your GitHub username <code style="background: var(--panel-inset); padding: 0.2rem 0.4rem; border-radius: 3px; font-weight: bold; color: var(--accent);">@{username}</code> to confirm:
             </p>
             <form id="delete-account-form" method="POST" action="/account/delete">
-                <input type="text" id="delete-confirm-username" name="username" placeholder="{username}" autocomplete="off" required style="width: 100%; padding: 0.65rem 0.85rem; background: var(--panel-inset); border: 1px solid var(--border); border-radius: 4px; color: var(--text-primary); font-family: 'IBM Plex Mono', monospace; font-size: 0.9rem; margin-bottom: 1.25rem;">
+                <input type="text" id="delete-confirm-username" name="username" placeholder="{username}" autocomplete="off" required style="width: 100%; padding: 0.65rem 0.85rem; background: var(--panel-inset); border: 1px solid var(--border); border-radius: 4px; color: var(--text); font-family: var(--font-mono); font-size: 0.9rem; margin-bottom: 1.25rem;">
                 <div style="display: flex; justify-content: flex-end; gap: 0.75rem;">
                     <button type="button" class="btn btn-secondary" onclick="closeDeleteAccountModal()">Cancel</button>
                     <button type="submit" id="btn-confirm-delete" class="btn btn-primary" style="background: var(--danger); border-color: var(--danger); color: #fff;" disabled>Permanently Delete Account</button>
@@ -9623,13 +9615,13 @@ def settings_view(
 
             if (darkCard && lightCard) {{
                 if (active === 'dark') {{
-                    darkCard.style.borderColor = 'var(--brass)';
-                    lightCard.style.borderColor = 'var(--hairline)';
+                    darkCard.style.borderColor = 'var(--accent)';
+                    lightCard.style.borderColor = 'var(--border)';
                     if (darkCheck) darkCheck.style.display = 'inline-flex';
                     if (lightCheck) lightCheck.style.display = 'none';
                 }} else {{
-                    lightCard.style.borderColor = 'var(--brass)';
-                    darkCard.style.borderColor = 'var(--hairline)';
+                    lightCard.style.borderColor = 'var(--accent)';
+                    darkCard.style.borderColor = 'var(--border)';
                     if (lightCheck) lightCheck.style.display = 'inline-flex';
                     if (darkCheck) darkCheck.style.display = 'none';
                 }}
@@ -9703,7 +9695,7 @@ def rewards_view(
     total_badges = len(badges)
 
     error_html = f'<div class="alert-error" style="margin-bottom: 1.5rem; border-radius: 4px; padding: 0.75rem 1rem; font-size: 0.875rem;">{sanitize_text(error)}</div>' if error else ""
-    success_html = f'<div style="background: rgba(45, 212, 191, 0.1); border: 1px solid var(--teal); color: var(--teal); padding: 0.75rem 1rem; border-radius: 4px; margin-bottom: 1.5rem; font-size: 0.875rem; font-weight: 500;">{sanitize_text(success)}</div>' if success else ""
+    success_html = f'<div style="background: rgba(45, 212, 191, 0.1); border: 1px solid var(--success); color: var(--success); padding: 0.75rem 1rem; border-radius: 4px; margin-bottom: 1.5rem; font-size: 0.875rem; font-weight: 500;">{sanitize_text(success)}</div>' if success else ""
 
     # Quota Perk Action State
     can_redeem_quota = not is_paid and points_balance >= 100
@@ -9711,10 +9703,10 @@ def rewards_view(
     if is_paid:
         perk_button = """
         <div style="display: flex; flex-direction: column; gap: 0.5rem;">
-            <button type="button" class="btn btn-secondary" disabled style="opacity: 0.75; cursor: not-allowed; width: 100%; justify-content: center; font-family: 'IBM Plex Mono', monospace; font-size: 0.8125rem;">
+            <button type="button" class="btn btn-secondary" disabled style="opacity: 0.75; cursor: not-allowed; width: 100%; justify-content: center; font-family: var(--font-ui); font-size: 0.8125rem;">
                 👑 Pro Active (Unlimited Analyses)
             </button>
-            <span style="font-size: 0.75rem; color: var(--text-tertiary); text-align: center;">
+            <span style="font-size: 0.8125rem; color: var(--text-muted); text-align: center;">
                 You are on Backtrace Pro with unlimited repository analyses. Extra quota redemption is not needed.
             </span>
         </div>
@@ -9722,14 +9714,14 @@ def rewards_view(
     elif can_redeem_quota:
         perk_button = f"""
         <form method="POST" action="/rewards/redeem/quota">
-            <button type="submit" id="btn-redeem-quota" class="btn btn-primary" style="width: 100%; justify-content: center; font-family: 'IBM Plex Mono', monospace; font-size: 0.8125rem; font-weight: 600; letter-spacing: 0.02em;">
+            <button type="submit" id="btn-redeem-quota" class="btn btn-primary" style="width: 100%; justify-content: center; font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600; ">
                 ⚡ Redeem +2 Repos (100 PTS)
             </button>
         </form>
         """
     else:
         perk_button = f"""
-        <button type="button" class="btn btn-secondary" disabled style="opacity: 0.5; cursor: not-allowed; width: 100%; justify-content: center; font-family: 'IBM Plex Mono', monospace; font-size: 0.8125rem;">
+        <button type="button" class="btn btn-secondary" disabled style="opacity: 0.5; cursor: not-allowed; width: 100%; justify-content: center; font-family: var(--font-ui); font-size: 0.8125rem;">
             Need 100 PTS (Have {points_balance})
         </button>
         """
@@ -9739,11 +9731,11 @@ def rewards_view(
     for badge in badges:
         earned = badge.get("earned", False)
         earned_badge = """
-        <span class="tag tag-brass" style="background: rgba(135, 90, 20, 0.2); color: var(--brass); border-color: var(--brass); font-size: 0.6875rem; font-weight: 600;">✓ UNLOCKED</span>
+        <span class="tag tag-brass" style="background: rgba(135, 90, 20, 0.2); color: var(--accent); border-color: var(--accent); font-size: 0.8125rem; font-weight: 600;">✓ UNLOCKED</span>
         """ if earned else """
-        <span class="tag tag-ghost" style="color: var(--text-tertiary); font-size: 0.6875rem;">LOCKED</span>
+        <span class="tag tag-ghost" style="color: var(--text-muted); font-size: 0.8125rem;">LOCKED</span>
         """
-        card_border = "border-color: var(--brass); box-shadow: 0 0 12px rgba(135, 90, 20, 0.15);" if earned else "border-color: var(--hairline);"
+        card_border = "border-color: var(--accent); box-shadow: 0 0 12px rgba(135, 90, 20, 0.15);" if earned else "border-color: var(--border);"
         progress_val = badge.get("current_progress", 0)
         target_val = badge.get("target", 1)
         pct = badge.get("progress_pct", 0)
@@ -9755,17 +9747,17 @@ def rewards_view(
                     <span style="font-size: 1.75rem; line-height: 1;">{badge.get('icon', '🎯')}</span>
                     {earned_badge}
                 </div>
-                <h4 style="font-size: 1rem; font-weight: 600; color: var(--text-primary); margin-bottom: 0.2rem;">{sanitize_text(badge.get('name', ''))}</h4>
-                <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--brass); margin-bottom: 0.4rem; text-transform: uppercase;">{sanitize_text(badge.get('tagline', ''))}</div>
-                <p style="font-size: 0.8125rem; color: var(--text-secondary); line-height: 1.4;">{sanitize_text(badge.get('description', ''))}</p>
+                <h4 style="font-size: 1rem; font-weight: 600; color: var(--text); margin-bottom: 0.2rem;">{sanitize_text(badge.get('name', ''))}</h4>
+                <div style="font-family: var(--font-mono); font-size: 0.8125rem; color: var(--accent); margin-bottom: 0.4rem; ">{sanitize_text(badge.get('tagline', ''))}</div>
+                <p style="font-size: 0.8125rem; color: var(--text-muted); line-height: 1.4;">{sanitize_text(badge.get('description', ''))}</p>
             </div>
             <div>
-                <div style="display: flex; justify-content: space-between; font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--text-tertiary); margin-bottom: 0.25rem;">
+                <div style="display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 0.8125rem; color: var(--text-muted); margin-bottom: 0.25rem;">
                     <span>Progress</span>
                     <span>{progress_val} / {target_val}</span>
                 </div>
                 <div style="width: 100%; height: 4px; background: var(--panel-raised); border-radius: 2px; overflow: hidden;">
-                    <div style="width: {pct}%; height: 100%; background: var(--brass); transition: width 300ms ease;"></div>
+                    <div style="width: {pct}%; height: 100%; background: var(--accent); transition: width 300ms ease;"></div>
                 </div>
             </div>
         </div>
@@ -9782,17 +9774,17 @@ def rewards_view(
         row_bg = "background: rgba(135, 90, 20, 0.08); font-weight: 600;" if is_me else ""
         rank_badge = "🥇" if entry["rank"] == 1 else ("🥈" if entry["rank"] == 2 else ("🥉" if entry["rank"] == 3 else f"#{entry['rank']}"))
         if entry.get("show_on_leaderboard", False) and entry['username'] != "Anonymous":
-            username_cell = f'<span style="font-family: \'IBM Plex Mono\', monospace; font-size: 0.875rem; color: var(--text-primary);">@{sanitize_text(entry["username"])}</span>'
+            username_cell = f'<span style="font-family: var(--font-mono); font-size: 0.875rem; color: var(--text);">@{sanitize_text(entry["username"])}</span>'
         else:
-            username_cell = f'<span style="font-family: \'IBM Plex Mono\', monospace; font-size: 0.875rem; color: var(--text-tertiary); font-style: italic;">Anonymous</span>'
+            username_cell = f'<span style="font-family: var(--font-mono); font-size: 0.875rem; color: var(--text-muted); font-style: italic;">Anonymous</span>'
         leaderboard_rows += f"""
         <tr style="{row_bg} border-bottom: 1px solid var(--hairline-soft);">
-            <td style="padding: 0.75rem 1rem; font-family: 'IBM Plex Mono', monospace; font-size: 0.875rem; color: var(--brass);">{rank_badge}</td>
+            <td style="padding: 0.75rem 1rem; font-family: var(--font-mono); font-size: 0.875rem; color: var(--accent);">{rank_badge}</td>
             <td style="padding: 0.75rem 1rem; display: flex; align-items: center; gap: 0.5rem;">
                 {username_cell}
-                {'<span class="tag tag-brass" style="font-size: 0.625rem; padding: 0.1rem 0.35rem;">YOU</span>' if is_me else ''}
+                {'<span class="tag tag-brass" style="font-size: 0.8125rem; padding: 0.1rem 0.35rem;">YOU</span>' if is_me else ''}
             </td>
-            <td style="padding: 0.75rem 1rem; text-align: right; font-family: 'IBM Plex Mono', monospace; font-size: 0.875rem; font-weight: 600; color: #f59e0b;">
+            <td style="padding: 0.75rem 1rem; text-align: right; font-family: var(--font-mono); font-size: 0.875rem; font-weight: 600; color: #f59e0b;">
                 {entry['points']} PTS
             </td>
         </tr>
@@ -9803,17 +9795,17 @@ def rewards_view(
     for e in ledger_entries[:20]:
         reason_label = sanitize_text(e.reason.replace("_", " ").title())
         pts = e.points_awarded
-        pts_color = "#10b981" if pts > 0 else ("#ef4444" if pts < 0 else "var(--text-tertiary)")
+        pts_color = "#10b981" if pts > 0 else ("#ef4444" if pts < 0 else "var(--text-muted)")
         pts_prefix = "+" if pts > 0 else ""
         created_str = format_time_tag(e.created_at)
 
         ledger_rows += f"""
         <tr style="border-bottom: 1px solid var(--hairline-soft);">
-            <td style="padding: 0.65rem 0.85rem; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--text-tertiary);">{e.id}</td>
-            <td style="padding: 0.65rem 0.85rem; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--text-secondary);">{created_str}</td>
-            <td style="padding: 0.65rem 0.85rem; font-size: 0.8125rem; color: var(--text-primary);">{reason_label}</td>
-            <td style="padding: 0.65rem 0.85rem; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--text-secondary); text-align: center;">Tier {e.milestone_tier if e.milestone_tier else '—'}</td>
-            <td style="padding: 0.65rem 0.85rem; font-family: 'IBM Plex Mono', monospace; font-size: 0.8125rem; font-weight: 600; color: {pts_color}; text-align: right;">
+            <td style="padding: 0.65rem 0.85rem; font-family: var(--font-mono); font-size: 0.8125rem; color: var(--text-muted);">{e.id}</td>
+            <td style="padding: 0.65rem 0.85rem; font-family: var(--font-mono); font-size: 0.8125rem; color: var(--text-muted);">{created_str}</td>
+            <td style="padding: 0.65rem 0.85rem; font-size: 0.8125rem; color: var(--text);">{reason_label}</td>
+            <td style="padding: 0.65rem 0.85rem; font-family: var(--font-mono); font-size: 0.8125rem; color: var(--text-muted); text-align: center;">Tier {e.milestone_tier if e.milestone_tier else '—'}</td>
+            <td style="padding: 0.65rem 0.85rem; font-family: var(--font-mono); font-size: 0.8125rem; font-weight: 600; color: {pts_color}; text-align: right;">
                 {pts_prefix}{pts} PTS
             </td>
         </tr>
@@ -9827,54 +9819,54 @@ def rewards_view(
         <!-- Page Header -->
         <div style="margin-bottom: 2rem;">
             <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem;">
-                <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--brass);">
+                <span style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--accent);">
                     Economy & Perks
                 </span>
             </div>
             <h1 style="font-size: 2.25rem; margin-bottom: 0.5rem;">Points & Rewards Protocol</h1>
-            <p style="color: var(--text-secondary); font-size: 0.9375rem; max-width: 760px;">
+            <p style="color: var(--text-muted); font-size: 0.9375rem; max-width: 760px;">
                 Earn architectural points by solving progressive milestones. Redeem points for native software perks like monthly analysis quota, and unlock permanent badges.
             </p>
         </div>
 
         <!-- Metrics Overview Grid -->
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; margin-bottom: 2.5rem;">
-            <div class="card" style="padding: 1.25rem; border-color: var(--brass); background: var(--panel);">
-                <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--text-tertiary); text-transform: uppercase; margin-bottom: 0.35rem;">Active Point Balance</div>
-                <div style="font-family: 'Newsreader', Georgia, serif; font-size: 2.5rem; font-weight: 600; color: #f59e0b; line-height: 1.1; margin-bottom: 0.35rem;">
-                    {points_balance} <span style="font-size: 1.125rem; font-family: 'IBM Plex Mono', monospace; font-weight: 500;">PTS</span>
+            <div class="card" style="padding: 1.25rem; border-color: var(--accent); background: var(--surface-2);">
+                <div style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--text-muted); margin-bottom: 0.35rem;">Active Point Balance</div>
+                <div style="font-family: var(--font-ui); font-size: 2.5rem; font-weight: 600; color: #f59e0b; line-height: 1.1; margin-bottom: 0.35rem;">
+                    {points_balance} <span style="font-size: 1.125rem; font-family: var(--font-mono); font-weight: 500;">PTS</span>
                 </div>
-                <div style="font-size: 0.75rem; color: var(--text-tertiary);">
+                <div style="font-size: 0.8125rem; color: var(--text-muted);">
                     🕒 Points valid for 180 days (rolling expiry)
                 </div>
             </div>
 
-            <div class="card" style="padding: 1.25rem; background: var(--panel);">
-                <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--text-tertiary); text-transform: uppercase; margin-bottom: 0.35rem;">Lifetime Earned</div>
-                <div style="font-family: 'Newsreader', Georgia, serif; font-size: 2.5rem; font-weight: 600; color: var(--text-primary); line-height: 1.1; margin-bottom: 0.35rem;">
-                    {lifetime_points} <span style="font-size: 1.125rem; font-family: 'IBM Plex Mono', monospace; font-weight: 500;">PTS</span>
+            <div class="card" style="padding: 1.25rem; background: var(--surface-2);">
+                <div style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--text-muted); margin-bottom: 0.35rem;">Lifetime Earned</div>
+                <div style="font-family: var(--font-ui); font-size: 2.5rem; font-weight: 600; color: var(--text); line-height: 1.1; margin-bottom: 0.35rem;">
+                    {lifetime_points} <span style="font-size: 1.125rem; font-family: var(--font-mono); font-weight: 500;">PTS</span>
                 </div>
-                <div style="font-size: 0.75rem; color: var(--text-tertiary);">
+                <div style="font-size: 0.8125rem; color: var(--text-muted);">
                     All-time cumulative points awarded
                 </div>
             </div>
 
-            <div class="card" style="padding: 1.25rem; background: var(--panel);">
-                <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--text-tertiary); text-transform: uppercase; margin-bottom: 0.35rem;">Monthly Repo Quota</div>
-                <div style="font-family: 'Newsreader', Georgia, serif; font-size: 2.5rem; font-weight: 600; color: var(--teal); line-height: 1.1; margin-bottom: 0.35rem;">
+            <div class="card" style="padding: 1.25rem; background: var(--surface-2);">
+                <div style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--text-muted); margin-bottom: 0.35rem;">Monthly Repo Quota</div>
+                <div style="font-family: var(--font-ui); font-size: 2.5rem; font-weight: 600; color: var(--success); line-height: 1.1; margin-bottom: 0.35rem;">
                     {'UNLIMITED' if is_paid else f'{monthly_usage} / {monthly_quota}'}
                 </div>
-                <div style="font-size: 0.75rem; color: var(--text-tertiary);">
+                <div style="font-size: 0.8125rem; color: var(--text-muted);">
                     {'Pro plan active' if is_paid else (f'+{quota_bonus} bonus slots active this month' if quota_bonus > 0 else 'Standard free allowance')}
                 </div>
             </div>
 
-            <div class="card" style="padding: 1.25rem; background: var(--panel);">
-                <div style="font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--text-tertiary); text-transform: uppercase; margin-bottom: 0.35rem;">Achievement Badges</div>
-                <div style="font-family: 'Newsreader', Georgia, serif; font-size: 2.5rem; font-weight: 600; color: var(--brass); line-height: 1.1; margin-bottom: 0.35rem;">
-                    {earned_badges_count} <span style="font-size: 1.125rem; font-family: 'IBM Plex Mono', monospace; font-weight: 500;">/ {total_badges}</span>
+            <div class="card" style="padding: 1.25rem; background: var(--surface-2);">
+                <div style="font-family: var(--font-ui); font-size: 0.8125rem; color: var(--text-muted); margin-bottom: 0.35rem;">Achievement Badges</div>
+                <div style="font-family: var(--font-ui); font-size: 2.5rem; font-weight: 600; color: var(--accent); line-height: 1.1; margin-bottom: 0.35rem;">
+                    {earned_badges_count} <span style="font-size: 1.125rem; font-family: var(--font-ui); font-weight: 500;">/ {total_badges}</span>
                 </div>
-                <div style="font-size: 0.75rem; color: var(--text-tertiary);">
+                <div style="font-size: 0.8125rem; color: var(--text-muted);">
                     Architectural achievements unlocked
                 </div>
             </div>
@@ -9883,20 +9875,20 @@ def rewards_view(
         <!-- Bento Grid: Perks & Leaderboard -->
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 2.5rem;">
             <!-- Perk Redemption Card -->
-            <div class="card" style="padding: 1.5rem; background: var(--panel); display: flex; flex-direction: column; justify-content: space-between;">
+            <div class="card" style="padding: 1.5rem; background: var(--surface-2); display: flex; flex-direction: column; justify-content: space-between;">
                 <div>
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
-                        <span class="tag tag-brass" style="font-size: 0.6875rem;">SOFTWARE PERK</span>
-                        <span style="font-family: 'IBM Plex Mono', monospace; font-size: 0.875rem; font-weight: 600; color: #f59e0b;">100 PTS</span>
+                        <span class="tag tag-brass" style="font-size: 0.8125rem;">SOFTWARE PERK</span>
+                        <span style="font-family: var(--font-mono); font-size: 0.875rem; font-weight: 600; color: #f59e0b;">100 PTS</span>
                     </div>
                     <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem;">
                         <span style="font-size: 2rem;">🚀</span>
                         <div>
                             <h3 style="font-size: 1.25rem; margin: 0;">+2 Monthly Analysis Quota</h3>
-                            <span style="font-size: 0.8125rem; color: var(--text-secondary);">Instantly adds 2 additional repository analyses to this calendar month</span>
+                            <span style="font-size: 0.8125rem; color: var(--text-muted);">Instantly adds 2 additional repository analyses to this calendar month</span>
                         </div>
                     </div>
-                    <p style="font-size: 0.875rem; color: var(--text-secondary); line-height: 1.5; margin-bottom: 1.25rem;">
+                    <p style="font-size: 0.875rem; color: var(--text-muted); line-height: 1.5; margin-bottom: 1.25rem;">
                         Running low on monthly analyses? Spend 100 points to immediately boost your monthly limit. The bonus applies directly to Backtrace's real quota gate and renews your capacity.
                     </p>
                 </div>
@@ -9904,22 +9896,22 @@ def rewards_view(
             </div>
 
             <!-- Leaderboard Card -->
-            <div class="card" style="padding: 1.5rem; background: var(--panel);">
+            <div class="card" style="padding: 1.5rem; background: var(--surface-2);">
                 <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
                     <h3 style="font-size: 1.25rem; margin: 0;">Global Builder Leaderboard</h3>
-                    <span class="tag tag-ghost" style="font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem;">Your Rank: #{user_rank} ({user_points} PTS)</span>
+                    <span class="tag tag-ghost" style="font-family: var(--font-ui); font-size: 0.8125rem;">Your Rank: #{user_rank} ({user_points} PTS)</span>
                 </div>
                 <div style="overflow-x: auto; max-height: 220px; overflow-y: auto;">
                     <table style="width: 100%; border-collapse: collapse;">
                         <thead>
-                            <tr style="border-bottom: 1px solid var(--hairline); font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--text-tertiary); text-transform: uppercase;">
+                            <tr style="border-bottom: 1px solid var(--border); font-family: var(--font-mono); font-size: 0.8125rem; color: var(--text-muted); ">
                                 <th style="padding: 0.5rem 1rem; text-align: left;">Rank</th>
                                 <th style="padding: 0.5rem 1rem; text-align: left;">Architect</th>
                                 <th style="padding: 0.5rem 1rem; text-align: right;">Points</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {leaderboard_rows if leaderboard_rows else '<tr><td colspan="3" style="text-align: center; padding: 1.5rem; color: var(--text-tertiary);">No builders on leaderboard yet</td></tr>'}
+                            {leaderboard_rows if leaderboard_rows else '<tr><td colspan="3" style="text-align: center; padding: 1.5rem; color: var(--text-muted);">No builders on leaderboard yet</td></tr>'}
                         </tbody>
                     </table>
                 </div>
@@ -9930,7 +9922,7 @@ def rewards_view(
         <div style="margin-bottom: 2.5rem;">
             <div style="margin-bottom: 1rem;">
                 <h2 style="font-size: 1.5rem; margin-bottom: 0.25rem;">Architecture Report Achievement Badges</h2>
-                <p style="font-size: 0.875rem; color: var(--text-secondary);">Earn badges by demonstrating mastery, speed, and breadth across repository architectures.</p>
+                <p style="font-size: 0.875rem; color: var(--text-muted);">Earn badges by demonstrating mastery, speed, and breadth across repository architectures.</p>
             </div>
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem;">
                 {badges_html}
@@ -9938,18 +9930,18 @@ def rewards_view(
         </div>
 
         <!-- Audit Ledger Section -->
-        <div class="card" style="padding: 1.5rem; background: var(--panel);">
+        <div class="card" style="padding: 1.5rem; background: var(--surface-2);">
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
                 <div>
                     <h3 style="font-size: 1.25rem; margin-bottom: 0.2rem;">Points Audit Ledger</h3>
-                    <p style="font-size: 0.8125rem; color: var(--text-secondary); margin: 0;">Immutable, append-only transaction history</p>
+                    <p style="font-size: 0.8125rem; color: var(--text-muted); margin: 0;">Immutable, append-only transaction history</p>
                 </div>
-                <span class="tag tag-ghost" style="font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem;">Audit Trail Active</span>
+                <span class="tag tag-ghost" style="font-family: var(--font-mono); font-size: 0.8125rem;">Audit Trail Active</span>
             </div>
             <div style="overflow-x: auto;">
                 <table style="width: 100%; border-collapse: collapse;">
                     <thead>
-                        <tr style="border-bottom: 1px solid var(--hairline); font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--text-tertiary); text-transform: uppercase;">
+                        <tr style="border-bottom: 1px solid var(--border); font-family: var(--font-ui); font-size: 0.8125rem; color: var(--text-muted); ">
                             <th style="padding: 0.65rem 0.85rem; text-align: left;">ID</th>
                             <th style="padding: 0.65rem 0.85rem; text-align: left;">Date & Time</th>
                             <th style="padding: 0.65rem 0.85rem; text-align: left;">Reason</th>
@@ -9958,7 +9950,7 @@ def rewards_view(
                         </tr>
                     </thead>
                     <tbody>
-                        {ledger_rows if ledger_rows else '<tr><td colspan="5" style="text-align: center; padding: 2rem; color: var(--text-tertiary); font-style: italic;">No transactions in ledger yet. Solve milestones to earn points!</td></tr>'}
+                        {ledger_rows if ledger_rows else '<tr><td colspan="5" style="text-align: center; padding: 2rem; color: var(--text-muted); font-style: italic;">No transactions in ledger yet. Solve milestones to earn points!</td></tr>'}
                     </tbody>
                 </table>
             </div>

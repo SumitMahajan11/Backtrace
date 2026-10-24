@@ -10,6 +10,7 @@
   --text: #e8eaf0;
   --text-muted: #9aa3b2;
   --accent: #4f8cff;
+  --accent-strong: #2563eb;
   --danger: #ef5b5b;
   --success: #3ecf8e;
   --radius: 10px;
@@ -52,7 +53,9 @@
   --border: #e3e5ea;
   --text: #14161a;
   --text-muted: #5b6472;
-  --accent: #4f8cff;
+  --accent: #2563eb;
+  --accent-strong: #1d4ed8;
+  --accent-strong: #2563eb;
   --danger: #ef5b5b;
   --success: #3ecf8e;
   --radius: 10px;
@@ -135,10 +138,15 @@ code, pre, .mono, .file-path, table td.number {
 
 /* Buttons */
 .btn-primary {
-  background: var(--accent);
+  background: var(--accent-strong);
   color: #ffffff;
-  border: 1px solid var(--accent);
+  border: 1px solid var(--accent-strong);
   border-radius: var(--radius);
+}
+
+.btn-primary:hover {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
 }
 
 .btn-secondary {
@@ -215,7 +223,7 @@ code, pre, .mono, .file-path, table td.number {
   color: var(--text);
   border-radius: 9999px;
   padding: 0.25rem 0.65rem;
-  font-size: 12px;
+  font-size: 0.8125rem;
   font-family: var(--font-mono);
   cursor: pointer;
   display: inline-flex;
@@ -245,7 +253,7 @@ code, pre, .mono, .file-path, table td.number {
 }
 
 .runs-count {
-  font-size: 12px;
+  font-size: 0.8125rem;
   color: var(--text-muted);
   background: var(--surface-2);
   border: 1px solid var(--border);
@@ -328,12 +336,10 @@ code, pre, .mono, .file-path, table td.number {
 }
 
 .rail-group-title {
-  font-family: var(--font-mono);
-  font-size: 0.6875rem;
+  font-family: var(--font-ui);
+  font-size: 0.8125rem;
   font-weight: 700;
-  color: var(--brass);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  color: var(--accent);
   margin: 0.85rem 0 0.5rem 0;
 }
 
@@ -378,7 +384,7 @@ code, pre, .mono, .file-path, table td.number {
 
 .rail-item-num {
   font-family: var(--font-mono);
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
   font-weight: 700;
   color: var(--accent);
   min-width: 1.5rem;
@@ -405,7 +411,7 @@ code, pre, .mono, .file-path, table td.number {
   align-items: center;
   gap: 8px; /* Requirement 4: icon with an 8px gap */
   font-family: var(--font-mono);
-  font-size: 0.6875rem;
+  font-size: 0.8125rem;
 }
 
 .rail-status-icon {
@@ -547,7 +553,7 @@ code, pre, .mono, .file-path, table td.number {
   border: none;
   cursor: pointer;
   color: var(--text-muted);
-  font-size: 0.8rem;
+  font-size: 0.8125rem;
   padding: 0.1rem 0.3rem;
   border-radius: 3px;
   display: inline-flex;
@@ -605,7 +611,7 @@ code, pre, .mono, .file-path, table td.number {
   #dag-node-inspector {
     width: 100% !important;
     border-left: none !important;
-    border-top: 1px solid var(--hairline) !important;
+    border-top: 1px solid var(--border) !important;
     max-height: 300px !important;
   }
   .dag-hint {
