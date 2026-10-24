@@ -5322,15 +5322,11 @@ def report_view(
                 <div class="kpi-value" style="color: var(--accent);">{len(domain_dist)}</div>
                 <div class="kpi-sub" style="font-size: 0.8125rem; color: var(--text-muted);">{len(domain_dist)} subsystem domains</div>
             </div>
-            <div class="kpi-card" data-metric="CONFIDENCE SCORE">
+            <div class="kpi-card" data-metric="CONFIDENCE SCORE" data-high-pct="{conf_summary.high_pct}" data-low-pct="{conf_summary.low_pct}" data-low-count="{conf_summary.low_count}" data-source="{'summary' if conf_summary_raw else 'graph-nodes'}">
                 <div class="kpi-label">Confidence</div>
                 <div class="kpi-value" style="color: {overall_conf_color}; font-size: 1.5rem;">{conf_summary.high_pct}%</div>
                 <div class="kpi-sub" style="font-size: 0.8125rem; color: var(--text-muted);">
-                    {conf_summary.low_count} files low confidence
-                    <span style="display: none;">
-                        {f"HIGH ({conf_summary.high_pct}%)" if conf_summary.high_pct >= 50 else f"Share of files with low confidence: {conf_summary.low_pct}%"}
-                        {"" if conf_summary_raw else "estimated from graph nodes"}
-                    </span>
+                    {conf_summary.low_count} files low confidence{f'<div class="confidence-estimate-sub" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">Estimated from the dependency graph</div>' if not conf_summary_raw else ''}
                 </div>
             </div>
         </div>

@@ -59,13 +59,17 @@ def test_chart_and_table_percentages_are_equal():
     }
     report_html = report_view(job=job, raw_markdown=table_md, graph_data=graph_data, quiz_data=None)
 
-    # 4. Extract KPI confidence from overview card
-    # Should say: "Share of files with low confidence: 54%"
-    assert "LOW (54%)" not in report_html
-    assert "Share of files with low confidence: 54%" in report_html
+    # 4. Extract KPI confidence data attributes and visible text from overview card
+    assert 'data-source="summary"' in report_html
+    assert 'data-high-pct="20"' in report_html
+    assert 'data-low-pct="54"' in report_html
+    assert 'data-low-count="2"' in report_html
+    assert "Confidence" in report_html
+    assert "20%" in report_html
+    assert "2 files low confidence" in report_html
 
-    kpi_low_match = re.search(r"Share of files with low confidence:\s*(\d+(?:\.\d+)?)%", report_html)
-    assert kpi_low_match is not None, f"Could not find low confidence KPI in html: {report_html}"
+    kpi_low_match = re.search(r'data-low-pct="(\d+(?:\.\d+)?)"', report_html)
+    assert kpi_low_match is not None, f"Could not find low confidence KPI attribute in html: {report_html}"
     kpi_low_pct = float(kpi_low_match.group(1))
 
     # Assert chart and table percentages are equal
@@ -106,15 +110,22 @@ def test_high_confidence_chart_and_table_equal():
     job = {"id": 102, "repo_name": "repo"}
     report_html = report_view(job=job, raw_markdown=table_md, graph_data=graph_data, quiz_data=None)
 
-    assert "HIGH (80%)" in report_html
-    kpi_high_match = re.search(r"HIGH \((\d+(?:\.\d+)?)%\)", report_html)
+    assert 'data-source="summary"' in report_html
+    assert 'data-high-pct="80"' in report_html
+    assert 'data-low-pct="5"' in report_html
+    assert 'data-low-count="0"' in report_html
+    assert "Confidence" in report_html
+    assert "80%" in report_html
+    assert "0 files low confidence" in report_html
+
+    kpi_high_match = re.search(r'data-high-pct="(\d+(?:\.\d+)?)"', report_html)
     assert kpi_high_match is not None
     kpi_high_pct = float(kpi_high_match.group(1))
     assert kpi_high_pct == table_high_pct == 80.0
 
 
 def test_old_job_fallback_estimated_from_graph_nodes():
-    """Verify old jobs without confidence_summary fall back to nodes with 'estimated from graph nodes'."""
+    """Verify old jobs without confidence_summary fall back to nodes with 'Estimated from the dependency graph'."""
     graph_data = {
         "nodes": [
             {"id": "a.py", "confidence": "low"},
@@ -126,6 +137,11 @@ def test_old_job_fallback_estimated_from_graph_nodes():
     job = {"id": 103, "repo_name": "old-job"}
     report_html = report_view(job=job, raw_markdown="", graph_data=graph_data, quiz_data=None)
 
-    assert "estimated from graph nodes" in report_html
-    assert "LOW (100%)" not in report_html
-    assert "Share of files with low confidence: 100%" in report_html
+    assert 'data-source="graph-nodes"' in report_html
+    assert 'data-high-pct="0"' in report_html
+    assert 'data-low-pct="100"' in report_html
+    assert 'data-low-count="2"' in report_html
+    assert "Confidence" in report_html
+    assert "0%" in report_html
+    assert "2 files low confidence" in report_html
+    assert "Estimated from the dependency graph" in report_html
