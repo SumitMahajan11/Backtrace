@@ -8,9 +8,9 @@ LARGE_ERROR = "The repository is too large"
 GENERIC_ERROR = "Something went wrong on our side"
 
 # Word-boundary regexes
-# 1. "Too large" is checked first
+# 1. "Too large" is checked first (only size / file-count limits)
 _LARGE_REGEX = re.compile(
-    r"\b(?:large|exceeds?|limit|file limit|cap|too many files|size boundary)\b",
+    r"\b(?:too large|large repository|size limit|file limit|file cap|too many files|size boundary|max(?:imum)? files|exceeds? (?:the )?(?:size|file|allowed|maximum|max)|(?:size|file(?:[- ]count)?)\s+(?:exceeds?|limit|cap))\b",
     re.IGNORECASE,
 )
 

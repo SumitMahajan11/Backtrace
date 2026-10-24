@@ -20,6 +20,7 @@ from app.core.failure_reason import (
         ("tokenizer crashed", "generic", GENERIC_ERROR),
         ("Failed to escape output", "generic", GENERIC_ERROR),
         ("ghostwriter error", "generic", GENERIC_ERROR),
+        ("rate limit exceeded", "generic", GENERIC_ERROR),
         ("", "generic", GENERIC_ERROR),
         (None, "generic", GENERIC_ERROR),
     ],
