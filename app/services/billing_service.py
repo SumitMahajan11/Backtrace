@@ -3,7 +3,7 @@
 import os
 import time
 from datetime import datetime, timezone, timedelta
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple, Union
 
 import stripe
 from sqlalchemy.orm import Session
@@ -369,23 +369,32 @@ class BillingService:
             "tier": "paid" if is_paid else "free",
             "subscription_status": sub.status if sub else "inactive",
             "monthly_usage": current_usage,
+            "quota_used": current_usage,
             "monthly_quota": quota_limit,
+            "quota_limit": quota_limit,
             "is_quota_exceeded": False if is_paid else (current_usage >= quota_limit),
             "current_period_end": sub.current_period_end.isoformat() if sub and sub.current_period_end else None,
         }
+
+    @classmethod
+    def refund_quota(cls, user_or_id: Union[UserModel, int], session: Session, job_id: Optional[Union[int, str]] = None) -> bool:
+        """Decrements the user's monthly quota usage by removing their usage event."""
+        user_id = user_or_id.id if isinstance(user_or_id, UserModel) else int(user_or_id)
+        return BillingRepository.refund_quota(session, user_id, job_id=job_id)
 
     @classmethod
     def check_and_consume_quota(
         cls,
         user: UserModel,
         session: Session,
+        job_id: Optional[Union[int, str]] = None,
     ) -> Tuple[bool, int, int, str]:
         """
         Concurrency-safe quota check and consumption for analysis pipeline execution.
-        
+
         Returns:
             (is_allowed: bool, current_usage: int, quota_limit: int, tier: str)
-            
+
         - Paid users: Bypass quota checks, record usage event, and return is_allowed=True.
         - Free users: If monthly_usage >= effective_quota, returns is_allowed=False without recording.
                       If monthly_usage < effective_quota, records usage event and returns is_allowed=True.
@@ -398,8 +407,15 @@ class BillingService:
             and (sub.current_period_end is None or sub.current_period_end > now)
         )
 
+        numeric_job_id: Optional[int] = None
+        if job_id is not None:
+            try:
+                numeric_job_id = int(job_id)
+            except (ValueError, TypeError):
+                pass
+
         if is_paid:
-            BillingRepository.record_usage_event(session, user.id, event_type="repo_analysis")
+            BillingRepository.record_usage_event(session, user.id, event_type="repo_analysis", job_id=numeric_job_id)
             current_usage = BillingRepository.get_monthly_usage_count(session, user.id)
             return True, current_usage, -1, "paid"
 
@@ -410,7 +426,7 @@ class BillingService:
             return False, current_usage, quota_limit, "free"
 
         # Consume quota by recording usage event
-        BillingRepository.record_usage_event(session, user.id, event_type="repo_analysis")
+        BillingRepository.record_usage_event(session, user.id, event_type="repo_analysis", job_id=numeric_job_id)
         session.flush()
         new_usage = BillingRepository.get_monthly_usage_count(session, user.id)
         return True, new_usage, quota_limit, "free"
@@ -507,4 +523,3 @@ class BillingService:
                     "tier": "paid",
                 }
             return {"success": False, "message": f"Unable to verify Stripe checkout session: {exc}"}
-

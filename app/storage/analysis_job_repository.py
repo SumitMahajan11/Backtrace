@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import uuid
 from typing import Any, Dict, List, Optional, Union
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.db import AnalysisJobModel, utc_now
@@ -49,6 +49,23 @@ class AnalysisJobRepository:
             updated_at=utc_now(),
         )
         session.add(job)
+        session.flush()
+
+        from app.models.db import UsageEventModel
+        stmt = (
+            select(UsageEventModel)
+            .where(
+                UsageEventModel.user_id == user_id,
+                UsageEventModel.job_id.is_(None),
+                UsageEventModel.event_type == "repo_analysis",
+            )
+            .order_by(UsageEventModel.created_at.desc(), UsageEventModel.id.desc())
+            .limit(1)
+        )
+        unlinked_event = session.scalar(stmt)
+        if unlinked_event:
+            unlinked_event.job_id = job.id
+
         session.commit()
         session.refresh(job)
         return job
@@ -64,20 +81,120 @@ class AnalysisJobRepository:
         return session.scalar(stmt)
 
     @staticmethod
-    def get_jobs_for_user(session: Session, user_id: int, limit: int = 50) -> List[AnalysisJobModel]:
+    def get_jobs_for_user(session: Session, user_id: int, limit: int = 50, grouped: bool = False) -> List[AnalysisJobModel]:
         """Retrieves past analysis jobs for a specific user, ordered newest first."""
+        if grouped:
+            return AnalysisJobRepository.get_grouped_jobs_for_user(session, user_id, limit=limit)
         stmt = (
             select(AnalysisJobModel)
             .where(AnalysisJobModel.user_id == user_id)
             .order_by(AnalysisJobModel.created_at.desc())
             .limit(limit)
         )
-        return list(session.scalars(stmt).all())
+        jobs = list(session.scalars(stmt).all())
+        for j in jobs:
+            if not hasattr(j, "runs"):
+                j.runs = 1
+        return jobs
+
+    @staticmethod
+    def get_grouped_jobs_for_user(session: Session, user_id: int, limit: int = 50) -> List[AnalysisJobModel]:
+        """
+        Retrieves analysis jobs for a specific user grouped by repository URL.
+        Returns the latest run for each repository, with a `runs` attribute indicating
+        the total number of analysis runs for that repository URL.
+        Ordered newest first.
+        """
+        subq = (
+            select(
+                func.max(AnalysisJobModel.id).label("latest_id"),
+                func.count(AnalysisJobModel.id).label("runs"),
+            )
+            .where(AnalysisJobModel.user_id == user_id)
+            .group_by(AnalysisJobModel.github_url)
+            .subquery()
+        )
+
+        stmt = (
+            select(AnalysisJobModel, subq.c.runs)
+            .join(subq, AnalysisJobModel.id == subq.c.latest_id)
+            .order_by(AnalysisJobModel.created_at.desc(), AnalysisJobModel.id.desc())
+            .limit(limit)
+        )
+        results = session.execute(stmt).all()
+        grouped_jobs = []
+        for job, runs in results:
+            job.runs = runs
+            grouped_jobs.append(job)
+        return grouped_jobs
+
+    @staticmethod
+    def get_jobs_grouped_by_repo(session: Session, user_id: int, limit: int = 50) -> List[AnalysisJobModel]:
+        """Alias for get_grouped_jobs_for_user."""
+        return AnalysisJobRepository.get_grouped_jobs_for_user(session, user_id, limit=limit)
 
     @staticmethod
     def get_user_jobs(session: Session, user_id: int, limit: int = 50) -> List[AnalysisJobModel]:
         """Alias for get_jobs_for_user."""
         return AnalysisJobRepository.get_jobs_for_user(session, user_id, limit)
+
+    @staticmethod
+    def delete_job(session: Session, job_id: int, user_id: Optional[int] = None) -> bool:
+        """
+        Deletes an analysis job by ID.
+        If user_id is provided, verifies that the job belongs to that user.
+        Returns True if deleted, False if not found or unauthorized.
+        """
+        job = AnalysisJobRepository.get_job_by_id(session, job_id)
+        if not job:
+            return False
+        if user_id is not None and job.user_id != user_id:
+            return False
+        session.delete(job)
+        session.commit()
+        return True
+
+    @staticmethod
+    def find_completed_job(
+        session: Session,
+        user_id: int,
+        github_url: str,
+        commit_ref: Optional[str] = None,
+        subpath: Optional[str] = None,
+        resolved_sha: Optional[str] = None,
+    ) -> Optional[AnalysisJobModel]:
+        """
+        Looks up an existing completed analysis job for the user matching
+        repo URL, branch/commit_ref, subpath, and commit SHA.
+        """
+        clean_url = (github_url or "").strip().rstrip("/")
+        stmt = (
+            select(AnalysisJobModel)
+            .where(
+                AnalysisJobModel.user_id == user_id,
+                AnalysisJobModel.status.in_(["completed", "complete"]),
+            )
+        )
+        stmt = stmt.where(
+            (AnalysisJobModel.github_url == clean_url) |
+            (AnalysisJobModel.github_url == f"{clean_url}.git") |
+            (AnalysisJobModel.github_url == clean_url.rstrip(".git"))
+        )
+        if commit_ref:
+            stmt = stmt.where(AnalysisJobModel.commit_ref == commit_ref)
+        else:
+            stmt = stmt.where((AnalysisJobModel.commit_ref == None) | (AnalysisJobModel.commit_ref == ""))
+
+        if subpath:
+            stmt = stmt.where(AnalysisJobModel.subpath == subpath)
+        else:
+            stmt = stmt.where((AnalysisJobModel.subpath == None) | (AnalysisJobModel.subpath == ""))
+
+        if resolved_sha:
+            stmt = stmt.where(AnalysisJobModel.resolved_sha == resolved_sha)
+
+        stmt = stmt.order_by(AnalysisJobModel.created_at.desc())
+        return session.scalars(stmt).first()
 
     @staticmethod
     def update_job_status(
@@ -95,6 +212,7 @@ class AnalysisJobRepository:
         """Updates job status, markdown output, graph, quiz results, resolved SHA, failed stage, and execution duration."""
         job = AnalysisJobRepository.get_job_by_id(session, job_id)
         if job:
+            prev_status = job.status
             job.status = status
             if resolved_sha is not None:
                 job.resolved_sha = resolved_sha
@@ -111,6 +229,14 @@ class AnalysisJobRepository:
             if execution_time_seconds is not None:
                 job.execution_time_seconds = execution_time_seconds
             job.updated_at = utc_now()
+
+            # Refund quota on transition from pending/running to failed/cancelled in the same transaction
+            valid_prev = str(prev_status or "").lower() in ("pending", "running", "processing", "queued")
+            target_status = str(status or "").lower()
+            if valid_prev and target_status in ("failed", "cancelled"):
+                from app.storage.billing_repository import BillingRepository
+                BillingRepository.refund_quota(session, job.user_id, job_id=job.id)
+
             session.commit()
             session.refresh(job)
         return job

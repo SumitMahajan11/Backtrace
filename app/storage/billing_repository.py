@@ -1,7 +1,7 @@
 """Data Access Layer (Repository Pattern) for Subscriptions, Usage Events, and Webhook Deduplication."""
 
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, Union
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -98,10 +98,12 @@ class BillingRepository:
         session: Session,
         user_id: int,
         event_type: str = "repo_analysis",
+        job_id: Optional[int] = None,
     ) -> UsageEventModel:
         """Records an immutable analysis event in the usage audit log."""
         event = UsageEventModel(
             user_id=user_id,
+            job_id=job_id,
             event_type=event_type,
             created_at=utc_now(),
         )
@@ -132,6 +134,58 @@ class BillingRepository:
         )
         count = session.scalar(stmt)
         return int(count or 0)
+
+    @staticmethod
+    def refund_quota(session: Session, user_id: int, job_id: Optional[Union[int, str]] = None) -> bool:
+        """
+        Decrements user quota usage by removing the usage event for this job (or latest event)
+        for the current calendar month.
+        Called within the same transaction that marks a job as failed or cancelled.
+        """
+        ref = utc_now()
+        month_start = datetime(ref.year, ref.month, 1)
+
+        numeric_job_id = None
+        if job_id is not None:
+            try:
+                numeric_job_id = int(job_id)
+            except (ValueError, TypeError):
+                pass
+
+        if numeric_job_id is not None:
+            stmt = (
+                select(UsageEventModel)
+                .where(
+                    UsageEventModel.user_id == user_id,
+                    UsageEventModel.job_id == numeric_job_id,
+                    UsageEventModel.event_type == "repo_analysis",
+                    UsageEventModel.created_at >= month_start,
+                )
+                .order_by(UsageEventModel.created_at.desc(), UsageEventModel.id.desc())
+                .limit(1)
+            )
+            target_event = session.scalar(stmt)
+            if target_event:
+                session.delete(target_event)
+                session.flush()
+                return True
+
+        stmt = (
+            select(UsageEventModel)
+            .where(
+                UsageEventModel.user_id == user_id,
+                UsageEventModel.event_type == "repo_analysis",
+                UsageEventModel.created_at >= month_start,
+            )
+            .order_by(UsageEventModel.created_at.desc(), UsageEventModel.id.desc())
+            .limit(1)
+        )
+        latest_event = session.scalar(stmt)
+        if latest_event:
+            session.delete(latest_event)
+            session.flush()
+            return True
+        return False
 
     @staticmethod
     def is_webhook_event_processed(session: Session, event_id: str) -> bool:

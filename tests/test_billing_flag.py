@@ -120,3 +120,33 @@ def test_billing_enabled_settings_renders_price_display(auth_client, monkeypatch
     settings_resp = client.get("/settings")
     assert settings_resp.status_code == 200
     assert custom_price in settings_resp.text
+
+
+def test_billing_flag_env_values(monkeypatch):
+    """Verify billing_enabled() returns False when unset or 'false', and True when 'TRUE'."""
+    monkeypatch.delenv("STRIPE_BILLING_ENABLED", raising=False)
+    assert billing_enabled() is False
+
+    monkeypatch.setenv("STRIPE_BILLING_ENABLED", "false")
+    assert billing_enabled() is False
+
+    monkeypatch.setenv("STRIPE_BILLING_ENABLED", "TRUE")
+    assert billing_enabled() is True
+
+
+def test_billing_env_unset_ui_and_stripe_not_called(auth_client, monkeypatch):
+    """With env unset, Dashboard and Settings HTML contain no 'Upgrade to Pro', and stripe.Price.retrieve is never called."""
+    client, _ = auth_client
+    monkeypatch.delenv("STRIPE_BILLING_ENABLED", raising=False)
+    assert billing_enabled() is False
+
+    with patch("stripe.Price.retrieve") as mock_retrieve:
+        dash_resp = client.get("/dashboard")
+        assert dash_resp.status_code == 200
+        assert "Upgrade to Pro" not in dash_resp.text
+
+        settings_resp = client.get("/settings")
+        assert settings_resp.status_code == 200
+        assert "Upgrade to Pro" not in settings_resp.text
+
+        mock_retrieve.assert_not_called()

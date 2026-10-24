@@ -1,5 +1,6 @@
 """Service wrapping repository ingestion with Layer 9 cache & in-flight locking."""
 
+import re
 import subprocess
 import time
 from typing import Optional
@@ -12,13 +13,21 @@ from app.services.security import build_sandboxed_env
 from app.storage.repository import StorageRepository
 
 
-def get_remote_head_commit(github_url: str, timeout_seconds: float = 10.0) -> str:
+def get_remote_head_commit(
+    github_url: str,
+    commit_ref: Optional[str] = None,
+    timeout_seconds: float = 10.0,
+) -> str:
     """
     Executes a lightweight `git ls-remote` check to fetch remote HEAD commit hash
-    without executing a full repo clone.
+    or specific branch/ref commit hash without executing a full repo clone.
     """
+    if commit_ref and re.match(r"^[0-9a-fA-F]{40}$", commit_ref.strip()):
+        return commit_ref.strip()
+
     env = build_sandboxed_env()
-    cmd = ["git", "-c", "core.hooksPath=", "ls-remote", github_url, "HEAD"]
+    target_ref = commit_ref.strip() if commit_ref and commit_ref.strip() else "HEAD"
+    cmd = ["git", "-c", "core.hooksPath=", "ls-remote", github_url, target_ref]
     try:
         res = subprocess.run(
             cmd,
@@ -30,10 +39,33 @@ def get_remote_head_commit(github_url: str, timeout_seconds: float = 10.0) -> st
             timeout=timeout_seconds,
         )
         if res.returncode == 0 and res.stdout.strip():
-            commit_hash = res.stdout.strip().split()[0]
-            return commit_hash
+            lines = res.stdout.strip().splitlines()
+            if lines:
+                commit_hash = lines[0].split()[0]
+                return commit_hash
     except Exception:
         pass
+
+    # If specific ref failed or was not found, fallback to HEAD
+    if target_ref != "HEAD":
+        try:
+            cmd_head = ["git", "-c", "core.hooksPath=", "ls-remote", github_url, "HEAD"]
+            res = subprocess.run(
+                cmd_head,
+                env=env,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=timeout_seconds,
+            )
+            if res.returncode == 0 and res.stdout.strip():
+                lines = res.stdout.strip().splitlines()
+                if lines:
+                    return lines[0].split()[0]
+        except Exception:
+            pass
+
     # Return fallback identifier if remote ls-remote fails or in test mode
     return "head_latest"
 

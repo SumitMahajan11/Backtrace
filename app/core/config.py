@@ -19,10 +19,17 @@ def billing_enabled() -> bool:
     return os.getenv("STRIPE_BILLING_ENABLED", "").strip().lower() == "true"
 
 
+def rewards_enabled() -> bool:
+    """Returns True if REWARDS_ENABLED env var is 'true' (case-insensitive). Default is False."""
+    val = os.getenv("REWARDS_ENABLED", "").strip().lower()
+    return val == "true"
+
+
 class Settings(BaseSettings):
     # Environment mode
     ENVIRONMENT: Literal["development", "test", "production"] = "production"
     RETENTION_CLEANUP_ENABLED: bool = True
+    REWARDS_ENABLED: bool = False
     APP_NAME: str = "Backtrace"
     API_PREFIX: str = "/api"
     DEBUG: bool = False
@@ -84,6 +91,10 @@ class Settings(BaseSettings):
     REDIS_URL: Optional[str] = "redis://localhost:6379/0"
     RATE_LIMIT_CIRCUIT_BREAKER_THRESHOLD: int = 5
     RATE_LIMIT_REDIS_TIMEOUT: float = 0.5
+
+    # Footer & Support Links
+    FOOTER_GITHUB_URL: Optional[str] = "https://github.com/SumitMahajan11/Backtrace"
+    SUPPORT_EMAIL: Optional[str] = "support@backtrace.dev"
 
     # CORS & Security
     ALLOWED_HOSTS: list[str] = ["*"]
