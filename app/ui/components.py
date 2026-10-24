@@ -3100,9 +3100,7 @@ def progress_view(
     }}
     </style>
 
-    <div id="elapsed-timer-badge" style="display: none;">
-        <span id="elapsed-timer-text">{timer_badge_text}</span>
-    </div>
+    <div style="display: none;"><span id="elapsed-timer-text">{timer_badge_text}</span></div>
 
     <div style="margin-bottom: 1.5rem;">
         <div style="margin-bottom: 0.75rem;">

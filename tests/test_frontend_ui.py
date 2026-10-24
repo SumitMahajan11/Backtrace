@@ -1112,7 +1112,6 @@ def test_progress_view_live_elapsed_timer(client, create_user, test_db):
     assert resp_run.status_code == 200
     run_html = resp_run.text
 
-    assert 'id="elapsed-timer-badge"' in run_html
     assert 'id="elapsed-timer-text"' in run_html
     assert "Running for" in run_html
     assert "updateElapsedTimer" in run_html
@@ -1139,7 +1138,6 @@ def test_progress_view_live_elapsed_timer(client, create_user, test_db):
     assert resp_fail.status_code == 200
     fail_html = resp_fail.text
 
-    assert 'id="elapsed-timer-badge"' in fail_html
     assert "Failed after 0:35" in fail_html
 
     # 3. Direct progress_view render for completed job
@@ -1150,7 +1148,6 @@ def test_progress_view_live_elapsed_timer(client, create_user, test_db):
         from app.ui.components import progress_view
         comp_html = progress_view(job=job_completed, current_user=user)
 
-    assert 'id="elapsed-timer-badge"' in comp_html
     assert "Completed in 1:22" in comp_html
 
 
