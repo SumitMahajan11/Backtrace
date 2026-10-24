@@ -369,6 +369,7 @@ def test_xss_payload_in_repo_content_renders_inert(client, create_user, test_db)
 
 ```javascript
 console.log("{xss_script}");
+console.log('{xss_img}');
 ```
 """
 
@@ -386,7 +387,8 @@ console.log("{xss_script}");
             report_markdown=xss_markdown,
             graph_data={
                 "nodes": [
-                    {"id": f"malicious_module_{xss_script}", "type": "exploit", "dependencies": []}
+                    {"id": f"malicious_module_{xss_script}", "type": "exploit", "dependencies": []},
+                    {"id": f"malicious_img_{xss_img}", "type": "exploit", "dependencies": []},
                 ],
                 "edges": [],
             },
@@ -413,6 +415,7 @@ console.log("{xss_script}");
     # Positive assertions:
     # Where payload is rendered (graph nodes/scripts), escaped form is present
     assert "&lt;script&gt;" in rendered_html
+    assert "&lt;img src=x onerror" in rendered_html
     # Where payload is intentionally removed (sanitized markdown), visible text remains
     assert "Exploit question:" in rendered_html
     assert "Option 1:" in rendered_html
