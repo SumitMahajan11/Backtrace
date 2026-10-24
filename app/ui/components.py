@@ -3981,8 +3981,9 @@ function goToNextMilestone(currentTier) {
     }
 }
 
-async function checkMilestoneUnderstanding(jobId, tier) {
-    const card = document.getElementById('milestone-quiz-card-' + tier);
+async function checkMilestoneUnderstanding(jobId, tier, prefix) {
+    prefix = prefix || '';
+    const card = document.getElementById(prefix + 'milestone-quiz-card-' + tier);
     if (!card) return;
     const questions = card.querySelectorAll('.milestone-quiz-q');
     let correctCount = 0;
@@ -3991,7 +3992,7 @@ async function checkMilestoneUnderstanding(jobId, tier) {
     questions.forEach((qEl, idx) => {
         const correctIdx = parseInt(qEl.getAttribute('data-correct-idx') || '0', 10);
         const qNum = idx + 1;
-        const radios = document.getElementsByName('m_quiz_' + tier + '_' + qNum);
+        const radios = document.getElementsByName(prefix + 'm_quiz_' + tier + '_' + qNum);
         let selectedVal = null;
         for (const r of radios) {
             if (r.checked) {
@@ -4021,8 +4022,8 @@ async function checkMilestoneUnderstanding(jobId, tier) {
         }
     });
 
-    const scoreBanner = document.getElementById('quiz-score-banner-' + tier);
-    const scoreText = document.getElementById('quiz-score-text-' + tier);
+    const scoreBanner = document.getElementById(prefix + 'quiz-score-banner-' + tier);
+    const scoreText = document.getElementById(prefix + 'quiz-score-text-' + tier);
     if (scoreBanner && scoreText) {
         scoreBanner.style.display = 'inline-flex';
         scoreText.textContent = correctCount + ' of ' + total + ' correct';
@@ -4037,7 +4038,7 @@ async function checkMilestoneUnderstanding(jobId, tier) {
         }
     }
 
-    const retryBtn = document.getElementById('btn-retry-quiz-' + tier);
+    const retryBtn = document.getElementById(prefix + 'btn-retry-quiz-' + tier);
     if (retryBtn) retryBtn.style.display = 'inline-flex';
 
     try {
@@ -4052,13 +4053,14 @@ async function checkMilestoneUnderstanding(jobId, tier) {
     }
 }
 
-function retryMilestoneQuiz(jobId, tier) {
-    const card = document.getElementById('milestone-quiz-card-' + tier);
+function retryMilestoneQuiz(jobId, tier, prefix) {
+    prefix = prefix || '';
+    const card = document.getElementById(prefix + 'milestone-quiz-card-' + tier);
     if (!card) return;
     const questions = card.querySelectorAll('.milestone-quiz-q');
     questions.forEach((qEl, idx) => {
         const qNum = idx + 1;
-        const radios = document.getElementsByName('m_quiz_' + tier + '_' + qNum);
+        const radios = document.getElementsByName(prefix + 'm_quiz_' + tier + '_' + qNum);
         for (const r of radios) {
             r.checked = false;
         }
@@ -4068,10 +4070,10 @@ function retryMilestoneQuiz(jobId, tier) {
         if (explanationEl) explanationEl.style.display = 'none';
     });
 
-    const scoreBanner = document.getElementById('quiz-score-banner-' + tier);
+    const scoreBanner = document.getElementById(prefix + 'quiz-score-banner-' + tier);
     if (scoreBanner) scoreBanner.style.display = 'none';
 
-    const retryBtn = document.getElementById('btn-retry-quiz-' + tier);
+    const retryBtn = document.getElementById(prefix + 'btn-retry-quiz-' + tier);
     if (retryBtn) retryBtn.style.display = 'none';
 }
 
@@ -4898,7 +4900,7 @@ def _build_milestone_quiz_items(
     return questions[:3]
 
 
-def _render_milestone_quiz_card(job_id: Any, m_tier: int, questions: List[Dict[str, Any]], grading_details: Optional[Dict[str, Any]] = None) -> str:
+def _render_milestone_quiz_card(job_id: Any, m_tier: int, questions: List[Dict[str, Any]], grading_details: Optional[Dict[str, Any]] = None, id_prefix: str = "") -> str:
     """Renders the 'Check your understanding' 3-question quiz step per milestone with large 44px rows."""
     score_val = grading_details.get("quiz_score") if grading_details else None
     total_val = grading_details.get("quiz_total", 3) if grading_details else 3
@@ -4929,14 +4931,14 @@ def _render_milestone_quiz_card(job_id: Any, m_tier: int, questions: List[Dict[s
         for opt_idx, opt in enumerate(opts):
             opt_text = render_user_markdown(str(opt))
             opts_html += f"""
-            <label class="quiz-option-row" id="quiz-opt-row-{m_tier}-{q_idx}-{opt_idx}" style="min-height: 44px; display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0.85rem; background: var(--panel-raised); border: 1px solid var(--hairline-soft); border-radius: 4px; cursor: pointer; transition: all 120ms ease; margin-bottom: 0.45rem;">
-                <input type="radio" name="m_quiz_{m_tier}_{q_idx}" value="{opt_idx}" style="margin: 0; width: 18px; height: 18px; accent-color: var(--success); flex-shrink: 0;" />
+            <label class="quiz-option-row" id="{id_prefix}quiz-opt-row-{m_tier}-{q_idx}-{opt_idx}" style="min-height: 44px; display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0.85rem; background: var(--panel-raised); border: 1px solid var(--hairline-soft); border-radius: 4px; cursor: pointer; transition: all 120ms ease; margin-bottom: 0.45rem;">
+                <input type="radio" name="{id_prefix}m_quiz_{m_tier}_{q_idx}" value="{opt_idx}" style="margin: 0; width: 18px; height: 18px; accent-color: var(--success); flex-shrink: 0;" />
                 <span class="quiz-opt-text" style="font-size: 0.825rem; color: var(--text); line-height: 1.4;">{opt_text}</span>
             </label>
             """
 
         rendered_qs += f"""
-        <div class="milestone-quiz-q" id="milestone-quiz-q-{m_tier}-{q_idx}" data-question-idx="{q_idx}" data-correct-idx="{correct_idx}" style="margin-bottom: 1.25rem;">
+        <div class="milestone-quiz-q" id="{id_prefix}milestone-quiz-q-{m_tier}-{q_idx}" data-question-idx="{q_idx}" data-correct-idx="{correct_idx}" style="margin-bottom: 1.25rem;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
                 <span style="font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 700; color: var(--accent); ">Question {q_idx} of 3</span>
                 <span class="quiz-feedback" style="display: none; font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600;"></span>
@@ -4954,7 +4956,7 @@ def _render_milestone_quiz_card(job_id: Any, m_tier: int, questions: List[Dict[s
         """
 
     return f"""
-    <div class="milestone-quiz-card" id="milestone-quiz-card-{m_tier}" style="margin-top: 1.5rem; background: var(--surface-2); border: 1px solid var(--border); border-radius: 4px; padding: 1.25rem 1.5rem;">
+    <div class="milestone-quiz-card" id="{id_prefix}milestone-quiz-card-{m_tier}" style="margin-top: 1.5rem; background: var(--surface-2); border: 1px solid var(--border); border-radius: 4px; padding: 1.25rem 1.5rem;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; border-bottom: 1px solid var(--hairline-soft); padding-bottom: 0.5rem;">
             <div style="display: flex; align-items: center; gap: 0.5rem;">
                 <span style="font-size: 1.1rem;">🧠</span>
@@ -4965,18 +4967,18 @@ def _render_milestone_quiz_card(job_id: Any, m_tier: int, questions: List[Dict[s
         <p style="color: var(--text-muted); font-size: 0.825rem; margin-bottom: 1rem; line-height: 1.45;">
             Verify your architectural comprehension of this milestone's contracts, invariants, and role before moving ahead.
         </p>
-        <div class="milestone-quiz-questions" id="milestone-quiz-questions-{m_tier}">
+        <div class="milestone-quiz-questions" id="{id_prefix}milestone-quiz-questions-{m_tier}">
             {rendered_qs}
         </div>
         <div style="display: flex; align-items: center; gap: 0.75rem; margin-top: 1rem; flex-wrap: wrap;">
-            <button type="button" id="btn-check-quiz-{m_tier}" class="btn btn-sm btn-primary" onclick="checkMilestoneUnderstanding('{job_id}', {m_tier})" style="font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600;">
+            <button type="button" id="{id_prefix}btn-check-quiz-{m_tier}" class="btn btn-sm btn-primary" onclick="checkMilestoneUnderstanding('{job_id}', {m_tier}, '{id_prefix}')" style="font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600;">
                 Check answers
             </button>
-            <button type="button" id="btn-retry-quiz-{m_tier}" class="btn btn-sm btn-secondary" onclick="retryMilestoneQuiz('{job_id}', {m_tier})" style="display: {retry_display}; font-family: var(--font-ui); font-size: 0.8125rem;">
+            <button type="button" id="{id_prefix}btn-retry-quiz-{m_tier}" class="btn btn-sm btn-secondary" onclick="retryMilestoneQuiz('{job_id}', {m_tier}, '{id_prefix}')" style="display: {retry_display}; font-family: var(--font-ui); font-size: 0.8125rem;">
                 Retry
             </button>
-            <div id="quiz-score-banner-{m_tier}" class="quiz-score-banner" style="display: {banner_display}; font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600; padding: 0.4rem 0.85rem; border-radius: 4px; background: {banner_bg}; border: {banner_border}; color: {banner_color};" data-score-template="of 3 correct">
-                <span id="quiz-score-text-{m_tier}">{score_text}</span>
+            <div id="{id_prefix}quiz-score-banner-{m_tier}" class="quiz-score-banner" style="display: {banner_display}; font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600; padding: 0.4rem 0.85rem; border-radius: 4px; background: {banner_bg}; border: {banner_border}; color: {banner_color};" data-score-template="of 3 correct">
+                <span id="{id_prefix}quiz-score-text-{m_tier}">{score_text}</span>
             </div>
         </div>
     </div>
@@ -6868,7 +6870,7 @@ def report_view(
             except Exception:
                 m_tier = m_idx
             q_items = _build_milestone_quiz_items(m, m_idx, quiz_data, milestones_data)
-            quiz_cards_rendered += _render_milestone_quiz_card(job_id, m_tier, q_items)
+            quiz_cards_rendered += _render_milestone_quiz_card(job_id, m_tier, q_items, id_prefix="quiztab-")
 
         quiz_html = f"""
         <div class="stratum-card" id="section-quiz" style="margin-bottom: 2rem;">
@@ -6893,7 +6895,7 @@ def report_view(
         """
     elif quiz_data and quiz_data.get("questions"):
         questions = quiz_data.get("questions", [])
-        quiz_cards_rendered = _render_milestone_quiz_card(job_id, 1, questions)
+        quiz_cards_rendered = _render_milestone_quiz_card(job_id, 1, questions, id_prefix="quiztab-")
         quiz_html = f"""
         <div class="stratum-card" id="section-quiz" style="margin-bottom: 2rem;">
             <div class="card-header">
