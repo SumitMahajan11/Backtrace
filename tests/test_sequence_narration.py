@@ -173,6 +173,7 @@ def test_deterministic_narration_fallback(sample_scored_result):
 
     # Test Track
     test_step = result.test_track[0]
+    assert test_step.tier_index == 2
     assert "tests/test_api.py" in test_step.files
 
     # Standalone files

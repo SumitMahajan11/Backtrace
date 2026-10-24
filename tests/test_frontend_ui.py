@@ -410,6 +410,14 @@ console.log("{xss_script}");
     assert "<script>alert('XSS_VULNERABILITY')</script>" not in rendered_html
     assert '<img src=x onerror=alert("XSS_IMG")>' not in rendered_html
 
+    # Positive assertions:
+    # Where payload is rendered (graph nodes/scripts), escaped form is present
+    assert "&lt;script&gt;" in rendered_html
+    # Where payload is intentionally removed (sanitized markdown), visible text remains
+    assert "Exploit question:" in rendered_html
+    assert "Option 1:" in rendered_html
+    assert "Safe Option" in rendered_html
+
     # Check lazy milestone endpoint renders safely
     m_resp = client.get(f"/reports/{job_id}/milestones/1")
     if m_resp.status_code == 200:
@@ -419,6 +427,7 @@ console.log("{xss_script}");
     # Check export.md returns markdown
     exp_resp = client.get(f"/reports/{job_id}/export.md")
     assert exp_resp.status_code == 200
+    assert "Malicious Repo Report" in exp_resp.text
 
 
 def test_graph_dag_node_single_quote_xss_sink(client, create_user, test_db):

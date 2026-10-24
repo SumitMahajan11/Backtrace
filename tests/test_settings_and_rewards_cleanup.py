@@ -545,6 +545,9 @@ def test_xss_prevention_in_settings_and_export(client, create_user):
     assert resp.status_code == 200
     assert '<script>alert("xss")</script>' not in resp.text
     assert '<img src=x onerror=alert(1)>' not in resp.text
+    # Positive assertions: escaped form is present where rendered
+    assert "&lt;script&gt;alert(" in resp.text
+    assert "&lt;img src=x onerror=alert(1)&gt;" in resp.text
 
     # Export download contains expected data safely encoded
     resp_exp = client.get("/account/export.json")

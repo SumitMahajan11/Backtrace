@@ -349,7 +349,7 @@ def test_progress_sse_failed_job_terminal_event(client, test_user, test_db):
             status="failed",
         )
         job.failed_stage = "stage_1"
-        job.error_message = "Git clone sandbox error"
+        job.error_message = "Git clone failed: Repository not found (404)"
         session.commit()
         job_id = job.id
 
