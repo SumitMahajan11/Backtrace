@@ -75,7 +75,7 @@ def test_privacy_page_public_and_sections(client):
     assert response.status_code == 200
     assert "Privacy Policy" in response.text
     assert "Last updated" in response.text
-    assert "What we store" in response.text
+    assert "What data is stored" in response.text
     assert "How long" in response.text
     assert "Who processes your code" in response.text
     assert "GitHub permissions" in response.text

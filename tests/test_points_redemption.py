@@ -428,7 +428,7 @@ def test_rewards_frontend_pages_and_actions(db_session, test_users, rewards_on):
         assert "Architecture Report Achievement Badges" in resp_page.text
         assert "Global Builder Leaderboard" in resp_page.text
         assert "Points Audit Ledger" in resp_page.text
-        assert "Redeem +2 Repos (100 PTS)" in resp_page.text
+        assert "Redeem +2 Repos (100 pts)" in resp_page.text
 
         # 2. Form action POST /rewards/redeem/quota succeeds and redirects with flash message
         resp_post = client.post("/rewards/redeem/quota", follow_redirects=False)

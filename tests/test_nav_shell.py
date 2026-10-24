@@ -155,23 +155,26 @@ def test_nav_shell_quota_and_tier_consistency(client, create_user, test_db):
     client.cookies.set("access_token", token_free)
 
     resp_free_dash = client.get("/dashboard")
-    assert "FREE (2/5)" in resp_free_dash.text
+    assert "2 of 5 analyses used this month" in resp_free_dash.text
+    assert "Free (2 / 5)" in resp_free_dash.text
+    assert "FREE (" not in resp_free_dash.text
     assert "@nav_free_user" in resp_free_dash.text
     assert "/auth/logout" in resp_free_dash.text
 
     resp_free_set = client.get("/settings")
-    assert "FREE (2/5)" in resp_free_set.text
+    assert "Free (2 / 5)" in resp_free_set.text
+    assert "FREE (" not in resp_free_set.text
 
     # Pro User Checks
     token_pro = create_access_token(user_id=user_pro.id, github_id=user_pro.github_id, github_username=user_pro.github_username)
     client.cookies.set("access_token", token_pro)
 
     resp_pro_dash = client.get("/dashboard")
-    assert "PRO" in resp_pro_dash.text
+    assert "Pro" in resp_pro_dash.text
     assert "@nav_pro_user" in resp_pro_dash.text
 
     resp_pro_set = client.get("/settings")
-    assert "PRO" in resp_pro_set.text
+    assert "Pro" in resp_pro_set.text
 
 
 def test_nav_shell_accessible_theme_toggle_and_logout(client, create_user):
