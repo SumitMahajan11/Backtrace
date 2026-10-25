@@ -3778,3 +3778,59 @@ def test_dashboard_status_pill_single_line_height_1440_playwright(test_db):
         app.dependency_overrides.clear()
 
 
+def test_progress_view_done_renders_stats_grid_when_counts_present():
+    """Verifies that progress_view renders the stats grid when counts (files, modules, entry points) are present."""
+    from app.ui.components import progress_view
+
+    class MockDoneJob:
+        id = 101
+        repo_url = "https://github.com/owner/sample-repo"
+        repo_name = "sample-repo"
+        status = "completed"
+        created_at = "2026-10-25T10:00:00Z"
+        execution_time_seconds = 18.5
+        report_markdown = """# Architectural Report
+- **Total Analyzed Files**: `12`
+- **Domain Categories**: `3`
+- **Entry Point Files**: `app/main.py, app/api.py`
+
+| `core` | 5 | 41.7% |
+| `api` | 4 | 33.3% |
+| `models` | 3 | 25.0% |
+"""
+        graph_data = {
+            "nodes": [
+                {"id": "app/main.py", "domain": "core", "tier": 1},
+                {"id": "app/api.py", "domain": "api", "tier": 2},
+            ]
+        }
+
+    html = progress_view(job=MockDoneJob(), current_user=None)
+    assert "Files analyzed" in html
+    assert "ready-files-count" in html
+    assert ">12<" in html
+    assert ">3<" in html
+    assert ">2<" in html
+
+
+def test_progress_view_done_hides_stats_grid_when_counts_missing():
+    """Verifies that progress_view hides the stats grid when counts are missing or zero."""
+    from app.ui.components import progress_view
+
+    class MockDoneJobNoCounts:
+        id = 102
+        repo_url = "https://github.com/owner/empty-repo"
+        repo_name = "empty-repo"
+        status = "completed"
+        created_at = "2026-10-25T10:00:00Z"
+        execution_time_seconds = 5.0
+        report_markdown = ""
+        graph_data = {}
+
+    html = progress_view(job=MockDoneJobNoCounts(), current_user=None)
+    assert "Files analyzed" not in html
+    assert '<div class="progress-ready-stats-grid"' not in html
+    assert "Report ready" in html
+
+
+

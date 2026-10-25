@@ -2472,39 +2472,94 @@ def progress_view(
     secs_init = int(execution_time_seconds % 60)
     formatted_init_time = f"{mins_init}:{secs_init:02d}"
 
-    # Extract real numbers for completed state
-    files_analyzed = 0
-    modules_count = 0
-    entry_points_count = 0
+    # Extract real numbers for completed state matching report overview
+    raw_md = (
+        getattr(job, "report_markdown", None)
+        or getattr(job, "markdown_output", "")
+        or (job.get("report_markdown") or job.get("markdown_output", "") if isinstance(job, dict) else "")
+    )
+    raw_graph = (
+        getattr(job, "graph_data", None)
+        or getattr(job, "graph_output_json", None)
+        or (job.get("graph_data") or job.get("graph_output_json") if isinstance(job, dict) else None)
+    )
 
-    raw_md = getattr(job, "markdown_output", "") if hasattr(job, "markdown_output") else (job.get("markdown_output", "") if isinstance(job, dict) else "")
-    if raw_md:
-        try:
-            # Inline extraction of real numbers from synthesized markdown overview
-            files_m = re.search(r"\*\*Total Analyzed Files\*\*:\s*`?(\d+)`?", raw_md)
-            if files_m:
-                files_analyzed = int(files_m.group(1))
-            domains_m = re.search(r"\*\*Domain Categories\*\*:\s*`?(\d+)`?", raw_md)
-            if domains_m:
-                modules_count = int(domains_m.group(1))
-            entry_m = re.search(r"\*\*Entry Point Files\*\*:\s*`?([^`\n]+)`?", raw_md)
-            if entry_m:
-                entry_points_count = len([e.strip() for e in entry_m.group(1).split(",") if e.strip() and e.strip() != "None"])
-        except Exception:
-            pass
+    parsed_md = _parse_report_markdown(raw_md) if raw_md else {}
+    ov_data = parsed_md.get("overview", {})
+    domain_dist = parsed_md.get("domain_distribution", [])
 
-    raw_graph = getattr(job, "graph_output_json", None) if hasattr(job, "graph_output_json") else (job.get("graph_output_json", None) if isinstance(job, dict) else None)
-    if raw_graph and (files_analyzed == 0 or modules_count == 0):
+    g_data = {}
+    if raw_graph:
         try:
             g_data = json.loads(raw_graph) if isinstance(raw_graph, str) else (raw_graph if isinstance(raw_graph, dict) else {})
-            nodes = g_data.get("nodes", [])
-            if files_analyzed == 0:
-                files_analyzed = len(nodes)
-            if modules_count == 0:
-                tiers = {n.get("tier") for n in nodes if "tier" in n}
-                modules_count = max(1, len(tiers)) if tiers else len(nodes)
         except Exception:
-            pass
+            g_data = {}
+
+    nodes = g_data.get("nodes", []) if isinstance(g_data, dict) else []
+
+    files_analyzed = (
+        ov_data.get("total_files")
+        or getattr(job, "total_files", None)
+        or (job.get("total_files") if isinstance(job, dict) else None)
+        or len(nodes)
+        or 0
+    )
+
+    modules_count = (
+        len(domain_dist)
+        or ov_data.get("total_domains")
+        or (len({n.get("domain") for n in nodes if n.get("domain")}) if nodes else 0)
+        or (len({n.get("tier") for n in nodes if "tier" in n}) if nodes else 0)
+        or 0
+    )
+
+    raw_eps = ov_data.get("entry_points", [])
+    if not raw_eps and nodes:
+        raw_eps = [
+            n.get("id") or n.get("name") or n.get("path")
+            for n in nodes
+            if n.get("is_entry_point") or n.get("type") in ("entry_point", "entry")
+        ]
+
+    app_eps = []
+    for raw_ep in raw_eps:
+        ep = str(raw_ep).strip()
+        if not ep:
+            continue
+        ep_lower = ep.lower()
+        if (
+            ep_lower.startswith(("test/", "tests/", "spec/", "specs/", "bench/", "benchmarks/"))
+            or "/test" in ep_lower
+            or "/tests" in ep_lower
+            or "/spec" in ep_lower
+            or "test_" in ep_lower
+            or "_test." in ep_lower
+            or "tests." in ep_lower
+            or "bench" in ep_lower
+        ):
+            continue
+        app_eps.append(ep)
+
+    entry_points_count = len(app_eps) if app_eps else (len(raw_eps) if raw_eps else 0)
+
+    stats_grid_html = ""
+    if files_analyzed > 0 or modules_count > 0 or entry_points_count > 0:
+        stats_grid_html = f"""
+        <div class="progress-ready-stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+            <div class="stat-card" style="background: var(--surface-2); padding: 1rem; border-radius: 6px; border: 1px solid var(--border);">
+                <div style="font-size: 0.8125rem; color: var(--text-muted); ">Files analyzed</div>
+                <div id="ready-files-count" style="font-size: 1.5rem; font-weight: 700; color: var(--text); margin-top: 0.25rem;">{files_analyzed}</div>
+            </div>
+            <div class="stat-card" style="background: var(--surface-2); padding: 1rem; border-radius: 6px; border: 1px solid var(--border);">
+                <div style="font-size: 0.8125rem; color: var(--text-muted); ">Modules</div>
+                <div id="ready-modules-count" style="font-size: 1.5rem; font-weight: 700; color: var(--text); margin-top: 0.25rem;">{modules_count}</div>
+            </div>
+            <div class="stat-card" style="background: var(--surface-2); padding: 1rem; border-radius: 6px; border: 1px solid var(--border);">
+                <div style="font-size: 0.8125rem; color: var(--text-muted); ">Entry points</div>
+                <div id="ready-entry-count" style="font-size: 1.5rem; font-weight: 700; color: var(--text); margin-top: 0.25rem;">{entry_points_count}</div>
+            </div>
+        </div>
+        """
 
     # Determine visibility states
     is_completed = (job_status in ("completed", "complete"))
@@ -3152,20 +3207,7 @@ def progress_view(
                 <p style="font-size: 0.8125rem; color: var(--text-muted); margin: 0.15rem 0 0 0;">Repository analysis completed successfully.</p>
             </div>
         </div>
-        <div class="progress-ready-stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
-            <div class="stat-card" style="background: var(--surface-2); padding: 1rem; border-radius: 6px; border: 1px solid var(--border);">
-                <div style="font-size: 0.8125rem; color: var(--text-muted); ">Files analyzed</div>
-                <div id="ready-files-count" style="font-size: 1.5rem; font-weight: 700; color: var(--text); margin-top: 0.25rem;">{files_analyzed}</div>
-            </div>
-            <div class="stat-card" style="background: var(--surface-2); padding: 1rem; border-radius: 6px; border: 1px solid var(--border);">
-                <div style="font-size: 0.8125rem; color: var(--text-muted); ">Modules</div>
-                <div id="ready-modules-count" style="font-size: 1.5rem; font-weight: 700; color: var(--text); margin-top: 0.25rem;">{modules_count}</div>
-            </div>
-            <div class="stat-card" style="background: var(--surface-2); padding: 1rem; border-radius: 6px; border: 1px solid var(--border);">
-                <div style="font-size: 0.8125rem; color: var(--text-muted); ">Entry points</div>
-                <div id="ready-entry-count" style="font-size: 1.5rem; font-weight: 700; color: var(--text); margin-top: 0.25rem;">{entry_points_count}</div>
-            </div>
-        </div>
+        {stats_grid_html}
         <a href="/report/{job_id}" class="btn btn-primary" id="start-learning-btn" style="display: inline-flex; align-items: center; gap: 0.5rem; font-size: 0.9375rem; padding: 0.65rem 1.25rem;">
             Start learning &rarr;
         </a>
