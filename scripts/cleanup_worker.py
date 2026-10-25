@@ -16,6 +16,14 @@ def run_retention_cleanup() -> int:
     start_time = time.time()
     with get_db_session() as session:
         purged_count = StorageRepository.cleanup_expired_records(session)
+        try:
+            from app.storage.analysis_job_repository import AnalysisJobRepository
+            from app.core.config import get_settings
+            stale_timeout = getattr(get_settings(), "STALE_JOB_TIMEOUT_MINUTES", 30)
+            AnalysisJobRepository.clean_stale_running_jobs(session, timeout_minutes=stale_timeout)
+        except Exception as exc:
+            import logging
+            logging.getLogger("app.retention").error(f"Failed periodic sweep of stale jobs: {exc}")
 
     elapsed = round(time.time() - start_time, 3)
     print(f"[RetentionWorker] Purged {purged_count} expired repository record(s) in {elapsed}s.")

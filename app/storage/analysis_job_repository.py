@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import uuid
+from datetime import timedelta
 from typing import Any, Dict, List, Optional, Union
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -280,3 +281,49 @@ class AnalysisJobRepository:
             session.commit()
             session.refresh(job)
         return job
+
+    @staticmethod
+    def clean_stale_running_jobs(
+        session: Session,
+        timeout_minutes: int = 30,
+        clear_reason: Optional[str] = None,
+        statuses: Optional[List[str]] = None,
+    ) -> List[AnalysisJobModel]:
+        """
+        Scans for active jobs stuck in running/processing state older than timeout_minutes.
+        Marks them as failed with a diagnostic error message and refunds the associated quota event.
+        Returns list of updated AnalysisJobModel instances.
+        """
+        now = utc_now()
+        cutoff = now - timedelta(minutes=timeout_minutes)
+        target_statuses = statuses or ["running", "processing"]
+
+        stmt = (
+            select(AnalysisJobModel.id)
+            .where(
+                AnalysisJobModel.status.in_(target_statuses),
+                func.coalesce(AnalysisJobModel.updated_at, AnalysisJobModel.created_at) <= cutoff,
+            )
+            .order_by(AnalysisJobModel.id.asc())
+        )
+        stale_job_ids = list(session.scalars(stmt).all())
+        reclaimed: List[AnalysisJobModel] = []
+
+        default_reason = (
+            f"Analysis job timed out after {timeout_minutes} minutes in running state "
+            f"(server restart or worker crash). Quota has been refunded."
+        )
+        reason = clear_reason or default_reason
+
+        for job_id in stale_job_ids:
+            updated_job = AnalysisJobRepository.update_job_status(
+                session=session,
+                job_id=job_id,
+                status="failed",
+                error_message=reason,
+                failed_stage="stale_worker_timeout",
+            )
+            if updated_job:
+                reclaimed.append(updated_job)
+
+        return reclaimed
