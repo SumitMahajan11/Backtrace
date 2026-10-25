@@ -3893,5 +3893,41 @@ def test_progress_view_done_renders_stats_grid_when_entry_points_is_zero():
     assert re.search(r'id="ready-entry-count"[^>]*>\s*0\s*<', html)
 
 
+def test_progress_view_done_renders_count_from_graph_nodes_when_line_absent():
+    """Verifies that progress_view renders count from graph nodes when Entry Point Files line is absent."""
+    import re
+    from app.ui.components import progress_view
+
+    class MockDoneJobNodesOnly:
+        id = 105
+        repo_url = "https://github.com/owner/sample-repo"
+        repo_name = "sample-repo"
+        status = "completed"
+        created_at = "2026-10-25T10:00:00Z"
+        execution_time_seconds = 18.5
+        report_markdown = """# Architectural Report
+- **Total Analyzed Files**: `12`
+- **Domain Categories**: `3`
+
+| `core` | 5 | 41.7% |
+| `api` | 4 | 33.3% |
+| `models` | 3 | 25.0% |
+"""
+        graph_data = {
+            "nodes": [
+                {"id": "app/main.py", "domain": "core", "tier": 1, "is_entry_point": True},
+                {"id": "app/cli.py", "domain": "core", "tier": 1, "is_entry_point": True},
+            ]
+        }
+
+    html = progress_view(job=MockDoneJobNodesOnly(), current_user=None)
+    assert "Files analyzed" in html
+    assert '<div class="progress-ready-stats-grid"' in html
+    assert re.search(r'id="ready-files-count"[^>]*>\s*12\s*<', html)
+    assert re.search(r'id="ready-modules-count"[^>]*>\s*3\s*<', html)
+    assert re.search(r'id="ready-entry-count"[^>]*>\s*2\s*<', html)
+
+
+
 
 

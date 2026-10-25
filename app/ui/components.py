@@ -2550,12 +2550,12 @@ def progress_view(
         entry_points_count = 0
 
     entry_raw_val = ov_data.get("entry_points_raw")
-    if entry_raw_val is None or str(entry_raw_val).strip().lower() in ("none", "n/a", "null"):
-        entry_points_display = "—"
-    elif str(entry_raw_val).strip() == "0":
+    if entry_points_count > 0:
+        entry_points_display = entry_points_count
+    elif entry_raw_val is not None:
         entry_points_display = 0
     else:
-        entry_points_display = entry_points_count
+        entry_points_display = "—"
 
     stats_grid_html = ""
     if files_analyzed > 0:
@@ -2835,7 +2835,8 @@ def progress_view(
                 const eEl = document.getElementById("ready-entry-count");
                 if (fEl) fEl.textContent = (data && (data.files_analyzed || data.files)) || "—";
                 if (mEl) mEl.textContent = (data && (data.modules_mapped || data.modules)) || "—";
-                if (eEl) eEl.textContent = (data && (data.entry_points || data.entry_points_count)) || "—";
+                const epVal = (data && (data.entry_points != null ? data.entry_points : data.entry_points_count));
+                if (eEl) eEl.textContent = (epVal != null) ? epVal : "—";
                 readyCard.style.display = "block";
             }}
 
