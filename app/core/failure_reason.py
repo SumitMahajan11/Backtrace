@@ -1,11 +1,12 @@
 """Centralized failure reason classification using word-boundary regular expressions."""
 
 import re
-from typing import Optional
+from typing import Any, Optional
 
 ACCESS_ERROR = "We couldn't access this repository (it may be private or the link is wrong)"
 LARGE_ERROR = "The repository is too large"
 GENERIC_ERROR = "Something went wrong on our side"
+GITHUB_BUSY_ERROR = "GitHub is busy right now. Try again in a few minutes."
 
 # Word-boundary regexes
 # 1. "Too large" is checked first (only size / file-count limits)
@@ -44,3 +45,36 @@ def failure_reason(error_message: Optional[str]) -> str:
 
 
 map_failure_reason = failure_reason
+
+
+def map_github_api_error(error: Any, message: Optional[str] = None) -> str:
+    """
+    Map GitHub API errors to clean user-facing sentences:
+    404, 401, or 403 without 'rate limit' -> ACCESS_ERROR
+    403 with 'rate limit', or 429 -> GITHUB_BUSY_ERROR ('GitHub is busy right now. Try again in a few minutes.')
+    Anything else -> GENERIC_ERROR
+    """
+    if isinstance(error, int):
+        status_code = error
+        msg = message or ""
+    else:
+        status_code = getattr(error, "status_code", None)
+        msg = message if message is not None else (str(error) if error is not None else "")
+
+    msg_lower = msg.lower()
+    is_rate_limit = "rate limit" in msg_lower
+
+    if status_code in (404, 401):
+        return ACCESS_ERROR
+    if status_code == 403:
+        if is_rate_limit:
+            return GITHUB_BUSY_ERROR
+        return ACCESS_ERROR
+    if status_code == 429:
+        return GITHUB_BUSY_ERROR
+
+    return GENERIC_ERROR
+
+
+github_api_failure_reason = map_github_api_error
+

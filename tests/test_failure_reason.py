@@ -51,3 +51,24 @@ def test_failure_reason_classification(raw_input, expected_class, expected_sente
         assert result == "The repository is too large"
     else:
         assert result == "Something went wrong on our side"
+
+
+@pytest.mark.parametrize(
+    "status_code,message,expected",
+    [
+        (404, "Not Found", ACCESS_ERROR),
+        (401, "Bad credentials", ACCESS_ERROR),
+        (403, "Forbidden", ACCESS_ERROR),
+        (403, "API rate limit exceeded", "GitHub is busy right now. Try again in a few minutes."),
+        (429, "Too Many Requests", "GitHub is busy right now. Try again in a few minutes."),
+        (500, "Internal Server Error", GENERIC_ERROR),
+    ],
+)
+def test_map_github_api_error_parametrized(status_code, message, expected):
+    from app.models.ingestion import GitHubAPIError
+    from app.core.failure_reason import map_github_api_error, GITHUB_BUSY_ERROR
+
+    err = GitHubAPIError(message, status_code=status_code)
+    assert map_github_api_error(err) == expected
+    assert map_github_api_error(status_code, message) == expected
+
