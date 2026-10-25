@@ -2532,6 +2532,8 @@ def progress_view(
             continue
         app_eps.append(ep)
 
+    entry_points_count = len(app_eps) if app_eps else (len(raw_eps) if raw_eps else 0)
+
     try:
         files_analyzed = int(files_analyzed) if isinstance(files_analyzed, (int, float, str)) else 0
     except Exception:
