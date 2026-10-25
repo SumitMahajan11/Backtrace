@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     APP_NAME: str = "Backtrace"
     API_PREFIX: str = "/api"
     DEBUG: bool = False
+    FRONTEND_VERSION: str = "1"
 
     # Server settings
     HOST: str = "0.0.0.0"
