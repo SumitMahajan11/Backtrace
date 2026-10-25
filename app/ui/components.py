@@ -2549,6 +2549,14 @@ def progress_view(
     except Exception:
         entry_points_count = 0
 
+    entry_raw_val = ov_data.get("entry_points_raw")
+    if entry_raw_val is None or str(entry_raw_val).strip().lower() in ("none", "n/a", "null"):
+        entry_points_display = "—"
+    elif str(entry_raw_val).strip() == "0":
+        entry_points_display = 0
+    else:
+        entry_points_display = entry_points_count
+
     stats_grid_html = ""
     if files_analyzed > 0:
         stats_grid_html = f"""
@@ -2563,7 +2571,7 @@ def progress_view(
             </div>
             <div class="stat-card" style="background: var(--surface-2); padding: 1rem; border-radius: 6px; border: 1px solid var(--border);">
                 <div style="font-size: 0.8125rem; color: var(--text-muted); ">Entry points</div>
-                <div id="ready-entry-count" style="font-size: 1.5rem; font-weight: 700; color: var(--text); margin-top: 0.25rem;">{entry_points_count}</div>
+                <div id="ready-entry-count" style="font-size: 1.5rem; font-weight: 700; color: var(--text); margin-top: 0.25rem;">{entry_points_display}</div>
             </div>
         </div>
         """
@@ -3316,11 +3324,14 @@ def _parse_report_markdown(raw_markdown: str) -> Dict[str, Any]:
     cyclic_m = re.search(r"\*\*(?:Cyclic Core Components|Circular Dependency Components)\*\*:\s*`?(\d+)`?", raw_markdown)
     isolated_m = re.search(r"\*\*Isolated / Support Files\*\*:\s*`?(\d+)`?", raw_markdown)
 
+    entry_raw_val = entry_m.group(1).strip().strip("`").strip() if entry_m else None
+
     result["overview"] = {
         "primary_language": lang_m.group(1).strip() if lang_m else "Unknown",
         "total_files": int(files_m.group(1)) if files_m else 0,
         "total_domains": int(domains_m.group(1)) if domains_m else 0,
         "entry_points": [e.strip() for e in entry_m.group(1).split(",") if e.strip() and e.strip().lower() not in ("none", "0", "n/a", "null")] if entry_m else [],
+        "entry_points_raw": entry_raw_val,
         "cyclic_files": int(cyclic_m.group(1)) if cyclic_m else 0,
         "isolated_files": int(isolated_m.group(1)) if isolated_m else 0,
     }
