@@ -1,0 +1,172 @@
+/* Stitch Design System Tokens for Frontend v2 */
+:root {
+    /* Stitch Color Palette (Dark Theme Default) */
+    --background: #121318;
+    --bg: #121318;
+    --surface: #121318;
+    --surface-dim: #121318;
+    --surface-bright: #38393f;
+    --surface-variant: #34343a;
+    --surface-container-lowest: #0d0e13;
+    --surface-container-low: #1a1b21;
+    --surface-container: #1e1f25;
+    --surface-container-high: #292a2f;
+    --surface-container-highest: #34343a;
+    --surface-tint: #00dbe9;
+
+    /* Primaries (Cyan Accent) */
+    --primary: #00f0ff;
+    --primary-container: #00f0ff;
+    --primary-fixed: #7df4ff;
+    --primary-fixed-dim: #00dbe9;
+    --on-primary: #00363a;
+    --on-primary-container: #006970;
+    --on-primary-fixed: #002022;
+    --on-primary-fixed-variant: #004f54;
+    --inverse-primary: #006970;
+
+    /* Secondaries */
+    --secondary: #aec6ff;
+    --secondary-container: #4e8eff;
+    --secondary-fixed: #d8e2ff;
+    --secondary-fixed-dim: #aec6ff;
+    --on-secondary: #002e6a;
+    --on-secondary-container: #00275d;
+    --on-secondary-fixed: #001a42;
+    --on-secondary-fixed-variant: #004395;
+
+    /* Tertiaries (Mint / Green) */
+    --tertiary: #d8ffe7;
+    --tertiary-container: #65f2b5;
+    --tertiary-fixed: #6ffbbe;
+    --tertiary-fixed-dim: #4edea3;
+    --on-tertiary: #003824;
+    --on-tertiary-container: #006d4a;
+    --on-tertiary-fixed: #002113;
+    --on-tertiary-fixed-variant: #005236;
+
+    /* Text & Neutral Typography */
+    --on-background: #e3e1e9;
+    --on-surface: #e3e1e9;
+    --on-surface-variant: #b9cacb;
+    --text: #e3e1e9;
+    --text-muted: #849495;
+    --inverse-surface: #e3e1e9;
+    --inverse-on-surface: #2f3036;
+
+    /* Borders & Outlines */
+    --border: #3b494b;
+    --border-subtle: #292a2f;
+    --outline: #849495;
+    --outline-variant: #3b494b;
+
+    /* Status Colors */
+    --error: #ffb4ab;
+    --error-container: #93000a;
+    --on-error: #690005;
+    --on-error-container: #ffdad6;
+    --danger: #ffb4ab;
+    --success: #4edea3;
+    --success-container: #005236;
+    --warning: #ffd043;
+    --warning-container: #4c3700;
+
+    /* Spacing */
+    --space-xs: 0.25rem;
+    --space-sm: 0.5rem;
+    --space-md: 1rem;
+    --space-lg: 1.5rem;
+    --space-xl: 2.5rem;
+    --margin: 2rem;
+    --margin-mobile: 1rem;
+    --gutter: 1.5rem;
+    --gutter-mobile: 0.75rem;
+
+    /* Border Radii */
+    --radius-sm: 0.25rem;
+    --radius: 0.5rem;
+    --radius-lg: 0.5rem;
+    --radius-xl: 0.75rem;
+    --radius-full: 9999px;
+
+    /* System Typography Stacks (No External Fonts) */
+    --font-sans: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-ui: var(--font-sans);
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+
+    /* Compatibility variables for legacy frontend1 components */
+    --accent: var(--primary);
+    --accent-strong: #00c8d6;
+    --panel: var(--surface-container);
+    --panel-raised: var(--surface-container-high);
+    --panel-overlay: var(--surface-container-highest);
+    --panel-inset: var(--surface-container-lowest);
+    --bg-card: var(--surface-container);
+    --bg-surface: var(--surface-container-low);
+    --hairline: var(--border);
+    --hairline-soft: var(--border-subtle);
+    --text-primary: var(--text);
+    --text-secondary: var(--text-muted);
+    --text-tertiary: var(--outline);
+    --brass: var(--primary);
+    --brass-hover: #00c8d6;
+    --brass-soft: rgba(0, 240, 255, 0.12);
+    --brass-border: rgba(0, 240, 255, 0.35);
+    --teal: var(--primary);
+    --teal-dim: #006970;
+    --teal-soft: rgba(0, 240, 255, 0.12);
+    --teal-border: rgba(0, 240, 255, 0.35);
+}
+
+/* Light Theme Overrides */
+[data-theme="light"] {
+    --background: #f7f9fc;
+    --bg: #f7f9fc;
+    --surface: #ffffff;
+    --surface-dim: #edf2f7;
+    --surface-bright: #ffffff;
+    --surface-variant: #e2e8f0;
+    --surface-container-lowest: #ffffff;
+    --surface-container-low: #f8fafc;
+    --surface-container: #f1f5f9;
+    --surface-container-high: #e2e8f0;
+    --surface-container-highest: #cbd5e1;
+
+    --primary: #007c8a;
+    --primary-container: #c4f7fa;
+    --on-primary: #ffffff;
+    --on-primary-container: #002022;
+
+    --secondary: #2f5bb8;
+    --secondary-container: #d8e2ff;
+    --on-secondary: #ffffff;
+    --on-secondary-container: #001a42;
+
+    --tertiary: #006d4a;
+    --tertiary-container: #a2f5cc;
+    --on-tertiary: #ffffff;
+
+    --text: #0f172a;
+    --text-muted: #64748b;
+    --on-background: #0f172a;
+    --on-surface: #0f172a;
+    --on-surface-variant: #475569;
+
+    --border: #cbd5e1;
+    --border-subtle: #e2e8f0;
+    --outline: #94a3b8;
+    --outline-variant: #cbd5e1;
+
+    --error: #ba1a1a;
+    --error-container: #ffdad6;
+    --on-error: #ffffff;
+    --danger: #ba1a1a;
+    --success: #059669;
+    --warning: #b45309;
+
+    --accent: var(--primary);
+    --brass: var(--primary);
+    --panel: var(--surface);
+    --panel-raised: var(--surface-container);
+    --hairline: var(--border);
+}
