@@ -3832,4 +3832,37 @@ def test_progress_view_done_hides_stats_grid_when_counts_missing():
     assert "Report ready" in html
 
 
+def test_progress_view_done_renders_stats_grid_when_entry_points_is_zero():
+    """Verifies that progress_view renders the stats grid showing '0' when entry points count is 0."""
+    from app.ui.components import progress_view
+
+    class MockDoneJobZeroEntries:
+        id = 103
+        repo_url = "https://github.com/owner/sample-repo"
+        repo_name = "sample-repo"
+        status = "completed"
+        created_at = "2026-10-25T10:00:00Z"
+        execution_time_seconds = 18.5
+        report_markdown = """# Architectural Report
+- **Total Analyzed Files**: `12`
+- **Domain Categories**: `3`
+- **Entry Point Files**: 0
+
+| `core` | 5 | 41.7% |
+| `api` | 4 | 33.3% |
+| `models` | 3 | 25.0% |
+"""
+        graph_data = {"nodes": []}
+
+    html = progress_view(job=MockDoneJobZeroEntries(), current_user=None)
+    assert "Files analyzed" in html
+    assert '<div class="progress-ready-stats-grid"' in html
+    assert "ready-files-count" in html
+    assert ">12<" in html
+    assert ">3<" in html
+    assert ">0<" in html
+    assert '<div id="ready-entry-count"' in html
+
+
+
 

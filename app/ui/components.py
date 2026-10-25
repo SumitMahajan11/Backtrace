@@ -2550,7 +2550,7 @@ def progress_view(
         entry_points_count = 0
 
     stats_grid_html = ""
-    if files_analyzed > 0 or modules_count > 0 or entry_points_count > 0:
+    if files_analyzed > 0:
         stats_grid_html = f"""
         <div class="progress-ready-stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
             <div class="stat-card" style="background: var(--surface-2); padding: 1rem; border-radius: 6px; border: 1px solid var(--border);">
@@ -3320,7 +3320,7 @@ def _parse_report_markdown(raw_markdown: str) -> Dict[str, Any]:
         "primary_language": lang_m.group(1).strip() if lang_m else "Unknown",
         "total_files": int(files_m.group(1)) if files_m else 0,
         "total_domains": int(domains_m.group(1)) if domains_m else 0,
-        "entry_points": [e.strip() for e in entry_m.group(1).split(",") if e.strip() and e.strip() != "None"] if entry_m else [],
+        "entry_points": [e.strip() for e in entry_m.group(1).split(",") if e.strip() and e.strip().lower() not in ("none", "0", "n/a", "null")] if entry_m else [],
         "cyclic_files": int(cyclic_m.group(1)) if cyclic_m else 0,
         "isolated_files": int(isolated_m.group(1)) if isolated_m else 0,
     }
