@@ -3969,6 +3969,55 @@ def test_progress_view_done_renders_zero_when_entry_points_none_from_real_genera
     assert re.search(r'id="ready-entry-count"[^>]*>\s*0\s*<', html)
 
 
+def test_static_files_served_with_correct_content_type(client):
+    """Assert status 200 and correct content-type for static files."""
+    resp_css = client.get("/static/style.css")
+    assert resp_css.status_code == 200
+    assert "text/css" in resp_css.headers.get("content-type", "")
+
+    resp_hl_css = client.get("/static/highlight.min.css")
+    assert resp_hl_css.status_code == 200
+    assert "text/css" in resp_hl_css.headers.get("content-type", "")
+
+    resp_hl_js = client.get("/static/highlight.min.js")
+    assert resp_hl_js.status_code == 200
+    assert "javascript" in resp_hl_js.headers.get("content-type", "")
+
+
+def test_login_page_static_urls_all_return_200(client):
+    """Assert that every /static/... asset referenced in the login page HTML returns 200."""
+    import re
+    resp = client.get("/login")
+    assert resp.status_code == 200
+    static_urls = re.findall(r'(?:href|src)=["\'](/static/[^"\' >]+)["\']', resp.text)
+    assert len(static_urls) >= 3
+    for url in static_urls:
+        asset_resp = client.get(url)
+        assert asset_resp.status_code == 200, f"Asset {url} returned {asset_resp.status_code}"
+
+
+def test_dockerfile_and_dockerignore_include_static():
+    """Assert Dockerfile COPY has static and .dockerignore does not exclude static."""
+    import re
+    from pathlib import Path
+    root = Path(__file__).resolve().parent.parent
+
+    dockerfile = (root / "Dockerfile").read_text(encoding="utf-8")
+    assert re.search(r"COPY\s+.*?static\s+.*?/static", dockerfile), "Dockerfile missing COPY static line"
+
+    dockerignore_path = root / ".dockerignore"
+    if dockerignore_path.exists():
+        dockerignore_lines = dockerignore_path.read_text(encoding="utf-8").splitlines()
+        for raw_line in dockerignore_lines:
+            line = raw_line.strip()
+            if not line or line.startswith("#"):
+                continue
+            assert not (line == "static" or line == "static/" or line.startswith("static/")), (
+                f".dockerignore excludes static: {line}"
+            )
+
+
+
 
 
 
