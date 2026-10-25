@@ -48,6 +48,36 @@ async def lifespan(app: FastAPI):
     # Clear settings cache to ensure fresh load from .env (not any stale module-level cache)
     get_settings.cache_clear()
     init_db()
+
+    # Reclaim stale running jobs and refund quota on startup (Prompt 40/41 / Risk 3)
+    try:
+        from app.db.session import get_db_session
+        from app.storage.analysis_job_repository import AnalysisJobRepository
+        current_settings = get_settings()
+        boot_grace_minutes = getattr(current_settings, "STALE_JOB_BOOT_GRACE_MINUTES", 2)
+        session_maker = getattr(app.state, "db_sessionmaker", None) if hasattr(app, "state") else None
+        if session_maker:
+            with get_db_session(target_sessionmaker=session_maker) as db_session:
+                reclaimed_jobs = AnalysisJobRepository.clean_stale_running_jobs(
+                    session=db_session,
+                    timeout_minutes=boot_grace_minutes,
+                )
+        else:
+            with get_db_session() as db_session:
+                reclaimed_jobs = AnalysisJobRepository.clean_stale_running_jobs(
+                    session=db_session,
+                    timeout_minutes=boot_grace_minutes,
+                )
+        if reclaimed_jobs:
+            import logging
+            logger = logging.getLogger("app.jobs")
+            logger.warning(
+                f"Cleaned up {len(reclaimed_jobs)} stale running job(s) at startup (boot grace: {boot_grace_minutes}m)."
+            )
+    except Exception as exc:
+        import logging
+        logging.getLogger("app.jobs").error(f"Failed to clean stale running jobs at startup: {exc}")
+
     from app.services.piston_health import piston_health_monitor
     if piston_health_monitor.is_sandbox_enabled():
         piston_health_monitor.start_background_task()
