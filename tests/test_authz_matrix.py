@@ -228,8 +228,11 @@ def test_authz_matrix_routes(client, owner_user, other_user, test_db):
         else:
             resp_owner = client.post(path, follow_redirects=False)
 
-        # Owner gets 200 (or 302 progress redirect for retry, or 409 if already completed/running)
-        assert resp_owner.status_code in (200, 302, 409), f"Owner got {resp_owner.status_code} on {path}"
+        # Owner gets route-specific expected status: retry path gets (302, 409), all others get original (200,)
+        if path == f"/analyses/{job_id}/retry":
+            assert resp_owner.status_code in (302, 409), f"Owner got {resp_owner.status_code} on retry route {path}"
+        else:
+            assert resp_owner.status_code in (200,), f"Owner got {resp_owner.status_code} on {path}"
 
 
 def test_authz_matrix_showcase_exception(client, owner_user, other_user, test_db):
@@ -331,7 +334,7 @@ def test_input_checks(client, owner_user, test_db, monkeypatch):
                 raw_msg = qs.get("error", [""])[0]
             else:
                 raw_msg = f"Redirect to {loc}"
-        elif resp.status_code in (200, 400, 409, 422):
+        elif resp.status_code in (200, 400, 422):
             import re
             # Extract error text from rendered dashboard banner or json detail
             m = re.search(r'id="form-error-banner"[^>]*>([\s\S]*?)</div>', resp.text)
@@ -362,4 +365,42 @@ def test_input_checks(client, owner_user, test_db, monkeypatch):
             if len(jobs) > 0:
                 print(f"STOPPING: Case [{case_name}] created AnalysisJob row: {jobs}")
             assert len(jobs) == 0, f"Case [{case_name}] created an AnalysisJob row!"
+
+
+def test_retry_running_or_completed_job_returns_409(client, owner_user, test_db):
+    """
+    Retrying an active ('running') or already finished ('completed') job
+    returns HTTP 409 Conflict across both API and JSON-accepting UI retry endpoints.
+    """
+    SessionLocal, _ = test_db
+    owner_token = create_access_token(
+        user_id=owner_user.id,
+        github_id=owner_user.github_id,
+        github_username=owner_user.github_username,
+    )
+    client.cookies.set("access_token", owner_token)
+
+    for initial_status in ("running", "completed"):
+        with SessionLocal() as session:
+            job = AnalysisJobRepository.create_job(
+                session=session,
+                user_id=owner_user.id,
+                repo_url=f"https://github.com/owner/job-{initial_status}",
+                status=initial_status,
+            )
+            job_id = job.id
+
+        # 1. API endpoint /api/analyses/{job_id}/retry returns exactly 409
+        resp_api = client.post(f"/api/analyses/{job_id}/retry")
+        assert resp_api.status_code == 409, f"Expected 409 on API retry for {initial_status} job, got {resp_api.status_code}"
+        assert resp_api.json().get("detail") == "This analysis can't be retried."
+
+        # 2. UI endpoint /analyses/{job_id}/retry with Accept: application/json returns exactly 409
+        resp_ui_json = client.post(
+            f"/analyses/{job_id}/retry",
+            headers={"Accept": "application/json"},
+        )
+        assert resp_ui_json.status_code == 409, f"Expected 409 on UI retry (json) for {initial_status} job, got {resp_ui_json.status_code}"
+        assert resp_ui_json.json().get("detail") == "This analysis can't be retried."
+
 
