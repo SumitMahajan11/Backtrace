@@ -284,10 +284,47 @@ def test_submit_analysis_github_api_error_renders_distinct_message(client, test_
                 follow_redirects=False,
             )
 
+            import html
+            from app.core.failure_reason import ACCESS_ERROR
             assert resp.status_code == 200
-            assert "GitHub API Error: GitHub API rate limit exceeded." in resp.text
+            assert ACCESS_ERROR in html.unescape(resp.text)
+            assert "GitHub API Error" not in resp.text
             # Zero jobs created
             jobs = AnalysisJobRepository.get_jobs_for_user(test_db_session, user.id)
             assert len(jobs) == 0
     finally:
         app.dependency_overrides.clear()
+
+
+def test_submit_time_github_api_error_renders_access_error(client, test_db_session):
+    """Verifies that GitHubAPIError at submission time renders ACCESS_ERROR rather than raw error."""
+    import html
+    from app.core.failure_reason import ACCESS_ERROR
+    from app.services.ingestion import GitHubAPIError
+    from app.models.db import UserModel
+
+    user = UserModel(github_id=98877, github_username="submit_err_user", email="submit_err@example.com")
+    test_db_session.add(user)
+    test_db_session.commit()
+    test_db_session.refresh(user)
+
+    from app.api.dependencies import get_current_user_optional, get_db
+    app.dependency_overrides[get_current_user_optional] = lambda: user
+    app.dependency_overrides[get_db] = lambda: test_db_session
+
+    try:
+        with patch(
+            "app.services.ingestion.check_repo_size_preflight",
+            side_effect=GitHubAPIError("Not Found", status_code=404),
+        ):
+            resp = client.post(
+                "/analyses/submit",
+                data={"repo_url": "https://github.com/owner/nonexistent-repo"},
+                follow_redirects=False,
+            )
+            assert resp.status_code == 200
+            assert ACCESS_ERROR in html.unescape(resp.text)
+            assert "GitHub API Error" not in resp.text
+    finally:
+        app.dependency_overrides.clear()
+

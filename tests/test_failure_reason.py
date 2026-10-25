@@ -34,6 +34,7 @@ from app.core.failure_reason import (
         ("IndexError at line 404", "generic", GENERIC_ERROR),
         ("private method crashed", "generic", GENERIC_ERROR),
         ("Git clone sandbox error", "generic", GENERIC_ERROR),
+        ("Git clone failed: No space left on device.", "generic", GENERIC_ERROR),
         ("", "generic", GENERIC_ERROR),
         (None, "generic", GENERIC_ERROR),
     ],

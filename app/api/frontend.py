@@ -505,13 +505,14 @@ def submit_analysis(
             status_code=status.HTTP_200_OK,
         )
     except GitHubAPIError as e:
-        # Distinct error for GitHub API failures (rate limit, private repo, 404, auth)
+        # Distinct error for GitHub API failures (rate limit, private repo, 404, auth) mapped to ACCESS_ERROR
+        from app.core.failure_reason import ACCESS_ERROR
         return HTMLResponse(
             content=dashboard_view(
                 current_user=user,
                 billing_status=billing_status,
                 past_jobs=past_jobs,
-                error=f"GitHub API Error: {str(e)}",
+                error=ACCESS_ERROR,
             ),
             status_code=status.HTTP_200_OK,
         )
