@@ -170,19 +170,27 @@ def test_leaderboard_username_masking(test_db, create_user):
         assert "Anonymous" in usernames
 
 
-def test_settings_leaderboard_checkbox_and_toggle(client, create_user, test_db):
-    """Settings page renders checkbox and POST /settings updates show_on_leaderboard boolean."""
+def test_settings_leaderboard_checkbox_and_toggle(client, create_user, test_db, monkeypatch):
+    """Settings page hides leaderboard toggle when REWARDS_ENABLED is off, shows when on, and POST /settings updates boolean."""
     user = create_user(github_id=203, username="checkbox_user", show_on_leaderboard=False)
     token = create_access_token(user_id=user.id, github_id=user.github_id, github_username=user.github_username)
     client.cookies.set("access_token", token)
 
-    # 1. GET /settings shows the checkbox unchecked
+    # 1. State 1: When REWARDS_ENABLED is off, toggle is hidden
+    monkeypatch.setenv("REWARDS_ENABLED", "false")
+    resp_off = client.get("/settings")
+    assert resp_off.status_code == 200
+    assert "Show my username on the leaderboard" not in resp_off.text
+    assert 'name="show_on_leaderboard"' not in resp_off.text
+
+    # 2. State 2: When REWARDS_ENABLED is on, toggle is visible
+    monkeypatch.setenv("REWARDS_ENABLED", "true")
     resp_get = client.get("/settings")
     assert resp_get.status_code == 200
     assert 'name="show_on_leaderboard"' in resp_get.text
     assert "Show my username on the leaderboard" in resp_get.text
 
-    # 2. POST /settings with show_on_leaderboard=true
+    # 3. POST /settings with show_on_leaderboard=true
     resp_post = client.post("/settings", data={"show_on_leaderboard": "true"}, follow_redirects=False)
     assert resp_post.status_code == 302
     assert "Preferences+updated" in resp_post.headers["location"]
@@ -192,7 +200,7 @@ def test_settings_leaderboard_checkbox_and_toggle(client, create_user, test_db):
         db_user = session.get(UserModel, user.id)
         assert db_user.show_on_leaderboard is True
 
-    # 3. POST /settings without show_on_leaderboard unchecks it
+    # 4. POST /settings without show_on_leaderboard unchecks it
     resp_post2 = client.post("/settings", data={}, follow_redirects=False)
     assert resp_post2.status_code == 302
     with SessionLocal() as session:

@@ -9465,6 +9465,21 @@ def settings_view(
         </div>
         """
 
+    leaderboard_toggle_html = ""
+    if rewards_enabled():
+        leaderboard_toggle_html = f"""
+        <!-- Leaderboard Username Visibility Checkbox -->
+        <form method="POST" action="/settings" style="margin-top: 1rem; padding-top: 0.85rem; border-top: 1px solid var(--hairline-soft);">
+            <label style="display: flex; align-items: center; gap: 0.65rem; cursor: pointer; font-size: 0.875rem; color: var(--text);">
+                <input type="checkbox" id="show_on_leaderboard" name="show_on_leaderboard" value="true" {'checked' if getattr(current_user, 'show_on_leaderboard', False) else ''} onchange="this.form.submit()" style="width: 17px; height: 17px; accent-color: var(--success); cursor: pointer;">
+                <span style="font-weight: 500;">Show my username on the leaderboard</span>
+            </label>
+            <noscript>
+                <button type="submit" class="btn btn-sm btn-secondary" style="margin-top: 0.5rem;">Save Preferences</button>
+            </noscript>
+        </form>
+        """
+
     content = f"""
     <!-- Settings Top Header -->
     <div style="display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 1.5rem; margin-bottom: 2rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--border);">
@@ -9516,16 +9531,7 @@ def settings_view(
                     </div>
                 </div>
 
-                <!-- Leaderboard Username Visibility Checkbox -->
-                <form method="POST" action="/settings" style="margin-top: 1rem; padding-top: 0.85rem; border-top: 1px solid var(--hairline-soft);">
-                    <label style="display: flex; align-items: center; gap: 0.65rem; cursor: pointer; font-size: 0.875rem; color: var(--text);">
-                        <input type="checkbox" id="show_on_leaderboard" name="show_on_leaderboard" value="true" {'checked' if getattr(current_user, 'show_on_leaderboard', False) else ''} onchange="this.form.submit()" style="width: 17px; height: 17px; accent-color: var(--success); cursor: pointer;">
-                        <span style="font-weight: 500;">Show my username on the leaderboard</span>
-                    </label>
-                    <noscript>
-                        <button type="submit" class="btn btn-sm btn-secondary" style="margin-top: 0.5rem;">Save Preferences</button>
-                    </noscript>
-                </form>
+                {leaderboard_toggle_html}
 
                 <div style="font-size: 0.8125rem; color: var(--text-muted); line-height: 1.45; background: var(--panel-raised); padding: 0.75rem 1rem; border-radius: 4px; border: 1px dashed var(--hairline-soft); margin-top: 1rem;">
                     Profile information and notification email are synced directly from GitHub OAuth. Profile modifications must be made within your GitHub account.
