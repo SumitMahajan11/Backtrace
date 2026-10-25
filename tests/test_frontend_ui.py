@@ -2680,14 +2680,27 @@ def test_failed_job_error_message_raw_in_db_and_escaped_on_dashboard_and_failed_
     dash_html = resp_dash.text
     assert "Something went wrong on our side" in dash_html
     assert "<b>x</b>" not in dash_html
+    assert "Something went wrong on our side" in dash_html
     assert "&lt;b&gt;x&lt;/b&gt;" not in dash_html
 
     # 2. Failed job view (progress_view)
     resp_prog = client.get(f"/progress/{job_id}")
     assert resp_prog.status_code == 200
     prog_html = resp_prog.text
+    assert "Something went wrong on our side" in prog_html
     assert "<b>x</b>" not in prog_html
+    assert "Something went wrong on our side" in prog_html
     assert "&amp;lt;b&amp;gt;x&amp;amp;lt;/b&amp;gt;" not in prog_html
+
+    # 3. Failed card: positive assert of sanitised sentence next to each not in
+    assert 'id="failed-card"' in prog_html
+    failed_card_idx = prog_html.find('id="failed-card"')
+    assert failed_card_idx != -1
+    failed_card_html = prog_html[failed_card_idx:failed_card_idx + 2000]
+    assert "Something went wrong on our side" in failed_card_html
+    assert "<b>x</b>" not in failed_card_html
+    assert "Something went wrong on our side" in failed_card_html
+    assert "&lt;b&gt;x&lt;/b&gt;" not in failed_card_html
 
 
 def test_pipeline_clone_error_keeps_generic_message_for_other_errors(client, test_db, create_user, monkeypatch):
@@ -2775,8 +2788,8 @@ def test_xss_prevention_in_js_render_templates_and_activity_entry(payload):
 
     # 1. progress_view template contains escapeHtml and Number coercion for stage values
     pv_html = progress_view(job=mock_job_processing, current_user=None)
-    assert "escapeHtml(stageName)" in pv_html
-    assert "escapeHtml(message)" in pv_html
+    assert "${escapeHtml(stageName)}" in pv_html
+    assert "${escapeHtml(message)}" in pv_html
     assert "Number(stageIndex) || 0" in pv_html
     assert "Number(totalStages) || 0" in pv_html
     assert "function escapeHtml(str)" in pv_html

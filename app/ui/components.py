@@ -2723,9 +2723,8 @@ def progress_view(
             const sIdx = Number(stageIndex) || 0;
             const tStages = Number(totalStages) || 0;
             const phaseIdx = (typeof stageToPhase !== 'undefined' && stageToPhase[stageName]) || (sIdx <= 2 ? 1 : (sIdx <= 5 ? 2 : (sIdx <= 7 ? 3 : 4)));
-            const phaseNames = {{1: "Get the code", 2: "Read the files", 3: "Map how they connect", 4: "Build your guide"}};
-            const phaseName = phaseNames[phaseIdx] || escapeHtml(stageName);
-            addLogEntry(`Phase ${{phaseIdx}} of 4 — ${{escapeHtml(phaseName)}}: ${{escapeHtml(message)}}`, isComplete ? "complete" : "active");
+            const phaseName = phaseNames[phaseIdx] || stageName;
+            addLogEntry(`Phase ${{phaseIdx}} of 4 — ${{escapeHtml(stageName)}}: ${{escapeHtml(message)}}`, isComplete ? "complete" : "active");
         }}
 
         function showReportReady(data) {{

@@ -148,12 +148,17 @@ def test_full_milestone_card_and_quiz_rendered_through_real_templates():
 
     # Visible text of milestone card (task instructions + structured brief)
     milestone_visible = strip_html_tags_to_visible_text(milestone_html)
+    assert "Tom & Jerry Core Architecture" in milestone_visible
+    assert "app/core.py" in milestone_visible
     assert "&amp;" not in milestone_visible
     assert "**" not in milestone_visible
     assert "`" not in milestone_visible
 
     # Visible text of quiz questions, options, explanation
     quiz_visible = strip_html_tags_to_visible_text(quiz_html)
+    assert "What is the role of core.py in Tom & Jerry architecture?" in quiz_visible
+    assert "Provides auth_service" in quiz_visible
+    assert "See app/core.py for Role: definition." in quiz_visible
     assert "&amp;" not in quiz_visible
     assert "**" not in quiz_visible
     assert "`" not in quiz_visible
