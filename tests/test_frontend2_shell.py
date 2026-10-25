@@ -177,6 +177,29 @@ def test_frontend2_xss_escaping_in_shell(monkeypatch):
     assert "&lt;img src=x" in shell_html
 
 
+def test_frontend2_avatar_url_attribute_escaping(monkeypatch):
+    """An avatar URL containing quote breakout (" onerror="x) is strictly escaped."""
+    monkeypatch.setenv("FRONTEND_VERSION", "2")
+    from app.ui.components import page_shell
+    from unittest.mock import MagicMock
+
+    hostile_avatar = 'https://example.com/avatar.png" onerror="alert(1)'
+    mock_user = MagicMock()
+    mock_user.github_username = "alice"
+    mock_user.avatar_url = hostile_avatar
+
+    shell_html = page_shell(
+        title="Dashboard",
+        content="<div>Safe Content</div>",
+        current_user=mock_user,
+        active_route="/dashboard",
+    )
+
+    # Must escape double quotes so attribute breakout is impossible
+    assert 'onerror="alert(1)' not in shell_html
+    assert '&quot; onerror=&quot;alert(1)' in shell_html
+
+
 def test_frontend2_playwright_responsiveness_and_shell(test_db, monkeypatch):
     """
     Playwright (real uvicorn server, FRONTEND_VERSION=2, no set_content):
