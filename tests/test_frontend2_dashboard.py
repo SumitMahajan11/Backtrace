@@ -429,3 +429,117 @@ class TestFrontend2DashboardPlaywright:
                 browser.close()
         finally:
             server.should_exit = True
+            server_thread.join(timeout=3)
+            app.dependency_overrides.clear()
+
+    def test_edit_link_clicks_fill_repo_url_input(self, test_db, monkeypatch):
+        """Clicking 'Edit link' on a failed job fills #repo-url-input with that job's repo URL and focuses it."""
+        monkeypatch.setenv("FRONTEND_VERSION", "2")
+        TestingSessionLocal, _ = test_db
+
+        def override_get_db():
+            session = TestingSessionLocal()
+            try:
+                yield session
+                session.commit()
+            except Exception:
+                session.rollback()
+                raise
+            finally:
+                session.close()
+
+        with TestingSessionLocal() as session:
+            user = UserModel(
+                github_id=99098,
+                github_username="pw_edit_user",
+                email="pw_edit@example.com",
+            )
+            session.add(user)
+            session.commit()
+            session.refresh(user)
+            user_id = user.id
+
+            j_failed = AnalysisJobRepository.create_job(
+                session=session,
+                user_id=user_id,
+                repo_url="https://github.com/encode/starlette",
+                repo_name="starlette",
+                status="failed",
+            )
+            AnalysisJobRepository.update_job_status(
+                session=session,
+                job_id=j_failed.id,
+                status="failed",
+                error_message="Repository not found or access denied",
+            )
+            session.commit()
+
+        token = create_access_token(
+            user_id=user_id,
+            github_id=99098,
+            github_username="pw_edit_user",
+        )
+
+        def override_get_current_user():
+            with TestingSessionLocal() as s:
+                u = s.query(UserModel).filter_by(id=user_id).first()
+                if u:
+                    s.refresh(u)
+                    s.expunge(u)
+                return u
+
+        app.dependency_overrides[get_current_user_optional] = override_get_current_user
+        app.dependency_overrides[get_db] = override_get_db
+
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind(("127.0.0.1", 0))
+            port = s.getsockname()[1]
+
+        config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="error")
+        server = uvicorn.Server(config)
+        server.install_signal_handlers = lambda: None
+        server_thread = threading.Thread(target=server.run, daemon=True)
+        server_thread.start()
+
+        for _ in range(50):
+            try:
+                with socket.create_connection(("127.0.0.1", port), timeout=0.1):
+                    break
+            except OSError:
+                time.sleep(0.05)
+
+        try:
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=True)
+                context = browser.new_context()
+                context.add_cookies([
+                    {
+                        "name": "access_token",
+                        "value": token,
+                        "domain": "127.0.0.1",
+                        "path": "/",
+                    }
+                ])
+                page = context.new_page()
+                page.set_viewport_size({"width": 1280, "height": 800})
+                page.goto(f"http://127.0.0.1:{port}/dashboard", wait_until="networkidle")
+
+                input_el = page.locator("#repo-url-input")
+                assert input_el.input_value() == ""
+
+                edit_button = page.locator(".edit-link-btn").first
+                assert edit_button.is_visible()
+                edit_button.click()
+
+                # Verify #repo-url-input is filled with the failed job repo URL
+                assert input_el.input_value() == "https://github.com/encode/starlette"
+
+                # Verify #repo-url-input is focused
+                focused_id = page.evaluate("() => document.activeElement ? document.activeElement.id : null")
+                assert focused_id == "repo-url-input"
+
+                browser.close()
+        finally:
+            server.should_exit = True
+            server_thread.join(timeout=3)
+            app.dependency_overrides.clear()
