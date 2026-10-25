@@ -217,7 +217,8 @@ def test_quiz_multiple_tiers_badge_rendering():
     assert "Tier None Invariant" not in html
     assert "Milestone 0" not in html
 
-    import re
+    from bs4 import BeautifulSoup
+    soup = BeautifulSoup(html, "html.parser")
     panes = {
         1: "Database Models",
         2: "Core Subsystem (Cyclic)",
@@ -225,12 +226,9 @@ def test_quiz_multiple_tiers_badge_rendering():
         4: "API Server",
     }
     for tier, title in panes.items():
-        assert f'id="milestone-pane-{tier}"' in html
-        # Find the content of this milestone pane block
-        pane_pattern = rf'id="milestone-pane-{tier}"[\s\S]*?(?=<div class="milestone-pane"|<!-- End Milestones -->|$)'
-        m = re.search(pane_pattern, html)
-        assert m is not None, f"milestone-pane-{tier} block not found"
-        assert title in m.group(0), f"Title {title!r} not found inside milestone-pane-{tier} block"
+        pane = soup.find(id=f"milestone-pane-{tier}")
+        assert pane is not None, f"milestone-pane-{tier} element not found in HTML"
+        assert title in pane.get_text(), f"Title {title!r} not found inside milestone-pane-{tier}"
 
 
 def test_unified_domain_colors_and_multi_domain_legend():

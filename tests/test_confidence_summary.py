@@ -35,9 +35,9 @@ def test_confidence_summary_10_files():
     assert summary.high_pct + summary.medium_pct + summary.low_pct == 100
 
     # 2. Test Overview component output in report_view
-    raw_markdown = f"""# Test Repo
+    raw_markdown = """# Test Repo
 ## 2. Build Order & Confidence Scoring
-| **Total Scored Files** | **2** ({summary.high_pct}%) | **3** ({summary.medium_pct}%) | **5** ({summary.low_pct}%) | **10** (100%) | - |
+| **Total Scored Files** | **2** (20%) | **3** (30%) | **5** (50%) | **10** (100%) | - |
 ## 3. Step-by-Step Architectural Milestones
 ### Milestone 1: Core
 """
@@ -70,8 +70,8 @@ def test_confidence_summary_10_files():
     assert "50% files low confidence" not in html_out
 
     # Overview and milestone table context use the exact same numbers
-    assert f"({summary.high_pct}%)" in html_out
-    assert f"({summary.low_pct}%)" in html_out
+    assert "(20%)" in html_out
+    assert "(50%)" in html_out
 
 
 def test_confidence_summary_edge_cases():
