@@ -1068,3 +1068,968 @@ def dashboard_view(
         extra_head='<link rel="stylesheet" href="/static/frontend2/dashboard.css">',
     )
 
+
+# -----------------------------------------------------------------------------
+# Frontend v2 Analysis Pipeline Phase & Stage Mappings
+# -----------------------------------------------------------------------------
+
+PHASE_DEFINITIONS: List[Dict[str, Any]] = [
+    {"index": 1, "id": "phase_1", "name": "Get the code", "stages": ["stage_0", "stage_1"]},
+    {"index": 2, "id": "phase_2", "name": "Read the files", "stages": ["stage_2", "stage_3", "stage_4"]},
+    {"index": 3, "id": "phase_3", "name": "Map how they connect", "stages": ["stage_5", "stage_6"]},
+    {"index": 4, "id": "phase_4", "name": "Build your guide", "stages": ["stage_7", "stage_8", "stage_9", "stage_10"]},
+]
+
+STAGE_TO_PHASE_MAP: Dict[str, Dict[str, Any]] = {
+    "stage_0": {"phase_index": 1, "phase_name": "Get the code"},
+    "stage_1": {"phase_index": 1, "phase_name": "Get the code"},
+    "stage_2": {"phase_index": 2, "phase_name": "Read the files"},
+    "stage_3": {"phase_index": 2, "phase_name": "Read the files"},
+    "stage_4": {"phase_index": 2, "phase_name": "Read the files"},
+    "stage_5": {"phase_index": 3, "phase_name": "Map how they connect"},
+    "stage_6": {"phase_index": 3, "phase_name": "Map how they connect"},
+    "stage_7": {"phase_index": 4, "phase_name": "Build your guide"},
+    "stage_8": {"phase_index": 4, "phase_name": "Build your guide"},
+    "stage_9": {"phase_index": 4, "phase_name": "Build your guide"},
+    "stage_10": {"phase_index": 4, "phase_name": "Build your guide"},
+}
+
+
+def map_stage_to_phase(stage: str) -> Dict[str, Any]:
+    """Map a stage key (stage_0 to stage_10) to one of the 4 user-facing phases."""
+    key = str(stage).strip().lower()
+    if key in STAGE_TO_PHASE_MAP:
+        return dict(STAGE_TO_PHASE_MAP[key])
+    for s_k, val in STAGE_TO_PHASE_MAP.items():
+        if s_k in key:
+            return dict(val)
+    return {"phase_index": 1, "phase_name": "Get the code"}
+
+
+def extract_owner_and_repo(job: Any) -> Tuple[str, str]:
+    """Extract clean (owner, repo) pair for Title: Analyzing {owner}/{repo}."""
+    raw_repo_url = getattr(job, "repo_url", None) if hasattr(job, "repo_url") else (job.get("repo_url") if isinstance(job, dict) else None)
+    raw_github_url = getattr(job, "github_url", None) if hasattr(job, "github_url") else (job.get("github_url") if isinstance(job, dict) else None)
+    raw_repo_name = getattr(job, "repo_name", None) if hasattr(job, "repo_name") else (job.get("repo_name") if isinstance(job, dict) else None)
+
+    url = str(raw_repo_url or raw_github_url or "").strip().rstrip("/")
+    if url.endswith(".git"):
+        url = url[:-4]
+
+    parts = [p for p in url.split("/") if p]
+    if len(parts) >= 2 and ("github.com" in url or "gitlab.com" in url or len(parts) >= 3):
+        return sanitize_text(parts[-2]), sanitize_text(parts[-1])
+
+    if raw_repo_name and "/" in str(raw_repo_name):
+        p = str(raw_repo_name).split("/")
+        return sanitize_text(p[0]), sanitize_text(p[1])
+
+    if raw_repo_name:
+        return "repository", sanitize_text(str(raw_repo_name))
+
+    return "repository", sanitize_text(str(getattr(job, "id", "repo")))
+
+
+def get_narration_source(
+    job: Any = None,
+    raw_markdown: Optional[str] = None,
+    graph_data: Optional[Dict[str, Any]] = None,
+) -> str:
+    """Extracts narration source ('llm' or 'template') from job, graph_data, or markdown."""
+    if graph_data and isinstance(graph_data, dict):
+        src = graph_data.get("narration_source")
+        if src in ("llm", "template"):
+            return src
+    if job:
+        if isinstance(job, dict):
+            src = job.get("narration_source")
+            if src in ("llm", "template"):
+                return src
+            gd = job.get("graph_data")
+            if isinstance(gd, dict) and gd.get("narration_source") in ("llm", "template"):
+                return gd.get("narration_source")
+        else:
+            src = getattr(job, "narration_source", None)
+            if src in ("llm", "template"):
+                return src
+            gd = getattr(job, "graph_data", None)
+            if isinstance(gd, dict) and gd.get("narration_source") in ("llm", "template"):
+                return gd.get("narration_source")
+    md = raw_markdown or (getattr(job, "report_markdown", None) if job else None)
+    if md and isinstance(md, str):
+        match = re.search(r"<!--\s*narration_source:\s*(llm|template)\s*-->", md)
+        if match:
+            return match.group(1)
+    return "template"
+
+
+def get_narration_label(source: str) -> str:
+    """Returns honest label based on narration source."""
+    if source == "llm":
+        return "LLM Step-by-Step Narration"
+    return "Step-by-step narration"
+
+
+def _parse_report_markdown(raw_markdown: str) -> Dict[str, Any]:
+    """Parse synthesized markdown into structured sections while preserving full content fidelity."""
+    if not raw_markdown:
+        return {}
+
+    result = {
+        "title": "",
+        "synthesized_at": "",
+        "overview": {},
+        "domain_distribution": [],
+        "confidence_calibration": "",
+        "milestones": [],
+        "raw_markdown": raw_markdown
+    }
+
+    t_match = re.search(r"^#\s+Architectural Reverse-Engineering Report:\s*`?([^`\n]+)`?", raw_markdown, re.MULTILINE)
+    if t_match:
+        result["title"] = t_match.group(1).strip()
+
+    time_match = re.search(r"\*Synthesized at:\s*([^*]+)\*", raw_markdown)
+    if time_match:
+        result["synthesized_at"] = time_match.group(1).strip()
+
+    lang_m = re.search(r"\*\*Primary Language\*\*:\s*`?([^`\n]+)`?", raw_markdown)
+    files_m = re.search(r"\*\*Total Analyzed Files\*\*:\s*`?(\d+)`?", raw_markdown)
+    domains_m = re.search(r"\*\*Domain Categories\*\*:\s*`?(\d+)`?", raw_markdown)
+    entry_m = re.search(r"\*\*Entry Point Files\*\*:\s*`?([^`\n]+)`?", raw_markdown)
+
+    entry_raw_val = entry_m.group(1).strip().strip("`").strip() if entry_m else None
+
+    result["overview"] = {
+        "primary_language": lang_m.group(1).strip() if lang_m else "Unknown",
+        "total_files": int(files_m.group(1)) if files_m else 0,
+        "total_domains": int(domains_m.group(1)) if domains_m else 0,
+        "entry_points": [e.strip() for e in entry_m.group(1).split(",") if e.strip() and e.strip().lower() not in ("none", "0", "n/a", "null")] if entry_m else [],
+        "entry_points_raw": entry_raw_val,
+    }
+
+    return result
+
+
+PROGRESS_STAGES_CLEAN: List[Tuple[str, str, str]] = [
+    (
+        "stage_0",
+        "Consent & Auth Gate",
+        "Authorizing repository access and verifying read permissions.",
+    ),
+    (
+        "stage_1",
+        "Shallow Clone",
+        "Fetching repository contents into an isolated sandbox.",
+    ),
+    (
+        "stage_2",
+        "Discovery & File Hierarchy",
+        "Scanning directory tree, project manifests, and language breakdown.",
+    ),
+    (
+        "stage_3",
+        "Code Structure Parsing",
+        "Parsing source code into concrete syntax trees.",
+    ),
+    (
+        "stage_4",
+        "Global Symbol Table",
+        "Indexing public interfaces, symbols, and cross-package declarations.",
+    ),
+    (
+        "stage_5",
+        "Directed Dependency Graph",
+        "Tracing import chains and resolving module dependencies.",
+    ),
+    (
+        "stage_6",
+        "Architecture Domain Mapping",
+        "Grouping modules into architectural subsystems and domain boundaries.",
+    ),
+    (
+        "stage_7",
+        "Step-by-step narration",
+        "Synthesizing architectural reading order and structural rationale.",
+    ),
+    (
+        "stage_8",
+        "Graph & Quiz Generation",
+        "Constructing interactive visual call graphs and comprehension quizzes.",
+    ),
+    (
+        "stage_9",
+        "Persistence & Architecture Report Assembly",
+        "Compiling analysis results and persisting final architecture report.",
+    ),
+    (
+        "stage_10",
+        "Telemetry & Quota Allocation",
+        "Finalizing execution metrics and updating account quota.",
+    ),
+]
+
+
+def progress_view(
+    job: Any,
+    current_user: UserModel,
+    billing_status: Optional[Dict[str, Any]] = None,
+) -> str:
+    """Render Frontend v2 Analysis Progress page adhering to Stitch aesthetics and backend reality."""
+    job_id = sanitize_text(str(getattr(job, "id", None) if hasattr(job, "id") else (job.get("id", "") if isinstance(job, dict) else "")))
+    raw_status = getattr(job, "status", "pending") if hasattr(job, "status") else (job.get("status", "pending") if isinstance(job, dict) else "pending")
+    job_status = str(raw_status or "pending").lower()
+    raw_job_error = getattr(job, "error_message", None) if hasattr(job, "error_message") else (job.get("error_message", None) if isinstance(job, dict) else None)
+
+    owner, repo = extract_owner_and_repo(job)
+
+    # Calculate timestamps & elapsed duration
+    job_created_ts = 0.0
+    raw_created_at = getattr(job, "created_at", None) if hasattr(job, "created_at") else (job.get("created_at", None) if isinstance(job, dict) else None)
+    if raw_created_at is not None:
+        try:
+            ca = raw_created_at
+            if isinstance(ca, (int, float)):
+                val = float(ca)
+                job_created_ts = float(val / 1000.0) if val > 1e11 else val
+            elif isinstance(ca, datetime):
+                if ca.tzinfo is None:
+                    job_created_ts = float(ca.replace(tzinfo=timezone.utc).timestamp())
+                else:
+                    job_created_ts = float(ca.timestamp())
+            elif isinstance(ca, str):
+                from datetime import datetime as dt
+                clean_str = ca.strip()
+                if clean_str.endswith(" UTC"):
+                    clean_str = clean_str[:-4].strip() + "+00:00"
+                elif clean_str.endswith("Z"):
+                    clean_str = clean_str[:-1] + "+00:00"
+                parsed = dt.fromisoformat(clean_str)
+                if parsed.tzinfo is None:
+                    parsed = parsed.replace(tzinfo=timezone.utc)
+                job_created_ts = float(parsed.timestamp())
+        except Exception:
+            job_created_ts = 0.0
+
+    raw_exec_time = getattr(job, "execution_time_seconds", 0.0) if hasattr(job, "execution_time_seconds") else (job.get("execution_time_seconds", 0.0) if isinstance(job, dict) else 0.0)
+    try:
+        execution_time_seconds = float(raw_exec_time) if raw_exec_time is not None and isinstance(raw_exec_time, (int, float, str)) else 0.0
+    except (ValueError, TypeError):
+        execution_time_seconds = 0.0
+
+    mins_init = int(execution_time_seconds // 60)
+    secs_init = int(execution_time_seconds % 60)
+    formatted_init_time = f"{mins_init}:{secs_init:02d}"
+
+    # Extract real numbers for completed state
+    raw_md = (
+        getattr(job, "report_markdown", None)
+        or getattr(job, "markdown_output", "")
+        or (job.get("report_markdown") or job.get("markdown_output", "") if isinstance(job, dict) else "")
+    )
+    raw_graph = (
+        getattr(job, "graph_data", None)
+        or getattr(job, "graph_output_json", None)
+        or (job.get("graph_data") or job.get("graph_output_json") if isinstance(job, dict) else None)
+    )
+
+    parsed_md = _parse_report_markdown(raw_md) if isinstance(raw_md, str) and raw_md else {}
+    ov_data = parsed_md.get("overview", {})
+
+    g_data = {}
+    if raw_graph:
+        try:
+            g_data = json.loads(raw_graph) if isinstance(raw_graph, str) else (raw_graph if isinstance(raw_graph, dict) else {})
+        except Exception:
+            g_data = {}
+
+    nodes = g_data.get("nodes", []) if isinstance(g_data, dict) else []
+
+    files_analyzed = (
+        ov_data.get("total_files")
+        or getattr(job, "total_files", None)
+        or (job.get("total_files") if isinstance(job, dict) else None)
+        or len(nodes)
+        or 0
+    )
+
+    modules_count = (
+        ov_data.get("total_domains")
+        or (len({n.get("domain") for n in nodes if n.get("domain")}) if nodes else 0)
+        or (len({n.get("tier") for n in nodes if "tier" in n}) if nodes else 0)
+        or 0
+    )
+
+    raw_eps = ov_data.get("entry_points", [])
+    if not raw_eps and nodes:
+        raw_eps = [
+            n.get("id") or n.get("name") or n.get("path")
+            for n in nodes
+            if n.get("is_entry_point") or n.get("type") in ("entry_point", "entry")
+        ]
+
+    app_eps = []
+    for raw_ep in raw_eps:
+        ep = str(raw_ep).strip()
+        if not ep:
+            continue
+        ep_lower = ep.lower()
+        if (
+            ep_lower.startswith(("test/", "tests/", "spec/", "specs/", "bench/", "benchmarks/"))
+            or "/test" in ep_lower
+            or "/tests" in ep_lower
+            or "/spec" in ep_lower
+            or "test_" in ep_lower
+            or "_test." in ep_lower
+            or "tests." in ep_lower
+            or "bench" in ep_lower
+        ):
+            continue
+        app_eps.append(ep)
+
+    entry_points_count = len(app_eps) if app_eps else (len(raw_eps) if raw_eps else 0)
+
+    try:
+        files_analyzed = int(files_analyzed) if isinstance(files_analyzed, (int, float, str)) else 0
+    except Exception:
+        files_analyzed = 0
+
+    try:
+        modules_count = int(modules_count) if isinstance(modules_count, (int, float, str)) else 0
+    except Exception:
+        modules_count = 0
+
+    try:
+        entry_points_count = int(entry_points_count) if isinstance(entry_points_count, (int, float, str)) else 0
+    except Exception:
+        entry_points_count = 0
+
+    entry_raw_val = ov_data.get("entry_points_raw")
+    if entry_points_count > 0:
+        entry_points_display = str(entry_points_count)
+    elif entry_raw_val is not None:
+        entry_points_display = "0"
+    else:
+        entry_points_display = "—"
+
+    is_completed = (job_status in ("completed", "complete"))
+    is_failed = (job_status == "failed")
+    is_cancelled = (job_status == "cancelled")
+    is_running = not (is_completed or is_failed or is_cancelled)
+
+    active_card_display = "block" if is_running else "none"
+    cancel_trigger_display = "block" if is_running else "none"
+    report_ready_display = "block" if is_completed else "none"
+    failed_card_display = "block" if is_failed else "none"
+    cancelled_card_display = "block" if is_cancelled else "none"
+
+    mapped_error_reason = failure_reason(raw_job_error)
+
+    now_ts = datetime.now(timezone.utc).timestamp()
+    if is_running and job_created_ts > 0:
+        running_secs = max(0, int(now_ts - job_created_ts))
+        initial_timer_str = f"{running_secs // 60}:{running_secs % 60:02d}"
+    elif execution_time_seconds > 0:
+        initial_timer_str = formatted_init_time
+    else:
+        initial_timer_str = "0:00"
+
+    initial_sentence = (
+        "Downloading the repository…"
+        if is_running
+        else ("Analysis complete." if is_completed else ("Analysis failed." if is_failed else "Analysis cancelled."))
+    )
+
+    raw_failed_stage = getattr(job, "failed_stage", None) if hasattr(job, "failed_stage") else (job.get("failed_stage") if isinstance(job, dict) else None)
+    failed_phase = map_stage_to_phase(raw_failed_stage)["phase_index"] if raw_failed_stage else 1
+
+    initial_phase_idx = 4 if is_completed else (failed_phase if (is_failed or is_cancelled) else 1)
+
+    # 4 Segmented Bars
+    bars_html = '<div class="segmented-progress-bars" id="segmented-bars">'
+    for p_i in range(1, 5):
+        if is_completed:
+            b_cls = "done"
+        elif is_running:
+            if p_i == 1:
+                b_cls = "active"
+            else:
+                b_cls = ""
+        elif is_failed or is_cancelled:
+            if p_i < failed_phase:
+                b_cls = "done"
+            elif p_i == failed_phase:
+                b_cls = "failed"
+            else:
+                b_cls = ""
+        else:
+            b_cls = ""
+        bars_html += f'<div class="segment-bar {b_cls}" id="segment-bar-{p_i}"></div>'
+    bars_html += '</div>'
+
+    # 4 Phase Cards
+    phase_default_msgs = {
+        1: "Authorizing and cloning repository contents into an isolated sandbox.",
+        2: "Scanning directory tree, parsing concrete syntax trees, and indexing symbols.",
+        3: "Tracing import chains and mapping architectural domain boundaries.",
+        4: "Synthesizing architectural narrative, diagrams, quizzes, and final guide.",
+    }
+
+    phase_cards_html = '<div class="phase-cards-container" id="phase-cards">'
+    for p in PHASE_DEFINITIONS:
+        p_idx = p["index"]
+        p_name = p["name"]
+
+        if is_completed:
+            c_state = "done"
+            ind_content = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>'
+            card_msg = "Completed successfully."
+        elif is_running:
+            if p_idx == 1:
+                c_state = "active"
+                ind_content = '<svg class="spinner-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2v4m0 12v4m-10-10h4m12 0h4m-3.17-6.83l-2.83 2.83m-8 8l-2.83 2.83m0-13.66l2.83 2.83m8 8l2.83 2.83"></path></svg>'
+                card_msg = initial_sentence
+            else:
+                c_state = "queued"
+                ind_content = f"<span>{p_idx}</span>"
+                card_msg = phase_default_msgs.get(p_idx, "Queued")
+        elif is_failed or is_cancelled:
+            if p_idx < failed_phase:
+                c_state = "done"
+                ind_content = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>'
+                card_msg = "Completed successfully."
+            elif p_idx == failed_phase:
+                c_state = "failed"
+                ind_content = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>'
+                card_msg = mapped_error_reason if is_failed else "Cancelled by user."
+            else:
+                c_state = "queued"
+                ind_content = f"<span>{p_idx}</span>"
+                card_msg = phase_default_msgs.get(p_idx, "Queued")
+        else:
+            c_state = "queued"
+            ind_content = f"<span>{p_idx}</span>"
+            card_msg = phase_default_msgs.get(p_idx, "Queued")
+
+        phase_cards_html += f"""
+        <div class="phase-card {c_state}" id="phase-card-{p_idx}">
+            <div class="phase-card-indicator" id="phase-indicator-{p_idx}">
+                {ind_content}
+            </div>
+            <div class="phase-card-content">
+                <div class="phase-card-header">
+                    <h3 class="phase-card-title" id="phase-title-{p_idx}">{p_name}</h3>
+                </div>
+                <p class="phase-card-msg" id="phase-msg-{p_idx}">{card_msg}</p>
+            </div>
+        </div>
+        """
+    phase_cards_html += '</div>'
+
+    # Build 11 Stages list for details toggle
+    narration_src = get_narration_source(job)
+    checkmark_svg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>'
+    circle_empty_svg = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"></circle></svg>'
+
+    stages_list_html = '<div class="stage-rows-list" id="stage-rows-list">'
+    for s_key, s_name, s_desc in PROGRESS_STAGES_CLEAN:
+        s_display_name = get_narration_label(narration_src) if (is_completed and s_key == "stage_7" and narration_src == "llm") else s_name
+        init_icon = checkmark_svg if is_completed else circle_empty_svg
+        icon_color = "var(--tertiary-fixed-dim)" if is_completed else "var(--text-muted)"
+        stages_list_html += f"""
+        <div class="stage-row" id="stage-row-{s_key}">
+            <div class="stage-row-left">
+                <span class="stage-row-icon" id="icon-{s_key}" style="color: {icon_color};">
+                    {init_icon}
+                </span>
+                <span class="stage-row-title">{s_display_name}</span>
+            </div>
+            <span class="stage-row-desc">{s_desc}</span>
+        </div>
+        """
+    stages_list_html += '</div>'
+
+    # Safe JavaScript definitions
+    PROGRESS_F2_JS = f"""
+    <script>
+        const jobId = "{job_id}";
+        const jobStartTime = {int(job_created_ts * 1000) if job_created_ts > 0 else "Date.now()"};
+        let isJobTerminated = { "true" if not is_running else "false" };
+
+        const checkmarkSvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+        const spinnerSvg = '<svg class="spinner-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2v4m0 12v4m-10-10h4m12 0h4m-3.17-6.83l-2.83 2.83m-8 8l-2.83 2.83m0-13.66l2.83 2.83m8 8l2.83 2.83"></path></svg>';
+        const failSvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+
+        function escapeHtml(str) {{
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }}
+
+        const stageToPhase = {{
+            "stage_0": 1, "stage_1": 1,
+            "stage_2": 2, "stage_3": 2, "stage_4": 2,
+            "stage_5": 3, "stage_6": 3,
+            "stage_7": 4, "stage_8": 4, "stage_9": 4, "stage_10": 4
+        }};
+
+        function updateStepper(activePhaseIndex, isAllDone, isFailed=false) {{
+            const stepText = document.getElementById("step-n-of-4-text");
+            const badge = document.getElementById("stepper-status-badge");
+            if (stepText) {{
+                stepText.textContent = isAllDone ? "Analysis complete" : "Step " + activePhaseIndex + " of 4";
+            }}
+            if (badge) {{
+                badge.textContent = isAllDone ? "COMPLETED" : (isFailed ? "FAILED" : "IN PROGRESS");
+            }}
+
+            for (let i = 1; i <= 4; i++) {{
+                const bar = document.getElementById("segment-bar-" + i);
+                const card = document.getElementById("phase-card-" + i);
+                const ind = document.getElementById("phase-indicator-" + i);
+
+                if (isAllDone || i < activePhaseIndex) {{
+                    if (bar) bar.className = "segment-bar done";
+                    if (card) card.className = "phase-card done";
+                    if (ind) ind.innerHTML = checkmarkSvg;
+                }} else if (i === activePhaseIndex && isFailed) {{
+                    if (bar) bar.className = "segment-bar failed";
+                    if (card) card.className = "phase-card failed";
+                    if (ind) ind.innerHTML = failSvg;
+                }} else if (i === activePhaseIndex && !isAllDone) {{
+                    if (bar) bar.className = "segment-bar active";
+                    if (card) card.className = "phase-card active";
+                    if (ind) ind.innerHTML = spinnerSvg;
+                }} else {{
+                    if (bar) bar.className = "segment-bar";
+                    if (card) card.className = "phase-card queued";
+                    if (ind) ind.innerHTML = `<span>${{i}}</span>`;
+                }}
+            }}
+        }}
+
+        const activeCardTimerEl = document.getElementById("active-card-timer");
+        const elapsedTimerEl = document.getElementById("elapsed-timer");
+        function updateElapsedTimer() {{
+            if (isJobTerminated) return;
+            const now = Date.now();
+            const elapsedSecs = Math.max(0, Math.floor((now - jobStartTime) / 1000));
+            const mins = Math.floor(elapsedSecs / 60);
+            const secs = elapsedSecs % 60;
+            const formatted = `${{mins}}:${{secs < 10 ? '0' : ''}}${{secs}}`;
+            if (activeCardTimerEl) activeCardTimerEl.textContent = formatted;
+            if (elapsedTimerEl) elapsedTimerEl.textContent = formatted;
+        }}
+
+        let timerInterval = null;
+        if (!isJobTerminated) {{
+            updateElapsedTimer();
+            timerInterval = setInterval(updateElapsedTimer, 1000);
+        }}
+
+        const logBox = document.getElementById("sse-terminal-log");
+        function addLogEntry(text, type="info") {{
+            if (!logBox) return;
+            const line = document.createElement("div");
+            line.style.marginBottom = "0.25rem";
+            line.style.fontSize = "0.75rem";
+            line.style.fontFamily = "var(--font-mono)";
+
+            let color = "var(--text-muted)";
+            if (type === "complete") color = "var(--tertiary-fixed-dim)";
+            if (type === "active") color = "var(--primary-fixed)";
+            if (type === "error") color = "var(--error)";
+
+            line.style.color = color;
+            const msgSpan = document.createElement("span");
+            msgSpan.textContent = text;
+            line.appendChild(msgSpan);
+            logBox.appendChild(line);
+            logBox.scrollTop = logBox.scrollHeight;
+        }}
+
+        function addActivityEntry(stageIndex, totalStages, stageName, message, isComplete=false) {{
+            const sIdx = Number(stageIndex) || 0;
+            const phaseIdx = (typeof stageToPhase !== 'undefined' && stageToPhase[stageName]) || (sIdx <= 2 ? 1 : (sIdx <= 5 ? 2 : (sIdx <= 7 ? 3 : 4)));
+            const phaseNames = {{1: "Get the code", 2: "Read the files", 3: "Map how they connect", 4: "Build your guide"}};
+            const phaseName = phaseNames[phaseIdx] || escapeHtml(stageName);
+            addLogEntry(`Phase ${{phaseIdx}} of 4 — ${{escapeHtml(phaseName)}}: ${{escapeHtml(message)}}`, isComplete ? "complete" : "active");
+        }}
+
+        function showReportReady(data) {{
+            isJobTerminated = true;
+            if (timerInterval) {{
+                clearInterval(timerInterval);
+                timerInterval = null;
+            }}
+            if (pollingInterval) {{
+                clearInterval(pollingInterval);
+                pollingInterval = null;
+            }}
+
+            const connLost = document.getElementById("connection-lost-banner");
+            if (connLost) connLost.style.display = "none";
+
+            const activeCard = document.getElementById("active-card");
+            if (activeCard) activeCard.style.display = "none";
+
+            const cancelWrapper = document.getElementById("cancel-trigger-wrapper");
+            if (cancelWrapper) cancelWrapper.style.display = "none";
+
+            const readyCard = document.getElementById("report-ready-card");
+            if (readyCard) {{
+                const fEl = document.getElementById("ready-files-count");
+                const mEl = document.getElementById("ready-modules-count");
+                const eEl = document.getElementById("ready-entry-count");
+                if (fEl) fEl.textContent = (data && (data.files_analyzed != null ? data.files_analyzed : data.files)) || "—";
+                if (mEl) mEl.textContent = (data && (data.modules_mapped != null ? data.modules_mapped : data.modules)) || "—";
+                const epVal = (data && (data.entry_points != null ? data.entry_points : data.entry_points_count));
+                if (eEl) eEl.textContent = (epVal != null) ? String(epVal) : "—";
+                readyCard.style.display = "block";
+            }}
+
+            updateStepper(4, true);
+
+            for (let i = 0; i <= 10; i++) {{
+                const icon = document.getElementById("icon-stage_" + i);
+                if (icon) {{
+                    icon.innerHTML = checkmarkSvg;
+                    icon.style.color = "var(--tertiary-fixed-dim)";
+                }}
+            }}
+        }}
+
+        function showFailure(reason, data) {{
+            isJobTerminated = true;
+            if (timerInterval) clearInterval(timerInterval);
+            if (pollingInterval) clearInterval(pollingInterval);
+
+            const connLost = document.getElementById("connection-lost-banner");
+            if (connLost) connLost.style.display = "none";
+
+            const activeCard = document.getElementById("active-card");
+            if (activeCard) activeCard.style.display = "none";
+
+            const cancelWrapper = document.getElementById("cancel-trigger-wrapper");
+            if (cancelWrapper) cancelWrapper.style.display = "none";
+
+            const failCard = document.getElementById("failed-card");
+            const failureMsg = document.getElementById("failed-reason-text");
+            if (failureMsg) {{
+                failureMsg.textContent = reason || "Something went wrong on our side";
+            }}
+            if (failCard) {{
+                failCard.style.display = "block";
+            }}
+
+            const failedStageKey = (data && data.failed_stage) || "stage_1";
+            const failedPhaseIdx = (typeof stageToPhase !== 'undefined' && stageToPhase[failedStageKey]) || 1;
+            updateStepper(failedPhaseIdx, false, true);
+        }}
+
+        function openCancelModal() {{
+            const modal = document.getElementById("cancel-modal");
+            if (modal) modal.classList.add("open");
+        }}
+
+        function closeCancelModal() {{
+            const modal = document.getElementById("cancel-modal");
+            if (modal) modal.classList.remove("open");
+        }}
+
+        let eventSource = null;
+        let pollingInterval = null;
+
+        function pollJobStatus() {{
+            if (isJobTerminated) return;
+            fetch(`/api/analyses/${{jobId}}/status`)
+                .then(r => r.json())
+                .then(data => {{
+                    if (!data) return;
+                    if (data.status === "completed") {{
+                        showReportReady(data);
+                    }} else if (data.status === "failed") {{
+                        showFailure(data.error_message, data);
+                    }} else if (data.status === "cancelled") {{
+                        isJobTerminated = true;
+                        window.location.reload();
+                    }}
+                }})
+                .catch(() => {{}});
+        }}
+
+        function handleSSEData(data) {{
+            if (!data) return;
+            if (data.type === "progress") {{
+                const stageKey = data.stage;
+                const phaseIdx = stageToPhase[stageKey] || 1;
+                updateStepper(phaseIdx, false);
+
+                const activeSentenceEl = document.getElementById("active-sentence");
+                if (activeSentenceEl) {{
+                    activeSentenceEl.textContent = data.message || "Analyzing repository…";
+                }}
+
+                const activePhaseMsg = document.getElementById("phase-msg-" + phaseIdx);
+                if (activePhaseMsg && data.message) {{
+                    activePhaseMsg.textContent = data.message;
+                }}
+
+                const barFill = document.getElementById("progress-bar-fill");
+                if (barFill) {{
+                    if (data.percentage && Number(data.percentage) > 0) {{
+                        barFill.className = "progress-bar-fill determinate";
+                        barFill.style.width = Number(data.percentage) + "%";
+                    }} else {{
+                        barFill.className = "progress-bar-fill indeterminate";
+                        barFill.style.width = "35%";
+                    }}
+                }}
+
+                const stageIcon = document.getElementById("icon-" + stageKey);
+                if (stageIcon) {{
+                    stageIcon.innerHTML = spinnerSvg;
+                    stageIcon.style.color = "var(--primary)";
+                }}
+
+                addActivityEntry(data.stage_index || 1, data.stage_total || 11, data.stage_name || stageKey, data.message || "Processing", false);
+            }} else if (data.type === "stage_complete") {{
+                const stageKey = data.stage;
+                const stageIcon = document.getElementById("icon-" + stageKey);
+                if (stageIcon) {{
+                    stageIcon.innerHTML = checkmarkSvg;
+                    stageIcon.style.color = "var(--tertiary-fixed-dim)";
+                }}
+                addActivityEntry(data.stage_index || 1, data.stage_total || 11, data.stage_name || stageKey, "Completed successfully.", true);
+            }} else if (data.type === "completed") {{
+                if (eventSource) eventSource.close();
+                showReportReady(data);
+            }} else if (data.type === "failed") {{
+                if (eventSource) eventSource.close();
+                showFailure(data.message, data);
+            }}
+        }}
+        window._handleSSEData = handleSSEData;
+
+        if (!isJobTerminated) {{
+            eventSource = new EventSource(`/api/analyses/${{jobId}}/events`);
+            window._eventSource = eventSource;
+            addLogEntry("Event stream connected.");
+
+            eventSource.onopen = function() {{
+                const banner = document.getElementById("connection-lost-banner");
+                if (banner) banner.style.display = "none";
+            }};
+
+            eventSource.onmessage = function(event) {{
+                try {{
+                    const data = JSON.parse(event.data);
+                    handleSSEData(data);
+                }} catch (e) {{
+                    console.error("SSE parse error", e);
+                }}
+            }};
+
+            eventSource.onerror = function() {{
+                if (!isJobTerminated) {{
+                    const banner = document.getElementById("connection-lost-banner");
+                    if (banner) banner.style.display = "flex";
+                    addLogEntry("Connection lost. Retrying…", "active");
+                    if (!pollingInterval) {{
+                        pollJobStatus();
+                        pollingInterval = setInterval(pollJobStatus, 2500);
+                    }}
+                }}
+            }};
+        }}
+    </script>
+    """
+
+    content = f"""
+    <div class="progress-page-container">
+        <div class="back-link-wrapper">
+            <a href="/dashboard" class="back-link">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                <span>Back to dashboard</span>
+            </a>
+        </div>
+
+        <!-- Connection Lost Banner -->
+        <div id="connection-lost-banner" class="connection-lost-banner">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+            <span>Connection lost. Retrying…</span>
+        </div>
+
+        <!-- Top Repository & Telemetry Card -->
+        <div class="telemetry-card" id="repo-telemetry-card">
+            <div class="repo-info-group">
+                <div class="repo-icon-badge">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="6" y1="3" x2="6" y2="15"></line><circle cx="18" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><path d="M18 9a9 9 0 0 1-9 9"></path></svg>
+                </div>
+                <h1 class="repo-title-text" title="Analyzing {owner}/{repo}"><span class="analyzing-prefix" style="color: var(--text-muted); font-weight: normal; font-size: 0.9em;">Analyzing </span>{owner}/{repo}</h1>
+            </div>
+            <div class="timer-pill">
+                <span class="timer-pulse-dot"></span>
+                <span id="elapsed-timer">{initial_timer_str}</span>
+            </div>
+        </div>
+
+        <!-- Stepper (Segmented Progress Bars & Step Header) -->
+        <div class="progress-stepper" id="progress-stepper">
+            <div class="stepper-header">
+                <span class="stepper-step-title" id="step-n-of-4-text">Step {initial_phase_idx} of 4</span>
+                <span class="stepper-status-badge" id="stepper-status-badge">{'IN PROGRESS' if is_running else ('COMPLETED' if is_completed else ('FAILED' if is_failed else 'CANCELLED'))}</span>
+            </div>
+            {bars_html}
+            {phase_cards_html}
+        </div>
+
+        <!-- Active Progress Card (while running) -->
+        <div class="active-card" id="active-card" style="display: {active_card_display};">
+            <div id="active-sentence" class="active-sentence">
+                {initial_sentence}
+            </div>
+            <div class="progress-bar-track">
+                <div id="progress-bar-fill" class="progress-bar-fill indeterminate"></div>
+            </div>
+            <div id="active-timer-display" class="active-timer-display">
+                Elapsed <span id="active-card-timer">{initial_timer_str}</span> · usually 10–30 seconds
+            </div>
+        </div>
+
+        <!-- End State: Report Ready Card -->
+        <div class="card report-ready-card" id="report-ready-card" style="display: {report_ready_display};">
+            <div class="ready-header">
+                <div class="ready-icon-circle">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                </div>
+                <div>
+                    <h2 style="font-size: 1.25rem; font-weight: 600; color: var(--text); margin: 0;">Report ready</h2>
+                    <p style="font-size: 0.8125rem; color: var(--text-muted); margin: 0.2rem 0 0 0;">Repository analysis completed successfully.</p>
+                </div>
+            </div>
+            <div class="ready-stats-grid">
+                <div class="ready-stat-card">
+                    <div class="ready-stat-label">Files analyzed</div>
+                    <div id="ready-files-count" class="ready-stat-value">{files_analyzed}</div>
+                </div>
+                <div class="ready-stat-card">
+                    <div class="ready-stat-label">Modules</div>
+                    <div id="ready-modules-count" class="ready-stat-value">{modules_count}</div>
+                </div>
+                <div class="ready-stat-card">
+                    <div class="ready-stat-label">Entry points</div>
+                    <div id="ready-entry-count" class="ready-stat-value">{entry_points_display}</div>
+                </div>
+            </div>
+            <div class="ready-actions">
+                <a href="/report/{job_id}" class="btn btn-primary" id="start-learning-btn" style="min-height: 44px; display: inline-flex; align-items: center; gap: 0.5rem;">
+                    <span>Start learning</span>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+                </a>
+                <a href="/report/{job_id}" class="btn btn-secondary" id="open-map-btn" style="min-height: 44px; display: inline-flex; align-items: center; gap: 0.5rem;">
+                    <span>Open map</span>
+                </a>
+            </div>
+        </div>
+
+        <!-- End State: Failed Card -->
+        <div class="card failed-card" id="failed-card" style="display: {failed_card_display};">
+            <div class="failed-header">
+                <div class="failed-icon-circle">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                </div>
+                <div>
+                    <h2 style="font-size: 1.15rem; font-weight: 600; color: var(--error); margin: 0 0 0.35rem 0;">Analysis failed</h2>
+                    <p id="failed-reason-text" class="failed-reason-text">
+                        {mapped_error_reason}
+                    </p>
+                </div>
+            </div>
+            <div class="failed-actions">
+                <form action="/analyses/{job_id}/retry" method="POST" style="margin: 0; display: inline;">
+                    <button type="submit" class="btn btn-primary" id="retry-btn" style="min-height: 44px;">Retry</button>
+                </form>
+                <a href="/dashboard" class="btn btn-secondary" style="min-height: 44px; display: inline-flex; align-items: center;">Back to dashboard</a>
+            </div>
+        </div>
+
+        <!-- End State: Cancelled Card -->
+        <div class="card cancelled-card" id="cancelled-card" style="display: {cancelled_card_display};">
+            <h2 style="font-size: 1.15rem; font-weight: 600; color: var(--text); margin: 0 0 0.35rem 0;">Analysis cancelled</h2>
+            <p style="font-size: 0.875rem; color: var(--text-muted); margin: 0 0 1.25rem 0;">This analysis was cancelled.</p>
+            <a href="/dashboard" class="btn btn-secondary" style="min-height: 44px; display: inline-flex; align-items: center;">Back to dashboard</a>
+        </div>
+
+        <!-- Cancel Button Trigger (while running) -->
+        <div class="cancel-analysis-wrapper" id="cancel-trigger-wrapper" style="display: {cancel_trigger_display};">
+            <button type="button" class="btn-open-cancel" id="open-cancel-btn" onclick="openCancelModal()">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                <span>Cancel analysis</span>
+            </button>
+        </div>
+
+        <!-- Cancel Confirmation Bottom Sheet / Modal -->
+        <div class="cancel-modal-overlay" id="cancel-modal">
+            <div class="cancel-modal-box">
+                <div class="cancel-modal-header">
+                    <div style="width: 36px; height: 36px; border-radius: 50%; background: rgba(255,180,171,0.15); color: var(--error); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                    </div>
+                    <div>
+                        <h2 style="font-size: 1.15rem; font-weight: 600; color: var(--text); margin: 0 0 0.25rem 0;">Cancel analysis?</h2>
+                        <p style="font-size: 0.8125rem; color: var(--text-muted); margin: 0; line-height: 1.4;">Cancel this analysis? You can start it again anytime.</p>
+                    </div>
+                </div>
+                <div class="cancel-modal-actions">
+                    <form action="/jobs/{job_id}/cancel" method="POST" id="cancel-form" style="margin: 0; width: 100%;">
+                        <button type="submit" class="btn-confirm-cancel" id="cancel-btn">
+                            Cancel analysis
+                        </button>
+                    </form>
+                    <button type="button" class="btn-dismiss-cancel" onclick="closeCancelModal()">
+                        Keep going
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Collapsible Activity Section -->
+        <details class="details-toggle activity-drawer" id="details-toggle">
+            <summary class="activity-summary">
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary-fixed-dim)" stroke-width="2"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+                    <span>Activity</span>
+                </div>
+                <span style="font-size: 0.8125rem; color: var(--text-muted);">Show activity &#9662;</span>
+            </summary>
+            <div class="activity-content">
+                <div style="margin-top: 1rem;">
+                    <h4 style="font-size: 0.8125rem; color: var(--text-muted); margin: 0 0 0.5rem 0; text-transform: uppercase; letter-spacing: 0.05em; font-family: var(--font-mono);">Pipeline Stages</h4>
+                    {stages_list_html}
+                </div>
+                <div>
+                    <h4 style="font-size: 0.8125rem; color: var(--text-muted); margin: 0 0 0.5rem 0; text-transform: uppercase; letter-spacing: 0.05em; font-family: var(--font-mono);">Event Log</h4>
+                    <div id="sse-terminal-log" class="terminal-log-box"></div>
+                </div>
+            </div>
+        </details>
+    </div>
+
+    {PROGRESS_F2_JS}
+    """
+
+    page_title = f"{owner}/{repo}" if owner else repo
+    return page_shell(
+        page_title,
+        content,
+        current_user=current_user,
+        active_route=f"/progress/{job_id}",
+        billing_status=billing_status,
+        extra_head='<link rel="stylesheet" href="/static/frontend2/progress.css">',
+    )
+
