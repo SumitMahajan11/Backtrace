@@ -82,3 +82,26 @@ _shim.__file__ = __file__
 _shim.__doc__ = __doc__
 _shim.__path__ = []
 sys.modules[__name__] = _shim
+
+# Wire dynamic shell dispatch into frontend1 so legacy views render in the active shell
+try:
+    import app.frontend1.components as _fe1_c
+    import app.frontend2.components as _fe2_c
+
+    _orig_fe1_page_shell = _fe1_c.page_shell
+    _orig_fe1_nav_shell = _fe1_c.nav_shell
+
+    def _dynamic_page_shell(*args, **kwargs):
+        if active_frontend() == "2":
+            return _fe2_c.page_shell(*args, **kwargs)
+        return _orig_fe1_page_shell(*args, **kwargs)
+
+    def _dynamic_nav_shell(*args, **kwargs):
+        if active_frontend() == "2":
+            return _fe2_c.nav_shell(*args, **kwargs)
+        return _orig_fe1_nav_shell(*args, **kwargs)
+
+    _fe1_c.page_shell = _dynamic_page_shell
+    _fe1_c.nav_shell = _dynamic_nav_shell
+except Exception:
+    pass

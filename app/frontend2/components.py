@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import html
 import os
 import re
 from typing import Any, Dict, Optional
@@ -53,10 +52,10 @@ def nav_shell(
     """
 
     raw_username = current_user.github_username or "User"
-    safe_username = html.escape(sanitize_text(raw_username))
+    safe_username = sanitize_text(raw_username)
 
     avatar_html = (
-        f'<img src="{html.escape(sanitize_text(current_user.avatar_url))}" alt="Avatar" class="avatar" />'
+        f'<img src="{sanitize_text(current_user.avatar_url)}" alt="Avatar" class="avatar" />'
         if current_user.avatar_url
         else '<div class="avatar-placeholder"></div>'
     )
@@ -150,17 +149,16 @@ def page_shell(
     )
 
     clean_title = sanitize_text(title)
-    safe_title = html.escape(clean_title)
 
     if clean_title == "Dashboard":
         doc_title = "<title>Dashboard · Backtrace</title>"
     elif clean_title.startswith("Architecture Report: "):
-        repo_part = html.escape(clean_title.replace("Architecture Report: ", ""))
+        repo_part = clean_title.replace("Architecture Report: ", "")
         doc_title = f"<title>{repo_part} · Backtrace</title>"
     elif active_route == "/login" or title == "Backtrace - Understand any GitHub repository":
         doc_title = "<title>Backtrace - Understand any GitHub repository</title>"
     else:
-        doc_title = f"<title>{safe_title} · Backtrace</title>"
+        doc_title = f"<title>{clean_title} · Backtrace</title>"
 
     # Determine if this is a report page
     is_report = bool(
