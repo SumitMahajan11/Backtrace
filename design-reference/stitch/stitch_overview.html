@@ -1,0 +1,262 @@
+﻿<!DOCTYPE html>
+
+<html class="dark" lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/><meta content="mobile_tab" name="shell-type"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><style>@layer base{html,body{width:100vw;min-height:100vh;margin:0;padding:0;background-color:#121318;color:#e3e1e9;}body{overscroll-behavior-y:none;-webkit-tap-highlight-color:transparent;}.pb-safe{padding-bottom:env(safe-area-inset-bottom,0px);}.pt-safe{padding-top:env(safe-area-inset-top,0px);}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { "colors": { "primary-container": "#00f0ff", "outline-variant": "#3b494b", "secondary-fixed-dim": "#aec6ff", "on-tertiary-container": "#006d4a", "surface-container-high": "#292a2f", "on-secondary-container": "#00275d", "inverse-primary": "#006970", "primary-fixed-dim": "#00dbe9", "on-secondary-fixed-variant": "#004395", "on-surface-variant": "#b9cacb", "on-tertiary-fixed-variant": "#005236", "surface-dim": "#121318", "surface-tint": "#00dbe9", "surface-container": "#1e1f25", "surface-container-low": "#1a1b21", "surface-container-lowest": "#0d0e13", "on-background": "#e3e1e9", "tertiary-fixed-dim": "#4edea3", "on-primary-fixed-variant": "#004f54", "inverse-surface": "#e3e1e9", "outline": "#849495", "surface": "#121318", "on-tertiary": "#003824", "on-tertiary-fixed": "#002113", "on-surface": "#e3e1e9", "secondary": "#aec6ff", "on-primary-fixed": "#002022", "on-secondary-fixed": "#001a42", "secondary-fixed": "#d8e2ff", "background": "#121318", "inverse-on-surface": "#2f3036", "on-primary-container": "#006970", "tertiary": "#d8ffe7", "surface-bright": "#38393f", "on-error-container": "#ffdad6", "tertiary-fixed": "#6ffbbe", "error": "#ffb4ab", "primary": "#dbfcff", "on-secondary": "#002e6a", "error-container": "#93000a", "tertiary-container": "#65f2b5", "surface-container-highest": "#34343a", "on-error": "#690005", "primary-fixed": "#7df4ff", "surface-variant": "#34343a", "secondary-container": "#4e8eff", "on-primary": "#00363a" }, "borderRadius": { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" }, "spacing": { "space-xs": "0.25rem", "space-xl": "2.5rem", "margin-mobile": "1rem", "gutter": "1.5rem", "margin": "2rem", "space-md": "1rem", "space-sm": "0.5rem", "space-lg": "1.5rem", "gutter-mobile": "0.75rem" }, "fontFamily": { "headline-lg": ["Geist"], "code-lg": ["JetBrains Mono"], "body-lg": ["Geist"], "body-md": ["Geist"], "headline-lg-mobile": ["Geist"], "body-sm": ["Geist"], "headline-sm": ["Geist"], "headline-xl-mobile": ["Geist"], "headline-md": ["Geist"], "label-sm": ["JetBrains Mono"], "headline-xl": ["Geist"], "label-md": ["JetBrains Mono"], "code-sm": ["JetBrains Mono"], "code-md": ["JetBrains Mono"] } } } }</script><style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head><body class="bg-surface font-body-md text-on-surface flex flex-col min-h-screen"><header class="fixed top-0 w-full z-50 pt-safe bg-surface/80 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.25)]"><div class="h-16 px-margin-mobile flex items-center justify-between"><div class="flex items-center gap-space-sm"><div class="w-9 h-9 rounded-lg bg-surface-container-high flex items-center justify-center text-primary-fixed-dim"><span class="material-symbols-outlined text-[20px]">history</span></div><div class="flex flex-col"><h1 class="font-headline-sm text-headline-sm text-on-surface tracking-tight font-semibold leading-tight">Overview</h1><span class="font-code-sm text-code-sm text-on-surface-variant font-normal leading-none mt-0.5">octocat/fastapi-core</span></div></div><div class="flex items-center gap-space-xs"><div class="relative"><button aria-label="Report actions" class="w-11 h-11 flex items-center justify-center rounded-full text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors" id="report-menu-btn" onclick="document.getElementById('report-dropdown').classList.toggle('hidden')"><span class="material-symbols-outlined text-[22px]">more_horiz</span></button><div class="hidden absolute right-0 mt-space-xs w-52 rounded-xl bg-surface-container-high backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.6)] py-space-xs z-50 flex flex-col" id="report-dropdown"><button class="flex items-center gap-space-sm px-space-md py-space-sm text-left text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-colors"><span class="material-symbols-outlined text-[18px]">markdown</span><span class="font-body-md text-body-md">Export as Markdown</span></button><button class="flex items-center gap-space-sm px-space-md py-space-sm text-left text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-colors"><span class="material-symbols-outlined text-[18px]">print</span><span class="font-body-md text-body-md">Print report</span></button><div class="h-[1px] bg-outline-variant/30 my-space-xs mx-space-sm"></div><a class="flex items-center gap-space-sm px-space-md py-space-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-colors" data-path="dashboard" href="#"><span class="material-symbols-outlined text-[18px]">arrow_back</span><span class="font-body-md text-body-md">Back to dashboard</span></a></div></div><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center ml-space-xs"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div></div></div></header><main class="flex-1 flex flex-col relative w-full pt-16 pb-20 bg-surface px-margin-mobile"><div class="flex flex-col w-full pb-24 gap-space-md">
+<!-- 1. Summary Card -->
+<div class="relative overflow-hidden rounded-xl bg-surface-container p-space-md shadow-md flex flex-col gap-space-sm">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-space-xs px-2 py-0.5 rounded-full bg-surface-container-high text-primary-fixed-dim">
+<span class="material-symbols-outlined text-[14px]">auto_stories</span>
+<span class="font-body-sm text-body-sm">From README</span>
+</div>
+<div class="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant font-code-sm text-code-sm">
+<span class="w-2 h-2 rounded-full bg-primary-container inline-block"></span>
+        Python
+      </div>
+</div>
+<div class="flex flex-col gap-1">
+<h2 class="font-headline-sm text-headline-sm text-on-surface">What this repository is</h2>
+<p class="font-body-md text-body-md text-on-surface-variant">
+        FastAPI Core implements high-performance asynchronous web APIs driven by Starlette and Pydantic schemas. It orchestrates dependency injection graphs, request validation pipelines, and auto-generated OpenAPI documentation into a unified, lean runtime.
+      </p>
+</div>
+</div>
+<!-- 2. Start Here Card -->
+<div class="relative overflow-hidden rounded-xl bg-surface-container p-space-md shadow-md flex flex-col gap-space-sm">
+<div class="flex items-center justify-between">
+<span class="font-body-sm text-body-sm text-primary-fixed-dim font-medium">Start here</span>
+<div class="flex items-center gap-space-xs">
+<span class="px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant font-label-sm text-label-sm">Entry point</span>
+<span class="px-2 py-0.5 rounded-full bg-primary-container/15 text-primary-fixed-dim font-label-sm text-label-sm">Core</span>
+</div>
+</div>
+<div class="flex flex-col gap-1">
+<div class="flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-[18px] text-primary-fixed-dim">terminal</span>
+<span class="font-code-md text-code-md text-on-surface font-semibold">app/main.py</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant">
+        Initializes the top-level ASGI application lifecycle, binds global router prefixes, and sets CORS middleware policies.
+      </p>
+</div>
+<button class="mt-space-xs flex items-center justify-center gap-space-xs w-full py-2.5 px-4 rounded-lg bg-surface-container-high text-primary-fixed-dim font-headline-sm text-headline-sm hover:bg-surface-bright active:scale-[0.99] transition-all min-h-[44px]" type="button">
+<span>Open in guide</span>
+<span class="material-symbols-outlined text-[18px]">arrow_forward</span>
+</button>
+</div>
+<!-- 3. Read These Files First -->
+<div class="flex flex-col gap-space-sm">
+<div class="flex items-center justify-between px-1">
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Read these files first</h3>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Reading order</span>
+</div>
+<div class="flex flex-col gap-space-xs">
+<!-- File #1 -->
+<div class="rounded-xl bg-surface-container p-space-md flex flex-col gap-space-xs shadow-sm">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-space-sm min-w-0">
+<span class="w-6 h-6 rounded-md bg-surface-container-high flex items-center justify-center font-code-sm text-code-sm text-primary-fixed-dim font-semibold shrink-0">#1</span>
+<span class="font-code-md text-code-md text-on-surface font-medium truncate">app/main.py</span>
+</div>
+<div class="flex items-center gap-space-xs shrink-0"><span class="px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant font-body-sm text-body-sm">Entry point</span><span class="px-2 py-0.5 rounded-full bg-surface-container-high text-primary-fixed-dim font-body-sm text-body-sm">Core</span></div>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant line-clamp-2">
+          Root executable that boots Starlette routing table, registers lifespan events, and mounts OpenAPI schema specs.
+        </p>
+<div class="flex items-center gap-space-md pt-1 text-on-surface-variant font-code-sm text-code-sm">
+<span>78 lines</span>
+<span>â€¢</span>
+<span>4 exports</span>
+</div>
+</div>
+<!-- File #2 -->
+<div class="rounded-xl bg-surface-container p-space-md flex flex-col gap-space-xs shadow-sm">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-space-sm min-w-0">
+<span class="w-6 h-6 rounded-md bg-surface-container-high flex items-center justify-center font-code-sm text-code-sm text-primary-fixed-dim font-semibold shrink-0">#2</span>
+<span class="font-code-md text-code-md text-on-surface font-medium truncate">app/app.py</span>
+</div>
+<span class="px-2 py-0.5 rounded-full bg-surface-container-high text-primary-fixed-dim font-label-sm text-label-sm shrink-0">Core</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant line-clamp-2">
+          Subclass wrappers configuring default exception handlers, custom response serializers, and telemetry hooks.
+        </p>
+<div class="flex items-center gap-space-md pt-1 text-on-surface-variant font-code-sm text-code-sm">
+<span>142 lines</span>
+<span>â€¢</span>
+<span>6 exports</span>
+</div>
+</div>
+<!-- File #3 -->
+<div class="rounded-xl bg-surface-container p-space-md flex flex-col gap-space-xs shadow-sm">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-space-sm min-w-0">
+<span class="w-6 h-6 rounded-md bg-surface-container-high flex items-center justify-center font-code-sm text-code-sm text-on-surface-variant font-semibold shrink-0">#3</span>
+<span class="font-code-md text-code-md text-on-surface font-medium truncate">app/middleware/auth.py</span>
+</div>
+<span class="px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant font-label-sm text-label-sm shrink-0">Support</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant line-clamp-2">
+          Intercepts JWT bearer tokens, resolves current user identity scopes, and guards against unauthorized requests.
+        </p>
+<div class="flex items-center gap-space-md pt-1 text-on-surface-variant font-code-sm text-code-sm">
+<span>115 lines</span>
+<span>â€¢</span>
+<span>3 exports</span>
+</div>
+</div>
+</div>
+<a class="flex items-center justify-center gap-1 py-2 font-code-md text-code-md text-primary-fixed-dim hover:text-primary transition-colors min-h-[44px]" href="#">
+<span>See all 18 files</span>
+<span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+</a>
+</div>
+<!-- 4. Factual Stats Grid -->
+<div class="grid grid-cols-2 gap-space-sm">
+<div class="rounded-xl bg-surface-container p-space-md flex flex-col gap-1">
+<span class="font-headline-lg-mobile text-headline-lg-mobile text-primary-fixed-dim font-bold leading-none">18</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">supported files</span>
+</div>
+<div class="rounded-xl bg-surface-container p-space-md flex flex-col gap-1">
+<span class="font-headline-lg-mobile text-headline-lg-mobile text-on-surface font-bold leading-none">4</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">subsystem domains</span>
+</div>
+<div class="rounded-xl bg-surface-container p-space-md flex flex-col gap-1">
+<span class="font-headline-lg-mobile text-headline-lg-mobile text-on-surface font-bold leading-none">1</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">application target</span>
+</div>
+<div class="rounded-xl bg-surface-container p-space-md flex flex-col gap-1">
+<span class="font-headline-lg-mobile text-headline-lg-mobile text-on-surface font-bold leading-none">0 / 2</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">milestones</span>
+</div>
+</div>
+<!-- 5. Subsystems Breakdown -->
+<div class="rounded-xl bg-surface-container p-space-md flex flex-col gap-space-md shadow-sm">
+<div class="flex items-center justify-between">
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Subsystems</h3>
+<span class="font-code-sm text-code-sm text-on-surface-variant">18 total</span>
+</div>
+<div class="flex flex-col gap-space-sm">
+<!-- Item 1 -->
+<div class="flex flex-col gap-1.5">
+<div class="flex items-center justify-between font-body-sm text-body-sm">
+<span class="text-on-surface font-medium">Core Engine</span>
+<span class="font-code-sm text-code-sm text-on-surface-variant">8 files</span>
+</div>
+<div class="w-full h-2 rounded-full bg-surface-container-highest overflow-hidden">
+<div class="h-full rounded-full bg-primary-container" style="width: 44.4%;"></div>
+</div>
+</div>
+<!-- Item 2 -->
+<div class="flex flex-col gap-1.5">
+<div class="flex items-center justify-between font-body-sm text-body-sm">
+<span class="text-on-surface font-medium">Security &amp; Auth</span>
+<span class="font-code-sm text-code-sm text-on-surface-variant">4 files</span>
+</div>
+<div class="w-full h-2 rounded-full bg-surface-container-highest overflow-hidden">
+<div class="h-full rounded-full bg-secondary-container" style="width: 22.2%;"></div>
+</div>
+</div>
+<!-- Item 3 -->
+<div class="flex flex-col gap-1.5">
+<div class="flex items-center justify-between font-body-sm text-body-sm">
+<span class="text-on-surface font-medium">Database Layer</span>
+<span class="font-code-sm text-code-sm text-on-surface-variant">3 files</span>
+</div>
+<div class="w-full h-2 rounded-full bg-surface-container-highest overflow-hidden">
+<div class="h-full rounded-full bg-tertiary-container" style="width: 16.6%;"></div>
+</div>
+</div>
+<!-- Item 4 -->
+<div class="flex flex-col gap-1.5">
+<div class="flex items-center justify-between font-body-sm text-body-sm">
+<span class="text-on-surface font-medium">Routers &amp; Endpoints</span>
+<span class="font-code-sm text-code-sm text-on-surface-variant">3 files</span>
+</div>
+<div class="w-full h-2 rounded-full bg-surface-container-highest overflow-hidden">
+<div class="h-full rounded-full bg-primary-fixed-dim" style="width: 16.6%;"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- 6. Mini-graph Preview -->
+<div class="flex flex-col gap-space-xs">
+<div class="flex items-center justify-between px-1">
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Import map</h3>
+</div>
+<div class="relative overflow-hidden rounded-xl bg-surface-container-lowest p-space-md h-52 flex flex-col items-center justify-center">
+<!-- Visual DAG representation -->
+<svg class="w-full h-full max-w-[340px]" fill="none" viewbox="0 0 340 160" xmlns="http://www.w3.org/2000/svg">
+<!-- Connecting Lines -->
+<path d="M70 80 L160 40" stroke="#00dbe9" stroke-dasharray="3 3" stroke-opacity="0.5" stroke-width="1.5"></path>
+<path d="M70 80 L160 120" stroke="#00dbe9" stroke-opacity="0.5" stroke-width="1.5"></path>
+<path d="M160 40 L260 40" stroke="#4edea3" stroke-opacity="0.4" stroke-width="1.5"></path>
+<path d="M160 120 L260 90" stroke="#4e8eff" stroke-opacity="0.5" stroke-width="1.5"></path>
+<path d="M160 120 L260 140" stroke="#4e8eff" stroke-opacity="0.3" stroke-width="1.5"></path>
+<!-- Center Origin Node -->
+<rect fill="#1e1f25" height="36" rx="8" width="104" x="18" y="62"></rect>
+<rect fill="#00dbe9" fill-opacity="0.1" height="36" rx="8" width="104" x="18" y="62"></rect>
+<text fill="#dbfcff" font-family="JetBrains Mono" font-size="11" font-weight="600" text-anchor="middle" x="70" y="84">main.py</text>
+<!-- Child Nodes -->
+<rect fill="#1e1f25" height="32" rx="6" width="76" x="150" y="24"></rect>
+<text fill="#e3e1e9" font-family="JetBrains Mono" font-size="10" text-anchor="middle" x="188" y="44">app.py</text>
+<rect fill="#1e1f25" height="32" rx="6" width="76" x="150" y="104"></rect>
+<text fill="#e3e1e9" font-family="JetBrains Mono" font-size="10" text-anchor="middle" x="188" y="124">auth.py</text>
+<!-- Leaf Nodes -->
+<circle cx="265" cy="40" fill="#1e1f25" r="14"></circle>
+<text fill="#b9cacb" font-family="JetBrains Mono" font-size="9" text-anchor="middle" x="265" y="44">cfg</text>
+<circle cx="265" cy="90" fill="#1e1f25" r="14"></circle>
+<text fill="#b9cacb" font-family="JetBrains Mono" font-size="9" text-anchor="middle" x="265" y="94">jwt</text>
+<circle cx="265" cy="140" fill="#1e1f25" r="14"></circle>
+<text fill="#b9cacb" font-family="JetBrains Mono" font-size="9" text-anchor="middle" x="265" y="144">db</text>
+</svg>
+</div>
+<a class="flex items-center justify-end gap-1 px-1 font-body-sm text-body-sm text-primary-fixed-dim hover:text-primary transition-colors min-h-[44px]" href="#">
+<span>Tap to explore in Map</span>
+<span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+</a>
+</div>
+<!-- 7. Confidence Disclosure -->
+<div class="rounded-xl bg-surface-container p-space-md flex flex-col gap-space-xs">
+<div class="flex items-center justify-between text-on-surface font-body-md text-body-md">
+<div class="flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-[18px] text-tertiary-fixed-dim">verified</span>
+<span>High confidence in 3 of 18 files</span>
+</div>
+<button class="flex items-center gap-1 font-label-md text-label-md text-primary-fixed-dim hover:text-primary py-2 px-1 min-h-[44px]" onclick="document.getElementById('confidence-info').classList.toggle('hidden')" type="button">
+<span>What does this mean?</span>
+<span class="material-symbols-outlined text-[16px]">arrow_drop_down</span>
+</button>
+</div>
+<div class="hidden flex flex-col gap-space-xs pt-space-xs font-body-sm text-body-sm text-on-surface-variant" id="confidence-info">
+<div class="rounded-lg bg-surface-container-high p-space-sm flex flex-col gap-1">
+<span class="text-tertiary-fixed-dim font-code-sm text-code-sm font-semibold">High confidence</span>
+<span>Verified AST execution and deterministic symbol import resolution across Python namespace packages.</span>
+</div>
+<div class="rounded-lg bg-surface-container-high p-space-sm flex flex-col gap-1">
+<span class="text-secondary font-code-sm text-code-sm font-semibold">Medium confidence</span>
+<span>Heuristic call graph links based on pattern matching with partial runtime inference.</span>
+</div>
+<div class="rounded-lg bg-surface-container-high p-space-sm flex flex-col gap-1">
+<span class="text-outline font-code-sm text-code-sm font-semibold">Low confidence</span>
+<span>Unresolved dynamic imports, runtime reflections, or missing external dependency stubs.</span>
+</div>
+</div>
+</div>
+<!-- 8. Sticky Bottom Actions Above Tab Bar -->
+<div class="sticky bottom-0 z-40 -mx-margin-mobile px-margin-mobile py-space-sm bg-surface/90 backdrop-blur-xl flex items-center gap-space-sm">
+<button class="flex-1 py-3 px-4 rounded-xl bg-gradient-to-r from-primary-container to-secondary-container text-on-secondary-container font-headline-sm text-headline-sm font-bold flex items-center justify-center gap-space-xs shadow-lg active:scale-[0.98] transition-all min-h-[48px]" type="button">
+<span>Start learning</span>
+<span class="material-symbols-outlined text-[20px]">arrow_forward</span>
+</button>
+<button class="py-3 px-5 rounded-xl bg-surface-container-high text-primary-fixed-dim font-headline-sm text-headline-sm font-semibold flex items-center justify-center gap-space-xs hover:bg-surface-bright active:scale-[0.98] transition-all min-h-[48px]" type="button">
+<span class="material-symbols-outlined text-[18px]">fork_right</span>
+<span>Open map</span>
+</button>
+</div>
+</div></main><nav class="fixed bottom-0 w-full z-50 pb-safe bg-surface/90 backdrop-blur-xl shadow-[0_-1px_12px_rgba(0,0,0,0.3)]" data-active-classes="text-primary-container font-semibold"><div class="flex justify-around items-center h-16 px-space-xs"><a aria-current="page" class="flex flex-col items-center justify-center gap-1 min-w-[64px] min-h-[44px] transition-colors text-primary-container font-semibold" data-path="overview" href="#"><span class="material-symbols-outlined text-[20px]">grid_view</span><span class="font-body-sm text-body-sm">Overview</span></a><a class="flex flex-col items-center justify-center gap-1 min-w-[64px] min-h-[44px] text-on-surface-variant transition-colors" data-path="map" href="#"><span class="material-symbols-outlined text-[20px]">fork_right</span><span class="font-body-sm text-body-sm">Map</span></a><a class="flex flex-col items-center justify-center gap-1 min-w-[64px] min-h-[44px] text-on-surface-variant transition-colors" data-path="learn" href="#"><span class="material-symbols-outlined text-[20px]">code</span><span class="font-body-sm text-body-sm">Learn</span></a><a class="flex flex-col items-center justify-center gap-1 min-w-[64px] min-h-[44px] text-on-surface-variant transition-colors" data-path="quiz" href="#"><span class="material-symbols-outlined text-[20px]">check_circle</span><span class="font-body-sm text-body-sm">Quiz</span></a></div></nav></body></html>
