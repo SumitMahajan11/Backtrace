@@ -287,9 +287,10 @@ def test_submit_analysis_github_api_error_renders_distinct_message(client, test_
             import html
             from app.core.failure_reason import ACCESS_ERROR, GITHUB_BUSY_ERROR
             assert resp.status_code == 200
-            assert GITHUB_BUSY_ERROR in html.unescape(resp.text)
-            assert ACCESS_ERROR not in resp.text
-            assert "GitHub API Error" not in resp.text
+            unescaped_text = html.unescape(resp.text)
+            assert GITHUB_BUSY_ERROR in unescaped_text
+            assert ACCESS_ERROR not in unescaped_text
+            assert "GitHub API Error" not in unescaped_text
             # Zero jobs created
             jobs = AnalysisJobRepository.get_jobs_for_user(test_db_session, user.id)
             assert len(jobs) == 0
@@ -325,7 +326,7 @@ def test_submit_time_github_api_error_renders_access_error(client, test_db_sessi
             )
             assert resp.status_code == 200
             assert ACCESS_ERROR in html.unescape(resp.text)
-            assert "GitHub API Error" not in resp.text
+            assert "GitHub API Error" not in html.unescape(resp.text)
     finally:
         app.dependency_overrides.clear()
 

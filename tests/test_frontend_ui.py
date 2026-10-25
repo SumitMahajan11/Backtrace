@@ -3627,12 +3627,10 @@ def test_progress_page_real_server_phase_names_playwright(test_db):
                         stage_index: 1,
                         stage_total: 11,
                         stage_name: payload,
-                        message: "Downloading repository..."
+                        message: payload
                     };
                     if (typeof eventSource !== 'undefined' && eventSource && eventSource.onmessage) {
                         eventSource.onmessage({ data: JSON.stringify(evt) });
-                    } else if (typeof addActivityEntry === 'function') {
-                        addActivityEntry(1, 11, payload, "Downloading repository...", false);
                     }
                 }""",
                 payload,
@@ -3645,6 +3643,8 @@ def test_progress_page_real_server_phase_names_playwright(test_db):
 
             text_content = log_box.inner_text()
             assert "Get the code" in text_content
+            assert ("&lt;img src=x onerror=window.__x=1&gt;" in text_content or payload in text_content)
+            assert log_box.locator("img").count() == 0
 
             x_val = page.evaluate("() => window.__x")
             assert x_val is None
