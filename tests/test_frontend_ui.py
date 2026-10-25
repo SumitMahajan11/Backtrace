@@ -3928,6 +3928,48 @@ def test_progress_view_done_renders_count_from_graph_nodes_when_line_absent():
     assert re.search(r'id="ready-entry-count"[^>]*>\s*2\s*<', html)
 
 
+def test_progress_view_done_renders_zero_when_entry_points_none_from_real_generator():
+    """Verifies that progress_view renders 0 for entry points when the real report formatter produces None."""
+    import re
+    from app.formatters.markdown_formatter import MarkdownReportFormatter
+    from app.synthesis.schema import ArchitectureOverview, SynthesizedRepositoryReport
+    from app.ui.components import progress_view
+
+    overview = ArchitectureOverview(
+        total_files=12,
+        total_domains=3,
+        domain_file_counts={"core": 5, "api": 4, "models": 3},
+        primary_language="Python",
+        entry_point_files=[],
+    )
+    report = SynthesizedRepositoryReport(
+        repo_name="sample-repo",
+        architecture_overview=overview,
+        confidence_disclosure="Scoring breakdown",
+        total_milestones=0,
+        synthesis_timestamp="2026-10-25T10:00:00Z",
+    )
+    report_md = MarkdownReportFormatter().format_report(report)
+
+    class MockDoneJobRealFormatterNone:
+        id = 106
+        repo_url = "https://github.com/owner/sample-repo"
+        repo_name = "sample-repo"
+        status = "completed"
+        created_at = "2026-10-25T10:00:00Z"
+        execution_time_seconds = 18.5
+        report_markdown = report_md
+        graph_data = {"nodes": []}
+
+    html = progress_view(job=MockDoneJobRealFormatterNone(), current_user=None)
+    assert "Files analyzed" in html
+    assert '<div class="progress-ready-stats-grid"' in html
+    assert re.search(r'id="ready-files-count"[^>]*>\s*12\s*<', html)
+    assert re.search(r'id="ready-modules-count"[^>]*>\s*3\s*<', html)
+    assert re.search(r'id="ready-entry-count"[^>]*>\s*0\s*<', html)
+
+
+
 
 
 
