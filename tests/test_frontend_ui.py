@@ -2788,8 +2788,9 @@ def test_xss_prevention_in_js_render_templates_and_activity_entry(payload):
 
     # 1. progress_view template contains escapeHtml and Number coercion for stage values
     pv_html = progress_view(job=mock_job_processing, current_user=None)
-    assert "${escapeHtml(stageName)}" in pv_html
+    assert "${escapeHtml(phaseName)}" in pv_html
     assert "${escapeHtml(message)}" in pv_html
+    assert "phaseNames" in pv_html
     assert "Number(stageIndex) || 0" in pv_html
     assert "Number(totalStages) || 0" in pv_html
     assert "function escapeHtml(str)" in pv_html
@@ -3510,3 +3511,149 @@ def test_payload_xss_prevention_in_report_and_settings_views(payload):
     assert f'src="{escaped_payload}"' in set_html
     assert f'alt="@{escaped_payload}"' in set_html
     assert f'@{escaped_payload}' in set_html
+
+
+def test_progress_page_real_server_phase_names_playwright(test_db):
+    """
+    Playwright test against a real server.
+    Loads the progress page and pushes a stage event with stageName <img src=x onerror=window.__x=1>.
+    Asserts:
+      - Log entry shows 'Get the code'
+      - window.__x is undefined
+      - There is no pageerror
+    """
+    import socket
+    import threading
+    import time
+    import uvicorn
+    from playwright.sync_api import sync_playwright
+    from app.main import app
+    from app.models.db import UserModel
+    from app.storage.analysis_job_repository import AnalysisJobRepository
+    from app.security.auth import create_access_token
+    from app.api.dependencies import get_current_user_optional, get_db
+
+    TestingSessionLocal, _ = test_db
+
+    def override_get_db():
+        session = TestingSessionLocal()
+        try:
+            yield session
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    with TestingSessionLocal() as session:
+        user = UserModel(
+            github_id=98765,
+            github_username="real_srv_pw_user",
+            email="pw_test@example.com",
+        )
+        session.add(user)
+        session.commit()
+        session.refresh(user)
+        user_id = user.id
+
+        job = AnalysisJobRepository.create_job(
+            session=session,
+            user_id=user_id,
+            repo_url="https://github.com/owner/pw-test-repo",
+            status="processing",
+        )
+        job_id = job.id
+
+    token = create_access_token(
+        user_id=user_id,
+        github_id=98765,
+        github_username="real_srv_pw_user",
+    )
+
+    def override_get_current_user():
+        with TestingSessionLocal() as s:
+            u = s.query(UserModel).filter_by(id=user_id).first()
+            if u:
+                s.refresh(u)
+                s.expunge(u)
+            return u
+
+    app.dependency_overrides[get_current_user_optional] = override_get_current_user
+    app.dependency_overrides[get_db] = override_get_db
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+
+    config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="error")
+    server = uvicorn.Server(config)
+    server.install_signal_handlers = lambda: None
+    server_thread = threading.Thread(target=server.run, daemon=True)
+    server_thread.start()
+
+    for _ in range(50):
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=0.1):
+                break
+        except OSError:
+            time.sleep(0.05)
+
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            context = browser.new_context()
+            context.add_cookies([
+                {
+                    "name": "access_token",
+                    "value": token,
+                    "domain": "127.0.0.1",
+                    "path": "/",
+                }
+            ])
+            page = context.new_page()
+
+            page_errors = []
+            page.on("pageerror", lambda err: page_errors.append(err))
+
+            page.goto(f"http://127.0.0.1:{port}/progress/{job_id}", wait_until="domcontentloaded")
+
+            payload = '<img src=x onerror=window.__x=1>'
+            page.evaluate(
+                """(payload) => {
+                    const evt = {
+                        type: "progress",
+                        stage: "stage_1",
+                        stage_index: 1,
+                        stage_total: 11,
+                        stage_name: payload,
+                        message: "Downloading repository..."
+                    };
+                    if (typeof eventSource !== 'undefined' && eventSource && eventSource.onmessage) {
+                        eventSource.onmessage({ data: JSON.stringify(evt) });
+                    } else if (typeof addActivityEntry === 'function') {
+                        addActivityEntry(1, 11, payload, "Downloading repository...", false);
+                    }
+                }""",
+                payload,
+            )
+
+            # Expand Details toggle to make event log visible
+            page.locator("#details-toggle summary").click()
+            log_box = page.locator("#sse-terminal-log")
+            log_box.wait_for(state="visible")
+
+            text_content = log_box.inner_text()
+            assert "Get the code" in text_content
+
+            x_val = page.evaluate("() => window.__x")
+            assert x_val is None
+
+            assert len(page_errors) == 0
+
+            browser.close()
+    finally:
+        server.should_exit = True
+        server_thread.join(timeout=2.0)
+        app.dependency_overrides.clear()
+
