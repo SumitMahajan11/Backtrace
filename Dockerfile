@@ -41,6 +41,7 @@ COPY --chown=appuser:appgroup docs /app/docs
 COPY --chown=appuser:appgroup alembic /app/alembic
 COPY --chown=appuser:appgroup alembic.ini /app/alembic.ini
 COPY --chown=appuser:appgroup scripts /app/scripts
+COPY --chown=appuser:appgroup static /app/static
 
 # Switch to unprivileged execution user
 USER appuser
