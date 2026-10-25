@@ -2476,7 +2476,7 @@ def progress_view(
         or (job.get("graph_data") or job.get("graph_output_json") if isinstance(job, dict) else None)
     )
 
-    parsed_md = _parse_report_markdown(raw_md) if raw_md else {}
+    parsed_md = _parse_report_markdown(raw_md) if isinstance(raw_md, str) and raw_md else {}
     ov_data = parsed_md.get("overview", {})
     domain_dist = parsed_md.get("domain_distribution", [])
 
@@ -2532,7 +2532,20 @@ def progress_view(
             continue
         app_eps.append(ep)
 
-    entry_points_count = len(app_eps) if app_eps else (len(raw_eps) if raw_eps else 0)
+    try:
+        files_analyzed = int(files_analyzed) if isinstance(files_analyzed, (int, float, str)) else 0
+    except Exception:
+        files_analyzed = 0
+
+    try:
+        modules_count = int(modules_count) if isinstance(modules_count, (int, float, str)) else 0
+    except Exception:
+        modules_count = 0
+
+    try:
+        entry_points_count = int(entry_points_count) if isinstance(entry_points_count, (int, float, str)) else 0
+    except Exception:
+        entry_points_count = 0
 
     stats_grid_html = ""
     if files_analyzed > 0 or modules_count > 0 or entry_points_count > 0:
@@ -5890,7 +5903,7 @@ def report_view(
         # Partition into core milestones and test milestones
         core_milestones = []
         test_milestones = []
-        for m_idx, m in enumerate(milestones_data, start=1):
+        for m in milestones_data:
             track_label = m.get("track_label") or ("Test files" if "test" in str(m.get("track", "")).lower() else "Milestone")
             is_test_milestone = (
                 track_label == "Test files"
@@ -5898,9 +5911,9 @@ def report_view(
                 or any("/test" in str(f).lower() or "test_" in str(f).lower() or "_test." in str(f).lower() for f in m.get("included_files", []))
             )
             if is_test_milestone:
-                test_milestones.append((m_idx, m))
+                test_milestones.append((len(test_milestones) + 1, m))
             else:
-                core_milestones.append((m_idx, m))
+                core_milestones.append((len(core_milestones) + 1, m))
 
         # Helper to render a single rail item
         def _render_rail_item_html(m_idx: int, m: Dict[str, Any]) -> str:
@@ -5910,7 +5923,12 @@ def report_view(
                 m_tier = m_idx
 
             track_label = m.get("track_label") or ("Test files" if "test" in str(m.get("track", "")).lower() else "Milestone")
-            if track_label == "Test files":
+            is_test_milestone = (
+                track_label == "Test files"
+                or "test" in str(m.get("track", "")).lower()
+                or any("/test" in str(f).lower() or "test_" in str(f).lower() or "_test." in str(f).lower() for f in m.get("included_files", []))
+            )
+            if is_test_milestone:
                 display_id = f"T{m_idx}"
             else:
                 display_id = str(m_idx)
@@ -5984,17 +6002,28 @@ def report_view(
         """
 
         panes_html = ""
-        for m_idx, m in enumerate(milestones_data, start=1):
+        core_counter = 0
+        test_counter = 0
+        for m in milestones_data:
+            track_label = m.get("track_label") or ("Test files" if "test" in str(m.get("track", "")).lower() else "Milestone")
+            is_test = (
+                track_label == "Test files"
+                or "test" in str(m.get("track", "")).lower()
+                or any("/test" in str(f).lower() or "test_" in str(f).lower() or "_test." in str(f).lower() for f in m.get("included_files", []))
+            )
+            if is_test:
+                test_counter += 1
+                display_id = f"T{test_counter}"
+                m_idx = test_counter
+            else:
+                core_counter += 1
+                display_id = str(core_counter)
+                m_idx = core_counter
+
             try:
                 m_tier = int(m.get("tier", m_idx))
             except (ValueError, TypeError):
                 m_tier = m_idx
-
-            track_label = m.get("track_label") or ("Test files" if "test" in str(m.get("track", "")).lower() else "Milestone")
-            if track_label == "Test files":
-                display_id = f"T{m_idx}"
-            else:
-                display_id = str(m_idx)
 
             m_title_raw = m.get("title", "")
             if not m_title_raw:

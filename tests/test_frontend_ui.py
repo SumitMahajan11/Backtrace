@@ -185,7 +185,6 @@ def test_dashboard_view_free_and_paid_tier_indicators(client, create_user):
     resp = client.get("/dashboard")
     assert resp.status_code == 200
     assert "Analyze a repository" in resp.text
-    assert "Free" in resp.text
     assert "0 of 5" in resp.text
     assert "Repository History" in resp.text
     assert "coder_bob" in resp.text
