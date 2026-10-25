@@ -173,6 +173,9 @@ from fastapi.staticfiles import StaticFiles
 _static_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static")
 if os.path.isdir(_static_dir):
     app.mount("/static", StaticFiles(directory=_static_dir), name="static")
+else:
+    logger.error("Static directory not found: %s", _static_dir)
+    raise RuntimeError(f"Static directory not found: {_static_dir}")
 
 
 @app.get("/health", tags=["Health"], summary="System Health and Readiness Inspection")
