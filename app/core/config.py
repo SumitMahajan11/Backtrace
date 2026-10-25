@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     # Environment mode
     ENVIRONMENT: Literal["development", "test", "production"] = "production"
     RETENTION_CLEANUP_ENABLED: bool = True
+    STALE_JOB_BOOT_GRACE_MINUTES: int = 2
+    STALE_JOB_TIMEOUT_MINUTES: int = 30
     REWARDS_ENABLED: bool = False
     APP_NAME: str = "Backtrace"
     API_PREFIX: str = "/api"
