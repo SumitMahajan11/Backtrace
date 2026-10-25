@@ -3834,6 +3834,7 @@ def test_progress_view_done_hides_stats_grid_when_counts_missing():
 
 def test_progress_view_done_renders_stats_grid_when_entry_points_is_zero():
     """Verifies that progress_view renders the stats grid showing '0' when entry points count is 0."""
+    import re
     from app.ui.components import progress_view
 
     class MockDoneJobZeroEntries:
@@ -3857,11 +3858,9 @@ def test_progress_view_done_renders_stats_grid_when_entry_points_is_zero():
     html = progress_view(job=MockDoneJobZeroEntries(), current_user=None)
     assert "Files analyzed" in html
     assert '<div class="progress-ready-stats-grid"' in html
-    assert "ready-files-count" in html
-    assert ">12<" in html
-    assert ">3<" in html
-    assert ">0<" in html
-    assert '<div id="ready-entry-count"' in html
+    assert re.search(r'id="ready-files-count"[^>]*>\s*12\s*<', html)
+    assert re.search(r'id="ready-modules-count"[^>]*>\s*3\s*<', html)
+    assert re.search(r'id="ready-entry-count"[^>]*>\s*0\s*<', html)
 
 
 
