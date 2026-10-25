@@ -148,22 +148,39 @@ def test_nav_shell_quota_and_tier_consistency(client, create_user, test_db):
             stripe_subscription_id="sub_pro_123",
             status="active",
         )
+        from app.storage.analysis_job_repository import AnalysisJobRepository
+        job = AnalysisJobRepository.create_job(
+            session=session,
+            user_id=user_free.id,
+            repo_url="https://github.com/owner/free-nav-test",
+            status="completed",
+        )
+        AnalysisJobRepository.update_job_status(
+            session=session,
+            job_id=job.id,
+            status="completed",
+            report_markdown="# Report\n\n- **Total Analyzed Files**: 5\n",
+            graph_data={"nodes": [{"id": "a"}]},
+        )
+        job_id = job.id
         session.commit()
 
     # Free User Checks
     token_free = create_access_token(user_id=user_free.id, github_id=user_free.github_id, github_username=user_free.github_username)
     client.cookies.set("access_token", token_free)
 
+    import re
     resp_free_dash = client.get("/dashboard")
+    assert re.search(r"Free \(", resp_free_dash.text, re.I) is None
     assert "2 of 5 analyses used this month" in resp_free_dash.text
-    assert "Free (2 / 5)" in resp_free_dash.text
-    assert "FREE (" not in resp_free_dash.text
     assert "@nav_free_user" in resp_free_dash.text
     assert "/auth/logout" in resp_free_dash.text
 
     resp_free_set = client.get("/settings")
-    assert "Free (2 / 5)" in resp_free_set.text
-    assert "FREE (" not in resp_free_set.text
+    assert re.search(r"Free \(", resp_free_set.text, re.I) is None
+
+    resp_free_report = client.get(f"/report/{job_id}")
+    assert re.search(r"Free \(", resp_free_report.text, re.I) is None
 
     # Pro User Checks
     token_pro = create_access_token(user_id=user_pro.id, github_id=user_pro.github_id, github_username=user_pro.github_username)

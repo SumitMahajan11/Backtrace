@@ -181,15 +181,7 @@ def nav_shell(
             </div>
             """
         else:
-            usage = billing_status.get("monthly_usage", billing_status.get("quota_used", 0))
-            limit = billing_status.get("monthly_quota", billing_status.get("quota_limit", 5))
-            tier_tag = f"""
-            <div class="tag" id="nav-tier-tag" style="display: inline-flex; align-items: center; gap: 0.35rem;">
-                <span class="chip-dot brass"></span>
-                <span style="font-family: var(--font-mono); font-size: 13px; font-weight: 600; color: var(--accent);">Free ({usage} / {limit})</span>
-                <!-- Free ({usage}/{limit}) -->
-            </div>
-            """
+            tier_tag = ""
 
     dashboard_active = "active" if active_route == "/dashboard" else ""
     rewards_active = "active" if active_route in ("/rewards", "/points") else ""
