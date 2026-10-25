@@ -838,6 +838,16 @@ def page_shell(
             background: var(--surface-2);
             border: 1px solid var(--border);
             color: var(--text-muted);
+            white-space: nowrap;
+        }}
+
+        .status-pill {{
+            white-space: nowrap;
+        }}
+
+        .status-col {{
+            min-width: 120px;
+            white-space: nowrap;
         }}
 
         .badge-free {{
@@ -2071,7 +2081,7 @@ def dashboard_view(
                 <div style="font-family: var(--font-mono); font-size: 0.8125rem; color: var(--text-muted); margin-top: 0.2rem; overflow-wrap: anywhere;">{repo_url}</div>
                 {repo_error_html}
             </td>
-            <td style="padding: 0.85rem 1rem; border-bottom: 1px solid var(--border);"><span class="badge {status_class}">{status_label}</span></td>
+            <td class="status-col" style="padding: 0.85rem 1rem; border-bottom: 1px solid var(--border); min-width: 120px; white-space: nowrap;"><span class="badge status-pill {status_class}" style="white-space: nowrap;">{status_label}</span></td>
             <td style="padding: 0.85rem 1rem; border-bottom: 1px solid var(--border);">{progress_html}</td>
             <td style="padding: 0.85rem 1rem; border-bottom: 1px solid var(--border); color: var(--text-muted); font-size: 13px;">
                 <div>{created_at}</div>
@@ -2093,7 +2103,7 @@ def dashboard_view(
                     <span>{repo_display}</span>
                     {runs_html}
                 </div>
-                <span class="badge {status_class}" style="flex-shrink: 0;">{status_label}</span>
+                <span class="badge status-pill {status_class}" style="flex-shrink: 0; white-space: nowrap;">{status_label}</span>
             </div>
             <div style="font-family: var(--font-mono); font-size: 0.8125rem; color: var(--text-muted); overflow-wrap: anywhere; word-break: break-word; margin-bottom: 0.5rem;">{repo_url}</div>
             {repo_error_html}
@@ -2132,7 +2142,7 @@ def dashboard_view(
                 <thead>
                     <tr style="border-bottom: 1px solid var(--border); background: var(--surface-2);">
                         <th style="padding: 0.75rem 1rem; text-align: left; font-size: 13px; font-family: var(--font-ui); color: var(--text-muted);">Repository</th>
-                        <th style="padding: 0.75rem 1rem; text-align: left; font-size: 13px; font-family: var(--font-ui); color: var(--text-muted);">Status</th>
+                        <th class="status-col" style="padding: 0.75rem 1rem; text-align: left; font-size: 13px; font-family: var(--font-ui); color: var(--text-muted); min-width: 120px; white-space: nowrap;">Status</th>
                         <th style="padding: 0.75rem 1rem; text-align: left; font-size: 13px; font-family: var(--font-ui); color: var(--text-muted);">Learning progress</th>
                         <th style="padding: 0.75rem 1rem; text-align: left; font-size: 13px; font-family: var(--font-ui); color: var(--text-muted);">Submitted</th>
                         <th style="padding: 0.75rem 1rem; text-align: right; font-size: 13px; font-family: var(--font-ui); color: var(--text-muted); white-space: nowrap;">Action</th>

@@ -3657,3 +3657,124 @@ def test_progress_page_real_server_phase_names_playwright(test_db):
         server_thread.join(timeout=2.0)
         app.dependency_overrides.clear()
 
+
+def test_dashboard_status_pill_single_line_height_1440_playwright(test_db):
+    """
+    Playwright test at 1440px viewport asserting that every .status-pill
+    in the dashboard table has a single-line height (<= 32px).
+    """
+    import socket
+    import threading
+    import time
+    import uvicorn
+    from playwright.sync_api import sync_playwright
+    from app.main import app
+    from app.models.db import UserModel
+    from app.storage.analysis_job_repository import AnalysisJobRepository
+    from app.security.auth import create_access_token
+    from app.api.dependencies import get_current_user_optional, get_db
+
+    TestingSessionLocal, _ = test_db
+
+    def override_get_db():
+        session = TestingSessionLocal()
+        try:
+            yield session
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    with TestingSessionLocal() as session:
+        user = UserModel(
+            github_id=98766,
+            github_username="status_pill_user",
+            email="pill_test@example.com",
+        )
+        session.add(user)
+        session.commit()
+        session.refresh(user)
+        user_id = user.id
+
+        for repo_url, status in [
+            ("https://github.com/owner/completed-repo", "completed"),
+            ("https://github.com/owner/running-repo", "running"),
+            ("https://github.com/owner/failed-repo", "failed"),
+            ("https://github.com/owner/pending-repo", "pending"),
+        ]:
+            AnalysisJobRepository.create_job(
+                session=session,
+                user_id=user_id,
+                repo_url=repo_url,
+                status=status,
+            )
+
+    token = create_access_token(
+        user_id=user_id,
+        github_id=98766,
+        github_username="status_pill_user",
+    )
+
+    def override_get_current_user():
+        with TestingSessionLocal() as s:
+            u = s.query(UserModel).filter_by(id=user_id).first()
+            if u:
+                s.refresh(u)
+                s.expunge(u)
+            return u
+
+    app.dependency_overrides[get_current_user_optional] = override_get_current_user
+    app.dependency_overrides[get_db] = override_get_db
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+
+    config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="error")
+    server = uvicorn.Server(config)
+    server.install_signal_handlers = lambda: None
+    server_thread = threading.Thread(target=server.run, daemon=True)
+    server_thread.start()
+
+    for _ in range(50):
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=0.1):
+                break
+        except OSError:
+            time.sleep(0.05)
+
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            context = browser.new_context(viewport={"width": 1440, "height": 900})
+            context.add_cookies([
+                {
+                    "name": "access_token",
+                    "value": token,
+                    "domain": "127.0.0.1",
+                    "path": "/",
+                }
+            ])
+            page = context.new_page()
+            page.set_viewport_size({"width": 1440, "height": 900})
+            page.goto(f"http://127.0.0.1:{port}/dashboard", wait_until="domcontentloaded")
+
+            table = page.locator(".history-table-container")
+            table.wait_for(state="visible")
+
+            pills = page.locator("table .status-pill").all()
+            assert len(pills) >= 4
+            for pill in pills:
+                box = pill.bounding_box()
+                assert box is not None
+                assert box["height"] <= 32, f"Expected single-line height <= 32px, got {box['height']}"
+
+            browser.close()
+    finally:
+        server.should_exit = True
+        server_thread.join(timeout=2.0)
+        app.dependency_overrides.clear()
+
+
