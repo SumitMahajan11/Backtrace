@@ -292,3 +292,66 @@ Calibration note.
     # 2. Verify all 6 domains appear in the Dependency Graph Legend
     for dom in ["CORE", "BACKEND", "FRONTEND", "DATABASE", "CONFIG", "TESTS"]:
         assert f">{dom}</span>" in html
+
+
+def test_report_view_legacy_0_based_fixture_no_milestone_0_no_layer_0():
+    """Validates that a 0-based legacy fixture produces 1-based milestone labels and Layer columns, with no Milestone 0 or Layer 0."""
+    from app.ui.components import report_view
+    from app.models.db import UserModel
+
+    dummy_user = UserModel(id=1, github_id=123, github_username="tester", email="tester@example.com")
+    job_mock = {
+        "id": 101,
+        "repo_name": "legacy-repo",
+        "repo_url": "https://github.com/example/legacy-repo",
+        "created_at": "2026-10-01 10:00:00 UTC",
+        "execution_time_seconds": 2.5,
+    }
+    raw_md = """# Architectural Reverse-Engineering Report: `legacy-repo`
+## 1. Executive Architecture Overview
+Some overview text.
+## 2. Sequence Reasoning & Confidence Calibration
+Calibration details.
+## 3. Step-by-Step Architectural Milestones
+### Milestone 0: Core Foundation (Tier 0)
+**[HIGH CONFIDENCE]** -- *Foundation Layer*
+**Overview:** Foundation overview.
+**Included Files:**
+- `app/core.py`
+### Milestone 1: API Layer (Tier 1)
+**[HIGH CONFIDENCE]** -- *Routing and Controllers*
+**Overview:** API overview.
+**Included Files:**
+- `app/api.py`
+"""
+    graph_data = {
+        "nodes": [
+            {"id": "app/core.py", "path": "app/core.py", "tier": 0, "domain": "core"},
+            {"id": "app/api.py", "path": "app/api.py", "tier": 1, "domain": "api"},
+        ],
+        "edges": [{"source": "app/core.py", "target": "app/api.py"}],
+        "milestones": [
+            {"tier": 0, "title": "Milestone 0: Core Foundation", "display_id": "0", "included_files": ["app/core.py"]},
+            {"tier": 1, "title": "Milestone 1: API Layer", "display_id": "1", "included_files": ["app/api.py"]},
+        ],
+    }
+    html = report_view(
+        job=job_mock,
+        raw_markdown=raw_md,
+        graph_data=graph_data,
+        quiz_data=None,
+        current_user=dummy_user,
+    )
+
+    # Must NOT have 0-based labels
+    assert "Milestone 0" not in html
+    assert "MILESTONE 0" not in html
+    assert "Layer 0" not in html
+    assert "TIER 0" not in html
+
+    # Must have 1-based labels derived from list position
+    assert "Milestone 1" in html
+    assert "Milestone 2" in html
+    assert "Layer 1" in html
+    assert "Layer 2" in html
+

@@ -2510,15 +2510,15 @@ def test_milestone_brief_rendering_with_data_and_omission_paths(client, create_u
     assert resp.status_code == 200
     html = resp.text
 
-    # Milestone 0 checks (Populated Data Path)
-    assert "Milestone 0 Structured Brief" in html
+    # Milestone 1 checks (Populated Data Path - list position 1)
+    assert "Milestone 1 Structured Brief" in html
     assert "Real overview of Milestone 0 core foundation layer." in html
     assert "KernelInit" in html
-    # Example I/O is NOT in graph_data -> Must NOT be in Milestone 0 brief
+    # Example I/O is NOT in graph_data -> Must NOT be in Milestone 1 brief
     assert 'class="brief-example-io-section"' not in html
 
-    # Milestone 1 checks (Omission / Missing Data Path)
-    assert "Milestone 1 Structured Brief" in html
+    # Milestone 2 checks (Omission / Missing Data Path - list position 2)
+    assert "Milestone 2 Structured Brief" in html
     assert "No objective text available for this milestone." in html
     assert "Any milestone module functions/classes" in html
 
@@ -2579,7 +2579,7 @@ def test_starter_code_unavailable_fallback_notice(client, create_user, test_db):
     html = resp.text
 
     # Brief is still shown
-    assert "Milestone 0 Structured Brief" in html
+    assert "Milestone 1 Structured Brief" in html
     assert "Defines environment configuration constants." in html
     # Visible starter code notice is rendered
     assert 'id="starter-unavailable-notice-0"' in html

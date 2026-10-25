@@ -4175,15 +4175,17 @@ def render_milestone_body_fragment(
         m_tier = m_idx
 
     track_label = m.get("track_label") or ("Test files" if "test" in str(m.get("track", "")).lower() else "Milestone")
-    raw_disp_id = m.get("display_id")
-    if raw_disp_id:
-        display_id = str(raw_disp_id)
-    elif track_label == "Test files":
-        display_id = f"T{m_tier if m_tier > 0 else m_idx}"
+    if track_label == "Test files":
+        display_id = f"T{m_idx}"
     else:
-        display_id = str(m_tier if m_tier > 0 else m_idx)
+        display_id = str(m_idx)
 
     m_title_raw = m.get("title", "")
+    if not m_title_raw:
+        m_title_raw = f"{track_label} {display_id}"
+    else:
+        m_title_raw = re.sub(r"\bMilestone\s+0\b", f"Milestone {display_id}", m_title_raw, flags=re.IGNORECASE)
+        m_title_raw = re.sub(r"\bTier\s+0\b", f"Layer {display_id}", m_title_raw, flags=re.IGNORECASE)
     m_title = sanitize_text(m_title_raw)
     m_role_raw = m.get("architectural_role", "")
     m_summary_raw = m.get("overview", "")
@@ -4517,8 +4519,8 @@ def render_milestone_body_fragment(
     </div>
     """
 
-    first_target_file = sanitize_text(m_files[0]) if m_files else f"milestone_{m_tier}.py"
-    role_context = render_user_markdown(m_role_raw) if m_role_raw else (render_user_markdown(m_title_raw) if m_title_raw else f"Milestone {m_tier}")
+    first_target_file = sanitize_text(m_files[0]) if m_files else f"milestone_{display_id}.py"
+    role_context = render_user_markdown(m_role_raw) if m_role_raw else (render_user_markdown(m_title_raw) if m_title_raw else f"Milestone {display_id}")
 
     guess_file_tabs_html = ""
     for f_idx, g_file in enumerate(m_files):
@@ -4719,7 +4721,7 @@ def render_milestone_body_fragment(
                             <polyline points="8 6 2 12 8 18"></polyline>
                         </svg>
                         <span style="font-family: var(--font-mono); font-size: 0.8125rem; font-weight: 600; color: var(--text); ">
-                            Milestone {m_tier} Implementation Workspace
+                            Milestone {display_id} Implementation Workspace
                         </span>
                     </div>
                     <span class="tag" style="font-size: 0.8125rem;">Structure &amp; Execution Verified</span>
@@ -4838,15 +4840,18 @@ def _build_milestone_quiz_items(
         tier = m_idx
 
     track_label = m.get("track_label") or ("Test files" if "test" in str(m.get("track", "")).lower() else "Milestone")
-    raw_disp_id = m.get("display_id")
-    if raw_disp_id:
-        display_id = str(raw_disp_id)
-    elif track_label == "Test files":
-        display_id = f"T{tier if tier > 0 else m_idx}"
+    if track_label == "Test files":
+        display_id = f"T{m_idx}"
     else:
-        display_id = str(tier if tier > 0 else m_idx)
+        display_id = str(m_idx)
 
-    m_title = m.get("title", f"Milestone {display_id}")
+    m_title_raw = m.get("title", "")
+    if not m_title_raw:
+        m_title_raw = f"{track_label} {display_id}"
+    else:
+        m_title_raw = re.sub(r"\bMilestone\s+0\b", f"Milestone {display_id}", m_title_raw, flags=re.IGNORECASE)
+        m_title_raw = re.sub(r"\bTier\s+0\b", f"Layer {display_id}", m_title_raw, flags=re.IGNORECASE)
+    m_title = m_title_raw
     m_files = m.get("included_files", [])
     m_exports = m.get("exported_symbols", [])
 
@@ -5482,12 +5487,13 @@ def report_view(
         for t_idx, t_val in enumerate(sorted_tiers):
             col_x = padding_x + t_idx * col_step
             tier_nodes = tiers[t_val]
+            layer_num = t_idx + 1
 
             # Column header
             svg_columns_html += f"""
             <g class="dag-column" transform="translate({col_x}, 0)">
                 <rect x="0" y="16" width="{col_width}" height="28" rx="4" fill="var(--panel-raised)" stroke="var(--border)" />
-                <text x="12" y="34" fill="var(--accent)" font-family="var(--font-mono)" font-size="11" font-weight="600">TIER {t_val}</text>
+                <text x="12" y="34" fill="var(--accent)" font-family="var(--font-mono)" font-size="11" font-weight="600">Layer {layer_num}</text>
                 <text x="{col_width - 12}" y="34" fill="var(--text-muted)" font-family="var(--font-mono)" font-size="10" text-anchor="end">{len(tier_nodes)} nodes</text>
                 <line x1="{col_width // 2}" y1="48" x2="{col_width // 2}" y2="{svg_height - 20}" stroke="var(--hairline-soft)" stroke-dasharray="3,3" opacity="0.4" />
             </g>
@@ -5904,15 +5910,18 @@ def report_view(
                 m_tier = m_idx
 
             track_label = m.get("track_label") or ("Test files" if "test" in str(m.get("track", "")).lower() else "Milestone")
-            raw_disp_id = m.get("display_id")
-            if raw_disp_id:
-                display_id = str(raw_disp_id)
-            elif track_label == "Test files":
-                display_id = f"T{m_tier if m_tier > 0 else m_idx}"
+            if track_label == "Test files":
+                display_id = f"T{m_idx}"
             else:
-                display_id = str(m_tier if m_tier > 0 else m_idx)
+                display_id = str(m_idx)
 
-            m_title = sanitize_text(m.get("title", f"Milestone {display_id}"))
+            m_title_raw = m.get("title", "")
+            if not m_title_raw:
+                m_title_raw = f"{track_label} {display_id}"
+            else:
+                m_title_raw = re.sub(r"\bMilestone\s+0\b", f"Milestone {display_id}", m_title_raw, flags=re.IGNORECASE)
+                m_title_raw = re.sub(r"\bTier\s+0\b", f"Layer {display_id}", m_title_raw, flags=re.IGNORECASE)
+            m_title = sanitize_text(m_title_raw)
             att = attempts_by_tier.get(m_tier) if attempts_by_tier else None
             if isinstance(att, dict):
                 att_status = att.get("status") or att.get("attempt_status") or "not_started"
@@ -5982,15 +5991,17 @@ def report_view(
                 m_tier = m_idx
 
             track_label = m.get("track_label") or ("Test files" if "test" in str(m.get("track", "")).lower() else "Milestone")
-            raw_disp_id = m.get("display_id")
-            if raw_disp_id:
-                display_id = str(raw_disp_id)
-            elif track_label == "Test files":
-                display_id = f"T{m_tier if m_tier > 0 else m_idx}"
+            if track_label == "Test files":
+                display_id = f"T{m_idx}"
             else:
-                display_id = str(m_tier if m_tier > 0 else m_idx)
+                display_id = str(m_idx)
 
             m_title_raw = m.get("title", "")
+            if not m_title_raw:
+                m_title_raw = f"{track_label} {display_id}"
+            else:
+                m_title_raw = re.sub(r"\bMilestone\s+0\b", f"Milestone {display_id}", m_title_raw, flags=re.IGNORECASE)
+                m_title_raw = re.sub(r"\bTier\s+0\b", f"Layer {display_id}", m_title_raw, flags=re.IGNORECASE)
             m_title = sanitize_text(m_title_raw)
             m_role_raw = m.get("architectural_role", "")
             m_role = render_user_markdown(m_role_raw) if m_role_raw else ""
@@ -6391,8 +6402,8 @@ def report_view(
             </div>
             """
 
-            first_target_file = sanitize_text(m_files[0]) if m_files else f"milestone_{m_tier}.py"
-            role_context = render_user_markdown(m_role_raw) if m_role_raw else (render_user_markdown(m_title_raw) if m_title_raw else f"Milestone {m_tier}")
+            first_target_file = sanitize_text(m_files[0]) if m_files else f"milestone_{display_id}.py"
+            role_context = render_user_markdown(m_role_raw) if m_role_raw else (render_user_markdown(m_title_raw) if m_title_raw else f"Milestone {display_id}")
 
             guess_file_tabs_html = ""
             for f_idx, g_file in enumerate(m_files):
@@ -6671,7 +6682,7 @@ def report_view(
                                     <polyline points="8 6 2 12 8 18"></polyline>
                                 </svg>
                                 <span style="font-family: var(--font-mono); font-size: 0.8125rem; font-weight: 600; color: var(--text); ">
-                                    Milestone {m_tier} Implementation Workspace
+                                    Milestone {display_id} Implementation Workspace
                                 </span>
                             </div>
                             <span class="tag" style="font-size: 0.8125rem;">Structure &amp; Execution Verified</span>
