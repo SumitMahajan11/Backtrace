@@ -2093,9 +2093,38 @@ def report_view(
         lazy_milestones=lazy_milestones,
     )
 
-    # Extract milestones pane
+    # Extract milestones pane and wrap milestone body containers if needed
     m_match = re.search(r'(<div class="report-tab-pane" id="tab-pane-milestones".*?)(?=<div class="report-tab-pane" id="tab-pane-quiz")', fe1_html, re.DOTALL)
     milestones_pane = m_match.group(1).strip() if m_match else '<div class="report-tab-pane" id="tab-pane-milestones" role="tabpanel" aria-labelledby="tab-btn-milestones" style="display: none;"></div>'
+
+    # Ensure each milestone pane has milestone-header and milestone-body-container
+    panes = re.split(r'(?=<div class="milestone-pane)', milestones_pane)
+    injected_panes = []
+    for p in panes:
+        if not p.startswith('<div class="milestone-pane'):
+            injected_panes.append(p)
+            continue
+        tier_m = re.search(r'data-tier="(\d+)"', p) or re.search(r'id="milestone-pane-(\d+)"', p)
+        tier = tier_m.group(1) if tier_m else "1"
+        if f'id="milestone-body-container-{tier}"' in p:
+            injected_panes.append(p)
+            continue
+        p = re.sub(
+            r'<div class="milestone-pane-header"',
+            f'<div class="milestone-header milestone-pane-header" id="milestone-header-{tier}" data-tier="{tier}" onclick="toggleMilestoneBody(window.BACKTRACE_JOB_ID, {tier})" style="cursor: pointer;"',
+            p,
+            count=1
+        )
+        editor_idx = p.find(f'id="milestone-editor-card-{tier}"')
+        if editor_idx != -1:
+            div_start = p.rfind('<div class="milestone-editor-wrapper"', 0, editor_idx)
+            if div_start != -1:
+                p = p[:div_start] + f'<div class="milestone-body-container" id="milestone-body-container-{tier}" style="display: block;">\n' + p[div_start:]
+                last_div = p.rfind('</div>')
+                if last_div != -1:
+                    p = p[:last_div] + '</div>\n' + p[last_div:]
+        injected_panes.append(p)
+    milestones_pane = "".join(injected_panes)
 
     # Extract quiz pane
     q_match = re.search(r'(<div class="report-tab-pane" id="tab-pane-quiz".*?)(?=\s*</div>\s*</div>\s*(?:<script|</main>|$))', fe1_html, re.DOTALL)
@@ -2121,10 +2150,8 @@ def report_view(
         """
         runtime_script = runtime_script.replace("if (!VALID_REPORT_TABS.includes(tabKey)) {", sync_code)
 
-    # Extract CodeMirror headers if present
-    cm_head = ""
-    if 'codemirror.min.css' in fe1_html:
-        cm_head = """    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+    # CodeMirror cdnjs styles
+    cm_head = """    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
     <style>
         .CodeMirror {
@@ -2144,6 +2171,51 @@ def report_view(
     </style>
 """
 
+    # CodeMirror and helper scripts
+    cm_scripts = """    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/clike/clike.min.js"></script>
+    <script src="/static/highlight.min.js"></script>
+"""
+
+    quiz_helper_js = """    <script>
+    function selectQuizOption(tier, qIdx, optIdx, prefix) {
+        prefix = prefix || '';
+        const selector = 'input[name="' + prefix + 'm_quiz_' + tier + '_' + qIdx + '"][value="' + optIdx + '"]';
+        const radio = document.querySelector(selector);
+        if (radio) {
+            radio.checked = true;
+            radio.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+    }
+
+    document.addEventListener('change', function(e) {
+        if (e.target && e.target.matches('input[type="radio"][name*="m_quiz_"]')) {
+            const qEl = e.target.closest('.milestone-quiz-q');
+            if (!qEl) return;
+            const correctIdx = parseInt(qEl.getAttribute('data-correct-idx') || '0', 10);
+            const selectedVal = parseInt(e.target.value, 10);
+            const feedbackEl = qEl.querySelector('.quiz-feedback');
+            const explanationEl = qEl.querySelector('.quiz-explanation');
+            if (feedbackEl) {
+                feedbackEl.style.display = 'inline-block';
+                if (selectedVal === correctIdx) {
+                    feedbackEl.style.color = 'var(--success)';
+                    feedbackEl.textContent = '✓ Correct';
+                } else {
+                    feedbackEl.style.color = 'var(--crimson)';
+                    feedbackEl.textContent = '✗ Incorrect';
+                }
+            }
+            if (explanationEl) {
+                explanationEl.style.display = 'block';
+            }
+        }
+    });
+    </script>
+"""
+
     # Extract Job Metadata
     try:
         job_id = int(job.id if hasattr(job, "id") else (job.get("id", 0) if isinstance(job, dict) else 0))
@@ -2153,7 +2225,9 @@ def report_view(
     raw_repo_name = getattr(job, "repo_name", None) if hasattr(job, "repo_name") else (job.get("repo_name") if isinstance(job, dict) else None)
     repo_name = sanitize_text(raw_repo_name or (repo_url.rstrip("/").split("/")[-1] if "/" in repo_url else repo_url))
     raw_created_at = getattr(job, "created_at", None) if hasattr(job, "created_at") else (job.get("created_at") if isinstance(job, dict) else None)
-    created_at = format_time_tag(raw_created_at)
+    created_at = format_time_tag(raw_created_at) if raw_created_at else ""
+    if "Just now" in created_at:
+        created_at = ""
     exec_time = getattr(job, "execution_time_seconds", None) if hasattr(job, "execution_time_seconds") else (job.get("execution_time_seconds") if isinstance(job, dict) else None)
     duration = f"{exec_time:.1f}s" if isinstance(exec_time, (int, float)) else "Completed"
     is_showcase = bool(getattr(job, "is_showcase", False) if hasattr(job, "is_showcase") else (job.get("is_showcase", False) if isinstance(job, dict) else False))
@@ -2928,6 +3002,16 @@ def report_view(
         </form>
         """
 
+    meta_spans = [
+        f'<span>Target: <a href="{repo_url}" target="_blank" rel="noopener noreferrer" style="color: var(--text-muted);">{repo_url}</a></span>'
+    ]
+    if raw_created_at and created_at and "Just now" not in created_at:
+        meta_spans.append(f'<span>Synthesized: {created_at}</span>')
+    meta_spans.append(f'<span>Duration: {duration}</span>')
+    if narration_badge_html:
+        meta_spans.append(narration_badge_html)
+    f2_meta_html = " <span>&bull;</span> ".join(meta_spans)
+
     top_dossier_html = f"""
     <div class="f2-report-header">
         <div class="f2-report-header-top">
@@ -2958,12 +3042,7 @@ def report_view(
                 Codebase Intelligence Report &bull; Structural Syntax Tree &amp; Dependency Reconstruction
             </div>
             <div class="f2-report-meta">
-                <span>Target: <a href="{repo_url}" target="_blank" rel="noopener noreferrer" style="color: var(--text-muted);">{repo_url}</a></span>
-                <span>&bull;</span>
-                <span>Synthesized: {created_at}</span>
-                <span>&bull;</span>
-                <span>Duration: {duration}</span>
-                {narration_badge_html}
+                {f2_meta_html}
             </div>
         </div>
     </div>
@@ -3018,6 +3097,8 @@ def report_view(
     <link rel="stylesheet" href="/static/frontend2/map.css">
     """
 
+    extra_scripts = cm_scripts + (runtime_script or "") + quiz_helper_js
+
     return page_shell(
         repo_name,
         content,
@@ -3025,7 +3106,7 @@ def report_view(
         active_route="/showcase" if is_showcase else "/report",
         billing_status=None if is_showcase else billing_status,
         extra_head=extra_head,
-        extra_scripts=runtime_script,
+        extra_scripts=extra_scripts,
     )
 
 
