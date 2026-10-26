@@ -548,7 +548,7 @@ class TestFrontend2ReportUnit:
         assert not duplicates, f"Duplicate scripts found: {duplicates}"
 
     def test_milestone_container_div_balanced(self, mock_user, monkeypatch):
-        """For the 100-node fixture, html.count('<div') must equal html.count('</div>') in both lazy_milestones=True and False."""
+        """For the 100-node fixture with 3 milestones and quiz data with 2 questions, html.count('<div') must equal html.count('</div>') in both lazy_milestones=True and False."""
         monkeypatch.setenv("FRONTEND_VERSION", "2")
         graph_data = _generate_100_node_graph()
         job = AnalysisJobModel(
@@ -574,10 +574,49 @@ class TestFrontend2ReportUnit:
                 "Fast, unopinionated routing engine.\n\n"
                 "**Included Files:**\n"
                 "- `src/module_0/file_0.py`\n\n"
-                "**Key Exported Symbols:** `Router, route`\n"
+                "**Key Exported Symbols:** `Router, route`\n\n"
+                "### Milestone 2: Middleware Pipeline (Tier 2)\n"
+                "**[HIGH CONFIDENCE]** -- *Request processing middleware pipeline*\n\n"
+                "**Overview:**\n"
+                "Request processing middleware pipeline.\n\n"
+                "**Included Files:**\n"
+                "- `src/module_1/file_5.py`\n\n"
+                "**Key Exported Symbols:** `use, handle`\n\n"
+                "### Milestone 3: Application Server (Tier 3)\n"
+                "**[HIGH CONFIDENCE]** -- *HTTP application server core*\n\n"
+                "**Overview:**\n"
+                "HTTP application server core.\n\n"
+                "**Included Files:**\n"
+                "- `src/module_2/file_10.py`\n\n"
+                "**Key Exported Symbols:** `listen, createServer`\n"
             ),
         )
-        quiz_data = {"questions": []}
+        quiz_data = {
+            "questions": [
+                {
+                    "question": "What is the primary role of Router in Tier 1?",
+                    "options": [
+                        "Route request dispatching",
+                        "Database compilation",
+                        "CSS styling",
+                        "Packet inspection",
+                    ],
+                    "correct_answer": 0,
+                    "explanation": "Router dispatches HTTP requests to handlers.",
+                },
+                {
+                    "question": "Which mechanism processes middleware in Tier 2?",
+                    "options": [
+                        "Sequential pipeline execution",
+                        "Thread termination",
+                        "Random assignment",
+                        "Synchronous blocking",
+                    ],
+                    "correct_answer": 0,
+                    "explanation": "Middleware functions run in sequential pipeline order.",
+                },
+            ]
+        }
 
         for lazy in [True, False]:
             html_out = fe2_report_view(
