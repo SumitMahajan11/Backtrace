@@ -134,8 +134,9 @@
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     border-bottom: 1px solid var(--border-subtle, #292a2f);
-    margin: 0 -1rem;
-    padding: 0 1rem;
+    width: 100%;
+    box-sizing: border-box;
+    overflow-x: hidden;
 }
 
 .report-tabs-nav {
@@ -143,6 +144,7 @@
     align-items: center;
     gap: 0.25rem;
     overflow-x: auto;
+    max-width: 100%;
     scrollbar-width: none;
     -webkit-overflow-scrolling: touch;
 }
