@@ -85,6 +85,7 @@ def _generate_100_node_graph() -> Dict[str, Any]:
             "confidence": "high" if i % 3 == 0 else ("medium" if i % 3 == 1 else "low"),
             "exports": [f"func_{i}", f"Class_{i}"],
             "is_entry_point": (i == 0 or i == 1),
+            "content": f"# Sample code for {label}\ndef main(): pass\n",
         })
 
     # Create edges from earlier tiers to later tiers
@@ -421,8 +422,49 @@ class TestFrontend2ReportUnit:
 
         assert "Layer 0" not in html_out
         assert "Layer 1" in html_out
+        assert "Layer 2" in html_out
+        assert html_out.count(">Layer 1<") == 1
         assert "Milestone 0" not in html_out
         assert "Milestone 1" in html_out
+
+    def test_created_at_missing_omits_line_and_never_prints_just_now(self, mock_user, monkeypatch):
+        """Never print 'Just now'. If created_at is missing, omit the Synthesized line."""
+        monkeypatch.setenv("FRONTEND_VERSION", "2")
+        job_no_created_at = AnalysisJobModel(
+            id=306,
+            user_id=mock_user.id,
+            repo_url="https://github.com/org/nocreated",
+            repo_name="nocreated",
+            status="completed",
+            created_at=None,
+        )
+        html_out = fe2_report_view(
+            job=job_no_created_at,
+            raw_markdown="# Report\n## Overview\nTest",
+            graph_data={"nodes": [], "edges": []},
+            quiz_data={},
+            current_user=mock_user,
+        )
+        assert "Synthesized:" not in html_out
+        assert "Just now" not in html_out
+
+        # Even with a recent timestamp, never print "Just now"
+        job_recent = AnalysisJobModel(
+            id=307,
+            user_id=mock_user.id,
+            repo_url="https://github.com/org/recent",
+            repo_name="recent",
+            status="completed",
+            created_at=datetime.now(timezone.utc),
+        )
+        html_recent = fe2_report_view(
+            job=job_recent,
+            raw_markdown="# Report\n## Overview\nTest",
+            graph_data={"nodes": [], "edges": []},
+            quiz_data={},
+            current_user=mock_user,
+        )
+        assert "Just now" not in html_recent
 
     def test_html_size_not_growing_vs_frontend1(self, mock_user, monkeypatch):
         """Frontend2 HTML payload size must not exceed Frontend1 HTML size on the same fixture."""
@@ -506,9 +548,14 @@ class TestFrontend2ReportPlaywright:
                     "- **Total Analyzed Files**: 100\n"
                     "- **Domain Categories**: 5\n"
                     "- **Entry Point Files**: src/module_0/file_0.py\n\n"
-                    "## Milestones\n"
-                    "### Milestone 1: Routing\n"
-                    "Fast, unopinionated routing engine.\n"
+                    "## 3. Step-by-Step Architectural Milestones\n\n"
+                    "### Milestone 1: Routing (Tier 1)\n"
+                    "**[HIGH CONFIDENCE]** -- *Fast unopinionated routing engine*\n\n"
+                    "**Overview:**\n"
+                    "Fast, unopinionated routing engine.\n\n"
+                    "**Included Files:**\n"
+                    "- `src/module_0/file_0.py`\n\n"
+                    "**Key Exported Symbols:** `Router, route`\n"
                 ),
             )
             session.add(job)
@@ -576,6 +623,11 @@ class TestFrontend2ReportPlaywright:
                 ])
                 page = context.new_page()
 
+                console_errors = []
+                page_errors = []
+                page.on("console", lambda msg: console_errors.append(msg.text) if msg.type == "error" else None)
+                page.on("pageerror", lambda err: page_errors.append(str(err)))
+
                 # Viewports to test
                 viewports = [
                     (390, 844),
@@ -610,6 +662,55 @@ class TestFrontend2ReportPlaywright:
                 page.locator("#tab-btn-milestones").click()
                 page.wait_for_timeout(100)
                 assert page.locator("#tab-pane-milestones").is_visible(), "Milestones tab pane not visible after clicking tab button"
+
+                # Verify Milestone body toggling (Item 7 requirement)
+                milestone_header = page.locator("#milestone-header-1")
+                assert milestone_header.is_visible(), "Milestone header should be visible"
+                body_container = page.locator("#milestone-body-container-1")
+                assert body_container.is_visible(), "Milestone body container should initially be visible"
+
+                # Editor appears: CodeMirror element exists (Item 7 requirement)
+                cm_element = page.locator(".CodeMirror").first
+                assert cm_element.is_visible(), "CodeMirror editor element should exist and be visible"
+
+                # Toggle milestone body: click header to close
+                milestone_header.click()
+                page.wait_for_timeout(150)
+                assert not body_container.is_visible(), "Milestone body container should be hidden after clicking header"
+
+                # Click header to re-open
+                milestone_header.click()
+                page.wait_for_timeout(150)
+                assert body_container.is_visible(), "Milestone body container should be visible after clicking header again"
+
+                # Click a quiz option and assert feedback appears (Item 7 requirement)
+                quiz_option = page.locator("#milestone-quiz-card-1 .quiz-option-row").first
+                assert quiz_option.is_visible(), "Quiz option row should be visible"
+                quiz_option.click()
+                page.wait_for_timeout(150)
+                feedback = page.locator("#milestone-quiz-card-1 .quiz-feedback").first
+                assert feedback.is_visible(), "Quiz feedback should appear after clicking quiz option"
+                feedback_text = feedback.inner_text()
+                assert ("Correct" in feedback_text or "Incorrect" in feedback_text), f"Feedback text unexpected: {feedback_text}"
+
+                # Click Verify and assert request is sent (Item 7 requirement)
+                verify_btn = page.locator("#btn-submit-1")
+                assert verify_btn.is_visible(), "Verify/Submit button should be visible"
+                with page.expect_request(lambda req: f"/api/attempts/{job_id}/1" in req.url and req.method == "POST"):
+                    verify_btn.click()
+
+                # Every script and stylesheet URL on the page returns 200 (Item 7 requirement)
+                script_urls = page.evaluate("() => Array.from(document.querySelectorAll('script[src]')).map(s => s.src)")
+                link_urls = page.evaluate("() => Array.from(document.querySelectorAll('link[rel=\"stylesheet\"], link[rel=\"icon\"], link[rel=\"alternate icon\"]')).map(l => l.href)")
+                all_assets = set(script_urls + link_urls)
+                assert len(all_assets) > 0, "Page should have scripts and stylesheets"
+                for asset_url in all_assets:
+                    resp = page.request.get(asset_url)
+                    assert resp.status == 200, f"Asset URL {asset_url} returned HTTP {resp.status}"
+
+                # No console errors or page errors (Item 7 requirement)
+                assert len(console_errors) == 0, f"Expected 0 console errors, got {len(console_errors)}: {console_errors}"
+                assert len(page_errors) == 0, f"Expected 0 page errors, got {len(page_errors)}: {page_errors}"
 
                 # Switch to Quiz tab
                 page.locator("#tab-btn-quiz").click()
