@@ -706,15 +706,25 @@ class TestFrontend2ReportPlaywright:
                 page.wait_for_timeout(150)
                 assert body_container.is_visible(), "Milestone body container should be visible after clicking header again"
 
-                # Click a quiz option and assert feedback appears (Item 7 requirement)
-                quiz_option = page.locator("#milestone-quiz-card-1 .quiz-option-row").first
-                assert quiz_option.is_visible(), "Quiz option row should be visible"
-                quiz_option.click()
+                # Click a correct option and assert "✓ Correct", then a wrong option and assert "✗ Incorrect"
+                q_el = page.locator("#milestone-quiz-card-1 .milestone-quiz-q").first
+                correct_idx = q_el.get_attribute("data-correct-idx") or "0"
+                wrong_idx = "0" if correct_idx != "0" else "1"
+
+                correct_option = q_el.locator(f'label.quiz-option-row:has(input[value="{correct_idx}"])')
+                assert correct_option.is_visible(), "Correct quiz option row should be visible"
+                correct_option.click()
                 page.wait_for_timeout(150)
-                feedback = page.locator("#milestone-quiz-card-1 .quiz-feedback").first
-                assert feedback.is_visible(), "Quiz feedback should appear after clicking quiz option"
-                feedback_text = feedback.inner_text()
-                assert ("Correct" in feedback_text or "Incorrect" in feedback_text), f"Feedback text unexpected: {feedback_text}"
+                feedback = q_el.locator(".quiz-feedback")
+                assert feedback.is_visible(), "Quiz feedback should appear after clicking correct option"
+                assert "✓ Correct" in feedback.inner_text(), f"Expected '✓ Correct', got: {feedback.inner_text()}"
+
+                wrong_option = q_el.locator(f'label.quiz-option-row:has(input[value="{wrong_idx}"])')
+                assert wrong_option.is_visible(), "Wrong quiz option row should be visible"
+                wrong_option.click()
+                page.wait_for_timeout(150)
+                assert feedback.is_visible(), "Quiz feedback should appear after clicking wrong option"
+                assert "✗ Incorrect" in feedback.inner_text(), f"Expected '✗ Incorrect', got: {feedback.inner_text()}"
 
                 # Click Verify and assert request is sent (Item 7 requirement)
                 verify_btn = page.locator("#btn-submit-1")
