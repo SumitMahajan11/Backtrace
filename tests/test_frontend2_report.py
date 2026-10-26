@@ -633,8 +633,9 @@ class TestFrontend2ReportUnit:
                 f"<div count is {html_out.count('<div')} vs </div> count {html_out.count('</div>')}"
             )
 
-    def test_milestone_and_tab_nesting_hierarchy(self, mock_user, monkeypatch):
-        """Parse report with html.parser and assert each milestone-body-container-N is inside milestone-pane-N and tab-pane-quiz shares parent with tab-pane-milestones."""
+    @pytest.mark.parametrize("lazy", [True, False])
+    def test_milestone_and_tab_nesting_hierarchy(self, mock_user, monkeypatch, lazy):
+        """Parse report with html.parser and assert each milestone-body-container-N is inside milestone-pane-N, pane siblings share parent, and tab-pane-quiz shares parent with tab-pane-milestones."""
         monkeypatch.setenv("FRONTEND_VERSION", "2")
         graph_data = _generate_100_node_graph()
         job = AnalysisJobModel(
@@ -735,47 +736,68 @@ class TestFrontend2ReportUnit:
                 if node is not None and node.parent is not None:
                     self.current = node.parent
 
-        for lazy in [True, False]:
-            html_out = fe2_report_view(
-                job=job,
-                raw_markdown=job.markdown_output,
-                graph_data=graph_data,
-                quiz_data=quiz_data,
-                current_user=mock_user,
-                lazy_milestones=lazy,
-            )
+        html_out = fe2_report_view(
+            job=job,
+            raw_markdown=job.markdown_output,
+            graph_data=graph_data,
+            quiz_data=quiz_data,
+            current_user=mock_user,
+            lazy_milestones=lazy,
+        )
 
-            parser = ReportDomParser()
-            parser.feed(html_out)
+        parser = ReportDomParser()
+        parser.feed(html_out)
 
-            # Assert that each milestone-body-container-N sits inside milestone-pane-N
-            for tier in [1, 2, 3]:
-                body_container = parser.nodes_by_id.get(f"milestone-body-container-{tier}")
-                pane = parser.nodes_by_id.get(f"milestone-pane-{tier}")
-                assert body_container is not None, f"milestone-body-container-{tier} missing in HTML (lazy={lazy})"
-                assert pane is not None, f"milestone-pane-{tier} missing in HTML (lazy={lazy})"
+        # Assert that each milestone-body-container-N sits inside milestone-pane-N
+        for tier in [1, 2, 3]:
+            body_container = parser.nodes_by_id.get(f"milestone-body-container-{tier}")
+            pane = parser.nodes_by_id.get(f"milestone-pane-{tier}")
+            assert body_container is not None, f"milestone-body-container-{tier} missing in HTML (lazy={lazy})"
+            assert pane is not None, f"milestone-pane-{tier} missing in HTML (lazy={lazy})"
 
-                ancestor = body_container.parent
+            ancestor = body_container.parent
+            is_inside = False
+            while ancestor is not None:
+                if ancestor is pane:
+                    is_inside = True
+                    break
+                ancestor = ancestor.parent
+            assert is_inside, f"milestone-body-container-{tier} does not sit inside milestone-pane-{tier} (lazy={lazy})"
+
+        # Assert that milestone-pane-1, -2 and -3 all share one parent
+        pane1 = parser.nodes_by_id.get("milestone-pane-1")
+        pane2 = parser.nodes_by_id.get("milestone-pane-2")
+        pane3 = parser.nodes_by_id.get("milestone-pane-3")
+        assert pane1 is not None and pane2 is not None and pane3 is not None, f"One or more milestone-pane-N missing (lazy={lazy})"
+        assert pane1.parent is not None, f"milestone-pane-1 has no parent (lazy={lazy})"
+        assert pane1.parent is pane2.parent, f"milestone-pane-1 and milestone-pane-2 do not share parent (lazy={lazy})"
+        assert pane1.parent is pane3.parent, f"milestone-pane-1 and milestone-pane-3 do not share parent (lazy={lazy})"
+
+        # Assert that tab-pane-quiz is a direct child of the same parent as tab-pane-milestones
+        quiz_pane = parser.nodes_by_id.get("tab-pane-quiz")
+        milestones_pane = parser.nodes_by_id.get("tab-pane-milestones")
+        assert quiz_pane is not None, f"tab-pane-quiz missing in HTML (lazy={lazy})"
+        assert milestones_pane is not None, f"tab-pane-milestones missing in HTML (lazy={lazy})"
+        assert quiz_pane.parent is not None, f"tab-pane-quiz has no parent (lazy={lazy})"
+        assert milestones_pane.parent is not None, f"tab-pane-milestones has no parent (lazy={lazy})"
+        assert quiz_pane.parent is milestones_pane.parent, (
+            f"tab-pane-quiz parent ({getattr(quiz_pane.parent, 'id', None) or quiz_pane.parent.tag}) "
+            f"does not match tab-pane-milestones parent ({getattr(milestones_pane.parent, 'id', None) or milestones_pane.parent.tag}) "
+            f"(lazy={lazy})"
+        )
+
+        # Assert that tab-pane-quiz is not inside any milestone-pane-N
+        for tier in [1, 2, 3]:
+            pane = parser.nodes_by_id.get(f"milestone-pane-{tier}")
+            if pane is not None:
+                ancestor = quiz_pane.parent
                 is_inside = False
                 while ancestor is not None:
                     if ancestor is pane:
                         is_inside = True
                         break
                     ancestor = ancestor.parent
-                assert is_inside, f"milestone-body-container-{tier} does not sit inside milestone-pane-{tier} (lazy={lazy})"
-
-            # Assert that tab-pane-quiz is a direct child of the same parent as tab-pane-milestones
-            quiz_pane = parser.nodes_by_id.get("tab-pane-quiz")
-            milestones_pane = parser.nodes_by_id.get("tab-pane-milestones")
-            assert quiz_pane is not None, f"tab-pane-quiz missing in HTML (lazy={lazy})"
-            assert milestones_pane is not None, f"tab-pane-milestones missing in HTML (lazy={lazy})"
-            assert quiz_pane.parent is not None, f"tab-pane-quiz has no parent (lazy={lazy})"
-            assert milestones_pane.parent is not None, f"tab-pane-milestones has no parent (lazy={lazy})"
-            assert quiz_pane.parent is milestones_pane.parent, (
-                f"tab-pane-quiz parent ({getattr(quiz_pane.parent, 'id', None) or quiz_pane.parent.tag}) "
-                f"does not match tab-pane-milestones parent ({getattr(milestones_pane.parent, 'id', None) or milestones_pane.parent.tag}) "
-                f"(lazy={lazy})"
-            )
+                assert not is_inside, f"tab-pane-quiz is nested inside milestone-pane-{tier} (lazy={lazy})"
 
 
 
