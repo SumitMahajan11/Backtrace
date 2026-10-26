@@ -20,12 +20,15 @@ def test_frontend_version_2_switch_and_fallback(monkeypatch):
 
     import app.ui
     import app.frontend1.components as fe1_comp
-    from app.ui.components import pricing_view, report_view
+    import app.frontend2.components as fe2_comp
+    from app.ui.components import pricing_view, settings_view, report_view
 
     # Verify fallback from app.ui and app.ui.components
     assert getattr(app.ui, "pricing_view") is fe1_comp.pricing_view
     assert pricing_view is fe1_comp.pricing_view
-    assert report_view is fe1_comp.report_view
+    assert settings_view is fe1_comp.settings_view
+    assert report_view is fe2_comp.report_view
+
 
     # When frontend2 defines an attribute, frontend2 version takes precedence
     import app.frontend2

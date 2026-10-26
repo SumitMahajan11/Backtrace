@@ -6,13 +6,39 @@ import html
 import os
 import re
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from app.core.config import billing_enabled, rewards_enabled
 from app.core.failure_reason import failure_reason
+from app.frontend1.components import (
+    ConfidenceSummary,
+    _parse_report_markdown,
+    _truncate_path_middle,
+    render_safe_markdown,
+    get_narration_source,
+    get_narration_label,
+    confidence_summary,
+    count_code_and_docs_files,
+    extract_readme_summary,
+    get_main_language,
+    get_read_first_files,
+    get_start_here_entry_points,
+    DOMAIN_COLOR_DEFS,
+    SANDBOX_DISABLED_BANNER_TEXT,
+    piston_health_monitor,
+    report_view as fe1_report_view,
+)
 from app.frontend2.icons import render_icon
 from app.models.db import UserModel
 from app.ui.sanitizer import sanitize_text
+
+# Re-export Overview helper functions
+extract_readme_summary = extract_readme_summary
+get_main_language = get_main_language
+get_start_here_entry_points = get_start_here_entry_points
+get_read_first_files = get_read_first_files
+count_code_and_docs_files = count_code_and_docs_files
+
 
 
 def nav_shell(
@@ -188,8 +214,8 @@ def page_shell(
                 <button type="button" class="f2-subnav-tab" id="f2-subnav-graph" onclick="switchReportTab('graph')">
                     {render_icon('map', 16)} Map
                 </button>
-                <button type="button" class="f2-subnav-tab" id="f2-subnav-learning" onclick="switchReportTab('learning')">
-                    {render_icon('book', 16)} Learn
+                <button type="button" class="f2-subnav-tab" id="f2-subnav-milestones" data-tab="milestones" onclick="switchReportTab('milestones')">
+                    {render_icon('book', 16)} Milestones
                 </button>
                 <button type="button" class="f2-subnav-tab" id="f2-subnav-quiz" onclick="switchReportTab('quiz')">
                     {render_icon('check-circle', 16)} Quiz
@@ -208,9 +234,9 @@ def page_shell(
                 {render_icon('map', 20)}
                 <span>Map</span>
             </a>
-            <a href="#learning" class="f2-bottom-tab" id="f2-bottom-learning" onclick="switchReportTab('learning'); return false;">
+            <a href="#milestones" class="f2-bottom-tab" id="f2-bottom-milestones" onclick="switchReportTab('milestones'); return false;">
                 {render_icon('book', 20)}
-                <span>Learn</span>
+                <span>Milestones</span>
             </a>
             <a href="#quiz" class="f2-bottom-tab" id="f2-bottom-quiz" onclick="switchReportTab('quiz'); return false;">
                 {render_icon('check-circle', 20)}
@@ -300,22 +326,22 @@ def page_shell(
             }}
         }});
 
-        function switchReportTab(tabId) {{
-            // Trigger legacy frontend1 tab button if present
-            const btn = document.getElementById('tab-btn-' + tabId);
-            if (btn) {{
-                btn.click();
-            }}
+        if (typeof window.switchReportTab !== 'function') {{
+            window.switchReportTab = function(tabId) {{
+                if (tabId === 'learning') tabId = 'milestones';
+                const btn = document.getElementById('tab-btn-' + tabId);
+                if (btn) {{
+                    btn.click();
+                }}
 
-            // Update subnav active class
-            document.querySelectorAll('.f2-subnav-tab').forEach(el => el.classList.remove('active'));
-            const sub = document.getElementById('f2-subnav-' + tabId);
-            if (sub) sub.classList.add('active');
+                document.querySelectorAll('.f2-subnav-tab').forEach(el => el.classList.remove('active'));
+                const sub = document.getElementById('f2-subnav-' + tabId) || document.getElementById('f2-subnav-' + (tabId === 'milestones' ? 'learning' : tabId));
+                if (sub) sub.classList.add('active');
 
-            // Update bottom bar active class
-            document.querySelectorAll('.f2-bottom-tab').forEach(el => el.classList.remove('active'));
-            const bot = document.getElementById('f2-bottom-' + tabId);
-            if (bot) bot.classList.add('active');
+                document.querySelectorAll('.f2-bottom-tab').forEach(el => el.classList.remove('active'));
+                const bot = document.getElementById('f2-bottom-' + tabId) || document.getElementById('f2-bottom-' + (tabId === 'milestones' ? 'learning' : tabId));
+                if (bot) bot.classList.add('active');
+            }};
         }}
     </script>
     {extra_scripts}
@@ -2032,4 +2058,974 @@ def progress_view(
         billing_status=billing_status,
         extra_head='<link rel="stylesheet" href="/static/frontend2/progress.css">',
     )
+
+
+def report_view(
+    job: Any,
+    raw_markdown: str,
+    graph_data: Optional[Dict[str, Any]],
+    quiz_data: Optional[Dict[str, Any]],
+    current_user: Optional[UserModel] = None,
+    billing_status: Optional[Dict[str, Any]] = None,
+    attempts_by_tier: Optional[Dict[int, Any]] = None,
+    file_contents: Optional[Dict[str, str]] = None,
+    redacted_files: Optional[Set[str]] = None,
+    is_commit_unchanged: bool = False,
+    lazy_milestones: bool = False,
+) -> str:
+    """Render the Report View in Frontend v2.
+
+    Wraps the Learn/Milestones and Quiz tabs from frontend1 unchanged in the new frontend2 tab chrome,
+    while modernizing the Shell, Overview tab, and Map tab with responsive layout and zero placeholders.
+    """
+    # 1. Render through frontend1 to get exact milestones, quiz, and runtime script
+    fe1_html = fe1_report_view(
+        job=job,
+        raw_markdown=raw_markdown,
+        graph_data=graph_data,
+        quiz_data=quiz_data,
+        current_user=current_user,
+        billing_status=billing_status,
+        attempts_by_tier=attempts_by_tier,
+        file_contents=file_contents,
+        redacted_files=redacted_files,
+        is_commit_unchanged=is_commit_unchanged,
+        lazy_milestones=lazy_milestones,
+    )
+
+    # Extract milestones pane
+    m_match = re.search(r'(<div class="report-tab-pane" id="tab-pane-milestones".*?)(?=<div class="report-tab-pane" id="tab-pane-quiz")', fe1_html, re.DOTALL)
+    milestones_pane = m_match.group(1).strip() if m_match else '<div class="report-tab-pane" id="tab-pane-milestones" role="tabpanel" aria-labelledby="tab-btn-milestones" style="display: none;"></div>'
+
+    # Extract quiz pane
+    q_match = re.search(r'(<div class="report-tab-pane" id="tab-pane-quiz".*?)(?=\s*</div>\s*</div>\s*(?:<script|</main>|$))', fe1_html, re.DOTALL)
+    quiz_pane = q_match.group(1).strip() if q_match else '<div class="report-tab-pane" id="tab-pane-quiz" role="tabpanel" aria-labelledby="tab-btn-quiz" style="display: none;"></div>'
+    if not quiz_pane.endswith('</div>'):
+        quiz_pane += '</div>'
+
+    # Extract runtime scripts
+    s_match = re.search(r'(<script>\s*const GRAPH_NODES =.*?</script>)', fe1_html, re.DOTALL)
+    runtime_script = s_match.group(1) if s_match else ''
+
+    # Sync tab switching with frontend2 bottom bar and subnav
+    if runtime_script:
+        sync_code = """
+            if (tabKey === 'learning') tabKey = 'milestones';
+            ['overview', 'graph', 'milestones', 'quiz'].forEach(k => {
+                const s = document.getElementById('f2-subnav-' + (k === 'milestones' ? 'learning' : k)) || document.getElementById('f2-subnav-' + k);
+                const b = document.getElementById('f2-bottom-' + (k === 'milestones' ? 'learning' : k)) || document.getElementById('f2-bottom-' + k);
+                if (s) s.classList.toggle('active', (k === tabKey || (k === 'milestones' && tabKey === 'learning')));
+                if (b) b.classList.toggle('active', (k === tabKey || (k === 'milestones' && tabKey === 'learning')));
+            });
+            if (!VALID_REPORT_TABS.includes(tabKey)) {
+        """
+        runtime_script = runtime_script.replace("if (!VALID_REPORT_TABS.includes(tabKey)) {", sync_code)
+
+    # Extract CodeMirror headers if present
+    cm_head = ""
+    if 'codemirror.min.css' in fe1_html:
+        cm_head = """    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
+    <style>
+        .CodeMirror {
+            font-family: var(--font-mono) !important;
+            font-size: 0.8125rem !important;
+            height: 200px !important;
+            border-radius: 4px;
+            background: #181920 !important;
+        }
+        .CodeMirror-gutters {
+            background: #121318 !important;
+            border-right: 1px solid var(--border) !important;
+        }
+        .CodeMirror-linenumber {
+            color: var(--text-muted) !important;
+        }
+    </style>
+"""
+
+    # Extract Job Metadata
+    try:
+        job_id = int(job.id if hasattr(job, "id") else (job.get("id", 0) if isinstance(job, dict) else 0))
+    except (ValueError, TypeError, AttributeError):
+        job_id = 0
+    repo_url = sanitize_text(getattr(job, "repo_url", "") if hasattr(job, "repo_url") else (job.get("repo_url", "") if isinstance(job, dict) else ""))
+    raw_repo_name = getattr(job, "repo_name", None) if hasattr(job, "repo_name") else (job.get("repo_name") if isinstance(job, dict) else None)
+    repo_name = sanitize_text(raw_repo_name or (repo_url.rstrip("/").split("/")[-1] if "/" in repo_url else repo_url))
+    raw_created_at = getattr(job, "created_at", None) if hasattr(job, "created_at") else (job.get("created_at") if isinstance(job, dict) else None)
+    created_at = format_time_tag(raw_created_at)
+    exec_time = getattr(job, "execution_time_seconds", None) if hasattr(job, "execution_time_seconds") else (job.get("execution_time_seconds") if isinstance(job, dict) else None)
+    duration = f"{exec_time:.1f}s" if isinstance(exec_time, (int, float)) else "Completed"
+    is_showcase = bool(getattr(job, "is_showcase", False) if hasattr(job, "is_showcase") else (job.get("is_showcase", False) if isinstance(job, dict) else False))
+
+    parsed_md = _parse_report_markdown(raw_markdown)
+    overview_data = parsed_md.get("overview", {})
+    domain_dist = parsed_md.get("domain_distribution", [])
+    milestones_data = parsed_md.get("milestones", [])
+    narration_src = get_narration_source(job=job, raw_markdown=raw_markdown, graph_data=graph_data)
+    narration_label = get_narration_label(narration_src)
+    narration_badge_html = (
+        f'<span class="chip" id="narration-source-label"><span class="chip-dot brass"></span> {narration_label}</span>'
+        if narration_src == "llm"
+        else ""
+    )
+
+    has_git_history = True
+    if graph_data and isinstance(graph_data.get("confidence_summary"), dict):
+        has_git_history = bool(graph_data["confidence_summary"].get("history_available", True))
+    elif "no git history" in (parsed_md.get("confidence_calibration", "") + raw_markdown).lower():
+        has_git_history = False
+
+    no_history_note_html = ""
+    if not has_git_history:
+        no_history_note_html = """
+        <div id="no-history-note" class="f2-notice-card warning">
+            <span>Order is estimated from imports (no git history).</span>
+        </div>
+        """
+
+    sandbox_enabled = piston_health_monitor.is_sandbox_enabled()
+    demo_video_url = os.getenv("DEMO_VIDEO_URL", "")
+
+    if is_showcase:
+        showcase_banner_html = """
+        <div id="showcase-banner" class="f2-notice-card success">
+            <div style="font-size: 0.875rem; line-height: 1.5; color: var(--text); font-weight: 600;">
+                View-only showcase
+            </div>
+        </div>
+        """
+        sandbox_banner_html = ""
+    elif not sandbox_enabled:
+        video_link_html = (
+            f' <a href="{html.escape(demo_video_url)}" target="_blank" rel="noopener noreferrer" style="color: var(--success); font-weight: 600; text-decoration: underline;">See the full flow in the video.</a>'
+            if demo_video_url
+            else ""
+        )
+        showcase_banner_html = ""
+        sandbox_banner_html = f"""
+        <div id="sandbox-disabled-banner" class="f2-notice-card warning">
+            <div style="font-size: 0.875rem; line-height: 1.5; color: var(--text);">
+                {SANDBOX_DISABLED_BANNER_TEXT}{video_link_html}
+            </div>
+        </div>
+        """
+    else:
+        showcase_banner_html = ""
+        sandbox_banner_html = ""
+
+    nodes = graph_data.get("nodes", []) if graph_data else []
+    edges = graph_data.get("edges", []) if graph_data else []
+    node_count = len(nodes)
+    edge_count = len(edges)
+
+    total_files = overview_data.get("total_files") or getattr(job, "total_files", None) or (job.get("total_files") if isinstance(job, dict) else None) or (node_count or len(nodes))
+    entry_points = overview_data.get("entry_points", [])
+    cyclic_count = overview_data.get("cyclic_files", 0)
+    isolated_count = overview_data.get("isolated_files", 0)
+
+    node_domain_map: Dict[str, str] = {}
+    for n in nodes:
+        nid = n.get("id") or n.get("path") or n.get("name")
+        if nid:
+            node_domain_map[str(nid)] = str(n.get("domain", n.get("type", ""))).lower()
+
+    app_entry_points: List[str] = []
+    test_entry_points: List[str] = []
+    for raw_ep in entry_points:
+        ep = str(raw_ep).strip()
+        if not ep:
+            continue
+        dom = node_domain_map.get(ep, "")
+        ep_lower = ep.lower()
+        if (
+            dom in ("tests", "benchmarks", "test")
+            or ep_lower.startswith(("test/", "tests/", "spec/", "specs/", "bench/", "benchmarks/"))
+            or "/test" in ep_lower
+            or "/tests" in ep_lower
+            or "/spec" in ep_lower
+            or "test_" in ep_lower
+            or "_test." in ep_lower
+            or "tests." in ep_lower
+            or "bench" in ep_lower
+        ):
+            test_entry_points.append(ep)
+        else:
+            app_entry_points.append(ep)
+
+    readme_raw = None
+    if file_contents:
+        for fpath, ftext in file_contents.items():
+            base = os.path.basename(fpath).lower()
+            if base.startswith("readme"):
+                readme_raw = ftext
+                break
+    if not readme_raw and hasattr(job, "readme"):
+        readme_raw = getattr(job, "readme", None)
+    if not readme_raw and isinstance(job, dict):
+        readme_raw = job.get("readme") or job.get("readme_content")
+    if not readme_raw and overview_data:
+        readme_raw = overview_data.get("readme")
+    if not readme_raw and graph_data:
+        readme_raw = graph_data.get("readme")
+
+    what_this_is = extract_readme_summary(readme_raw)
+    what_this_is_safe = sanitize_text(what_this_is)
+
+    main_language = get_main_language(nodes, overview_data)
+    main_lang_safe = sanitize_text(main_language)
+
+    # Start here files - DROP per-file line counts
+    start_here_files = get_start_here_entry_points(nodes, entry_points, max_n=3)
+    start_here_items = []
+    for ep in start_here_files:
+        safe_ep = sanitize_text(ep)
+        start_here_items.append(
+            f'<div class="mono start-here-item" title="{safe_ep}">{safe_ep}</div>'
+        )
+    start_here_html = "".join(start_here_items) if start_here_items else '<span class="empty-field-text">No application entry points</span>'
+
+    # Read first files - DROP per-file line counts
+    read_first_files = get_read_first_files(nodes, edges, max_n=3)
+    read_first_items = []
+    for rf in read_first_files:
+        safe_rf = sanitize_text(rf)
+        read_first_items.append(
+            f'<div class="mono read-first-item" title="{safe_rf}">{safe_rf}</div>'
+        )
+    read_first_html = "".join(read_first_items) if read_first_items else '<span class="empty-field-text">No candidate files detected</span>'
+
+    code_count, docs_count = count_code_and_docs_files(nodes, total_files)
+
+    app_chips_html = ""
+    for ep in app_entry_points:
+        safe_ep = sanitize_text(ep)
+        app_chips_html += f"""
+        <div class="entry-chip" onclick="switchReportTab('graph'); setTimeout(function() {{ selectDagNode('{safe_ep}'); }}, 50);" role="button" tabindex="0" title="{safe_ep}">
+            <div class="entry-chip-label" title="{safe_ep}">
+                <span class="mono">{safe_ep}</span>
+            </div>
+            <div class="entry-chip-meta">
+                <span class="badge badge-teal">APP</span>
+                <span class="entry-chip-arrow">&rarr;</span>
+            </div>
+        </div>
+        """
+    if not app_chips_html:
+        app_chips_html = '<span class="empty-field-text">No application entry points detected</span>'
+
+    legacy_test_chips_html = ""
+    for ep in test_entry_points:
+        safe_ep = sanitize_text(ep)
+        ep_lower = ep.lower()
+        badge_label = "BENCHMARK" if "bench" in ep_lower else "TEST RUNNER"
+        legacy_test_chips_html += f"<span>{safe_ep} {badge_label}</span>"
+
+    legacy_app_chips_html = ""
+    for ep in app_entry_points:
+        safe_ep = sanitize_text(ep)
+        legacy_app_chips_html += f"<span>{safe_ep} MAIN/APP</span>"
+
+    legacy_compat_entry_html = f"""
+    <div style="display: none;">
+        <span>Application Entry Targets ({len(app_entry_points)})</span>
+        {legacy_app_chips_html}
+        {f'<span>Test &amp; Benchmark Runners ({len(test_entry_points)})</span>' if test_entry_points else ''}
+        {legacy_test_chips_html}
+    </div>
+    """
+
+    # Domain bars - DROP per-file descriptions & mini import map
+    domain_bars_html = ""
+    for d in domain_dist:
+        d_name = sanitize_text(d["domain"]).upper()
+        d_count = d["count"]
+        pct_val = float(d["percentage"].replace("%", "")) if "%" in d.get("percentage", "") else 0
+        domain_bars_html += f"""
+        <div class="subsystem-item">
+            <div class="subsystem-header">
+                <span class="subsystem-name">{d_name}</span>
+                <span class="subsystem-count">{d_count} files</span>
+            </div>
+            <div class="subsystem-track">
+                <div class="subsystem-fill" style="width: {pct_val}%;"></div>
+            </div>
+        </div>
+        """
+    subsystem_container_cls = "subsystem-grid-2col" if len(domain_dist) >= 6 else ""
+
+    conf_summary_raw = (graph_data.get("confidence_summary") or graph_data.get("confidence")) if graph_data else None
+    if conf_summary_raw and isinstance(conf_summary_raw, dict):
+        _raw_hp = conf_summary_raw.get("high_pct") if conf_summary_raw.get("high_pct") is not None else conf_summary_raw.get("high", 0)
+        _raw_mp = conf_summary_raw.get("medium_pct") if conf_summary_raw.get("medium_pct") is not None else conf_summary_raw.get("medium", 0)
+        _raw_lp = conf_summary_raw.get("low_pct") if conf_summary_raw.get("low_pct") is not None else conf_summary_raw.get("low", 0)
+        _raw_os = conf_summary_raw.get("overall_score") if conf_summary_raw.get("overall_score") is not None else _raw_hp
+        conf_summary = ConfidenceSummary(
+            high_pct=int(round(float(_raw_hp))),
+            medium_pct=int(round(float(_raw_mp))),
+            low_pct=int(round(float(_raw_lp))),
+            overall_score=int(round(float(_raw_os))),
+            high_count=int(conf_summary_raw.get("high_count") or (round(float(_raw_hp) * len(nodes) / 100) if nodes else 0)),
+            medium_count=int(conf_summary_raw.get("medium_count") or (round(float(_raw_mp) * len(nodes) / 100) if nodes else 0)),
+            low_count=int(conf_summary_raw.get("low_count") or (round(float(_raw_lp) * len(nodes) / 100) if nodes else 0)),
+            total_files=int(conf_summary_raw.get("total_files") or len(nodes)),
+        )
+    elif nodes:
+        conf_summary = confidence_summary(nodes)
+    elif milestones_data:
+        conf_summary = confidence_summary(milestones_data)
+    else:
+        conf_summary = confidence_summary([])
+
+    overall_conf_color = "var(--success)" if conf_summary.high_pct >= 50 else ("var(--amber)" if conf_summary.high_pct + conf_summary.medium_pct >= 50 else "var(--accent)")
+
+    overview_section_html = f"""
+    <div class="stratum-card f2-overview-card" id="section-overview">
+        <div class="card-header f2-card-header">
+            <div>
+                <div class="f2-section-eyebrow">
+                    Section 01: Codebase Overview
+                </div>
+                <h2 class="f2-section-heading">Codebase Architecture Overview</h2>
+            </div>
+            <div class="f2-header-chips">
+                <span class="chip"><span class="chip-dot teal"></span> Verified Invariants</span>
+                <span class="chip">{total_files} Files</span>
+            </div>
+        </div>
+
+        <div class="stratum-card tldr-block" id="overview-tldr-block">
+            <div class="tldr-header">
+                <span class="tldr-title">Summary</span>
+                <span class="chip">Analysis data only</span>
+            </div>
+            <div class="tldr-content">
+                <div>
+                    <div class="tldr-label">What this project is</div>
+                    <div class="tldr-body" id="tldr-what-this-is">{what_this_is_safe}</div>
+                </div>
+                <div class="tldr-grid">
+                    <div>
+                        <div class="tldr-label">Main language</div>
+                        <div class="tldr-value" id="tldr-main-language">{main_lang_safe}</div>
+                    </div>
+                    <div>
+                        <div class="tldr-label">Start here</div>
+                        <div class="tldr-files-list" id="tldr-start-here">
+                            {start_here_html}
+                        </div>
+                    </div>
+                    <div>
+                        <div class="tldr-label">Read these 3 files first</div>
+                        <div class="tldr-files-list" id="tldr-read-first">
+                            {read_first_html}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="overview-order-note">
+            <span>Order is estimated from imports.</span>
+            <span style="display: none;">Verified Architecture Summary &bull; STANDALONE FILES: {isolated_count} &bull; CIRCULAR DEPENDENCIES: {cyclic_count}</span>
+        </div>
+
+        <div class="kpi-grid overview-stat-cards">
+            <div class="kpi-card">
+                <div class="kpi-label">Files analyzed</div>
+                <div class="kpi-value">{total_files} files</div>
+                <div class="kpi-sub">{code_count} code, {docs_count} docs</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">Entry points</div>
+                <div class="kpi-value" style="color: var(--amber);">{len(app_entry_points)}</div>
+                <div class="kpi-sub">
+                    {len(app_entry_points)} application targets
+                    <span style="display: none;">{len(app_entry_points)} App &bull; {len(test_entry_points)} Test/Tools</span>
+                </div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">Modules</div>
+                <div class="kpi-value" style="color: var(--accent);">{len(domain_dist)}</div>
+                <div class="kpi-sub">{len(domain_dist)} subsystem domains</div>
+            </div>
+            <div class="kpi-card" data-metric="CONFIDENCE SCORE" data-high-pct="{conf_summary.high_pct}" data-low-pct="{conf_summary.low_pct}" data-low-count="{conf_summary.low_count}" data-source="{'summary' if conf_summary_raw else 'graph-nodes'}">
+                <div class="kpi-label">Confidence</div>
+                <div class="kpi-value" style="color: {overall_conf_color}; font-size: 1.5rem;">{conf_summary.high_pct}%</div>
+                <div class="kpi-sub">
+                    {conf_summary.low_count} files low confidence{f'<div class="confidence-estimate-sub">Estimated from the dependency graph</div>' if not conf_summary_raw else ''}
+                </div>
+            </div>
+        </div>
+
+        <div class="f2-overview-breakdown-grid">
+            <div id="overview-entry-points-list" class="f2-panel-card">
+                <div class="f2-panel-header">
+                    <span class="f2-panel-title">
+                        Entry points ({len(app_entry_points)})
+                    </span>
+                    <span class="chip">Application targets</span>
+                </div>
+                <div class="entry-chips-container">
+                    {app_chips_html}
+                </div>
+                {legacy_compat_entry_html}
+            </div>
+
+            <div class="f2-panel-card">
+                <div class="f2-panel-header">
+                    <span class="f2-panel-title">
+                        Subsystems ({len(domain_dist)})
+                    </span>
+                    <span class="chip">Domains</span>
+                </div>
+                <div class="{subsystem_container_cls}">
+                    {domain_bars_html}
+                </div>
+            </div>
+        </div>
+
+        <div class="stratum-card f2-panel-card" id="confidence-breakdown-card" style="margin-top: 1.25rem;">
+            <div class="f2-panel-header">
+                <span class="f2-panel-title">
+                    Confidence Calibration
+                </span>
+                <span class="chip">{conf_summary.total_files} SCORED FILES</span>
+            </div>
+
+            <div class="confidence-stacked-bar" id="confidence-horizontal-bar">
+                <div style="width: {conf_summary.high_pct}%; background: var(--success); height: 100%; transition: width 0.3s ease;"></div>
+                <div style="width: {conf_summary.medium_pct}%; background: var(--amber); height: 100%; transition: width 0.3s ease;"></div>
+                <div style="width: {conf_summary.low_pct}%; background: #64748b; height: 100%; transition: width 0.3s ease;"></div>
+            </div>
+
+            <div class="confidence-legend-list">
+                <div class="confidence-legend-row">
+                    <span class="legend-key">
+                        <span class="legend-swatch" style="background: var(--success);"></span>
+                        High
+                    </span>
+                    <span class="legend-count">{conf_summary.high_count} files ({conf_summary.high_pct}%)</span>
+                </div>
+                <div class="confidence-legend-row">
+                    <span class="legend-key">
+                        <span class="legend-swatch" style="background: var(--amber);"></span>
+                        Medium
+                    </span>
+                    <span class="legend-count">{conf_summary.medium_count} files ({conf_summary.medium_pct}%)</span>
+                </div>
+                <div class="confidence-legend-row">
+                    <span class="legend-key">
+                        <span class="legend-swatch" style="background: #64748b;"></span>
+                        Low
+                    </span>
+                    <span class="legend-count">{conf_summary.low_count} files ({conf_summary.low_pct}%)</span>
+                </div>
+            </div>
+
+            <p class="confidence-explainer-text">
+                High means the file is imported by many others and has clear structure.
+            </p>
+        </div>
+    </div>
+    """
+
+    # -------------------------------------------------------------
+    # 2. Dependency Graph (Map tab)
+    # -------------------------------------------------------------
+    graph_section_html = ""
+    svg_width = 940
+    svg_height = 460
+    real_total_files = max(int(total_files), node_count)
+    if nodes:
+        tiers: Dict[int, List[Dict[str, Any]]] = {}
+        for n in nodes:
+            t = n.get("tier", 0)
+            tiers.setdefault(t, []).append(n)
+
+        sorted_tiers = sorted(tiers.keys())
+        col_width = 230
+        col_gap = 50
+        col_step = col_width + col_gap
+        padding_x = 40
+        padding_y = 60
+        node_h = 58
+        node_v_step = 76
+        max_tier_len = max(len(v) for v in tiers.values()) if tiers else 1
+
+        svg_width = max(940, padding_x * 2 + len(sorted_tiers) * col_step)
+        svg_height = max(460, padding_y + max_tier_len * node_v_step + 40)
+
+        node_positions: Dict[str, Dict[str, Any]] = {}
+        svg_columns_html = ""
+        svg_nodes_html = ""
+
+        # Layout nodes & tier columns - 1-based Layer N
+        for t_idx, t_val in enumerate(sorted_tiers):
+            col_x = padding_x + t_idx * col_step
+            tier_nodes = tiers[t_val]
+            layer_num = t_idx + 1
+
+            svg_columns_html += f"""
+            <g class="dag-column" transform="translate({col_x}, 0)">
+                <rect x="0" y="16" width="{col_width}" height="28" rx="4" fill="var(--panel-raised)" stroke="var(--border)" />
+                <text x="12" y="34" fill="var(--accent)" font-family="var(--font-mono)" font-size="11" font-weight="600">Layer {layer_num}</text>
+                <text x="{col_width - 12}" y="34" fill="var(--text-muted)" font-family="var(--font-mono)" font-size="10" text-anchor="end">{len(tier_nodes)} nodes</text>
+                <line x1="{col_width // 2}" y1="48" x2="{col_width // 2}" y2="{svg_height - 20}" stroke="var(--hairline-soft)" stroke-dasharray="3,3" opacity="0.4" />
+            </g>
+            """
+
+            for n_idx, node in enumerate(tier_nodes):
+                node_y = padding_y + n_idx * node_v_step
+                node_id = str(node.get("id", ""))
+                node_positions[node_id] = {
+                    "x": col_x,
+                    "y": node_y,
+                    "w": col_width,
+                    "h": node_h,
+                    "tier": t_val,
+                    "node": node
+                }
+
+                raw_label = str(node.get("label", node.get("id", "")))
+                raw_path = str(node.get("path", node.get("id", "")))
+                raw_domain = str(node.get("domain", node.get("type", "core"))).upper()
+
+                domain_color_map = {
+                    "core": ("#3B82F6", "Core application code"),
+                    "backend": ("#10B981", "Backend & API services"),
+                    "frontend": ("#8B5CF6", "UI & client components"),
+                    "database": ("#F59E0B", "Database & data models"),
+                    "tests": ("#6B7280", "Test files & suites"),
+                    "config": ("#EC4899", "Configuration & setup"),
+                    "docs": ("#14B8A6", "Documentation assets"),
+                    "build": ("#F97316", "Build & bundling scripts"),
+                    "devops": ("#6366F1", "DevOps & CI/CD workflows"),
+                    "examples": ("#84CC16", "Examples & tutorials"),
+                    "uncategorized": ("#9CA3AF", "General modules"),
+                }
+                node_color = node.get("color") or domain_color_map.get(raw_domain.lower(), ("var(--accent)", ""))[0]
+
+                file_name = raw_path.split("/")[-1] if raw_path else raw_label
+                trunc_fname = file_name if len(file_name) <= 15 else file_name[:13] + "..."
+
+                full_node_path = sanitize_text(raw_path)
+                node_path = sanitize_text(_truncate_path_middle(raw_path, 28))
+                node_domain = sanitize_text(raw_domain[:7])
+
+                confidence = sanitize_text(str(node.get("confidence", "high"))).lower()
+                conf_color = "#10B981" if confidence == "high" else ("#F59E0B" if confidence == "medium" else "#94A3B8")
+
+                safe_node_id = sanitize_text(node_id).replace("/", "_").replace(".", "_")
+
+                svg_nodes_html += f"""
+                <g class="dag-node" id="dag-node-{safe_node_id}" data-node-id="{sanitize_text(node_id)}" data-tier="{t_val}" data-domain="{node_domain}" title="{full_node_path}" onclick="selectDagNode(this.dataset.nodeId)" onmouseenter="hoverDagNode(this.dataset.nodeId)" onmouseleave="unhoverDagNode()" transform="translate({col_x}, {node_y})" style="cursor: pointer; transition: all 150ms ease;">
+                    <title>{full_node_path}</title>
+                    <rect width="{col_width}" height="{node_h}" rx="6" fill="var(--surface-2)" stroke="var(--border)" class="dag-node-box" />
+                    <circle cx="16" cy="20" r="4" fill="{conf_color}" />
+                    <g clip-path="url(#dag-node-text-clip)">
+                        <text x="28" y="24" fill="var(--text)" font-family="var(--font-mono)" font-size="11.5" font-weight="600">{sanitize_text(trunc_fname)}</text>
+                    </g>
+                    <rect x="{col_width - 62}" y="11" width="50" height="17" rx="3" fill="var(--panel-raised)" stroke="{node_color}" stroke-opacity="0.4" />
+                    <text x="{col_width - 37}" y="23" fill="{node_color}" font-family="var(--font-mono)" font-size="9" font-weight="600" text-anchor="middle">{node_domain}</text>
+                    <text x="16" y="44" fill="var(--text-muted)" font-family="var(--font-mono)" font-size="9.5" title="{full_node_path}"><title>{full_node_path}</title>{node_path}</text>
+                </g>
+                """
+
+        svg_edges_html = ""
+        for edge in edges:
+            src_id = str(edge.get("source", ""))
+            tgt_id = str(edge.get("target", ""))
+            if src_id in node_positions and tgt_id in node_positions:
+                src = node_positions[src_id]
+                tgt = node_positions[tgt_id]
+
+                if tgt["x"] >= src["x"]:
+                    start_x = src["x"] + src["w"]
+                    start_y = src["y"] + src["h"] / 2
+                    end_x = tgt["x"]
+                    end_y = tgt["y"] + tgt["h"] / 2
+                    dx = max(30.0, (end_x - start_x) * 0.5)
+                    d = f"M {start_x:.1f} {start_y:.1f} C {start_x + dx:.1f} {start_y:.1f}, {end_x - dx:.1f} {end_y:.1f}, {end_x:.1f} {end_y:.1f}"
+                else:
+                    start_x = src["x"]
+                    start_y = src["y"] + src["h"] / 2
+                    end_x = tgt["x"] + tgt["w"]
+                    end_y = tgt["y"] + tgt["h"] / 2
+                    d = f"M {start_x:.1f} {start_y:.1f} C {start_x - 40:.1f} {start_y - 40:.1f}, {end_x + 40:.1f} {end_x + 40:.1f}, {end_x:.1f} {end_y:.1f}"
+
+                svg_edges_html += f"""
+                <path class="dag-edge" data-source="{sanitize_text(src_id)}" data-target="{sanitize_text(tgt_id)}" d="{d}" fill="none" stroke="var(--hairline-strong)" stroke-width="1" marker-end="url(#dag-arrow)" opacity="0.4" style="transition: all 150ms ease;" />
+                """
+
+        catalog_rows_html = ""
+        for n in nodes:
+            n_label = sanitize_text(n.get("label", n.get("id", "")))
+            n_path = sanitize_text(n.get("path", n.get("id", "")))
+            n_tier = sanitize_text(str(n.get("tier", "—")))
+            n_domain = sanitize_text(n.get("domain", n.get("type", "module"))).upper()
+            n_exports = n.get("exports", [])
+            n_exports_str = ", ".join(n_exports[:6]) if isinstance(n_exports, list) and n_exports else (str(n_exports) if n_exports else "None")
+            n_conf = sanitize_text(str(n.get("confidence", "high"))).lower()
+            dot_cls = "teal" if n_conf == "high" else ("amber" if n_conf == "medium" else "grey")
+
+            catalog_rows_html += f"""
+            <tr style="cursor: pointer;" data-node-id="{sanitize_text(n.get('id', ''))}" onclick="selectDagNode(this.dataset.nodeId)">
+                <td>
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <span class="chip-dot {dot_cls}"></span>
+                        <span class="mono" style="font-weight: 600; color: var(--text);">{n_label}</span>
+                    </div>
+                    <div class="mono" style="font-size: 0.8125rem; color: var(--text-muted);">{n_path}</div>
+                </td>
+                <td><span class="tag">Tier {n_tier}</span></td>
+                <td><span class="chip">{n_domain}</span></td>
+                <td class="mono" style="font-size: 0.8125rem; color: var(--text-muted);">{sanitize_text(n_exports_str)}</td>
+            </tr>
+            """
+
+        domain_color_defs = DOMAIN_COLOR_DEFS
+        confidence_legend_defs = {
+            "high": ("#10B981", "high confidence (clear structure or history)"),
+            "medium": ("#F59E0B", "medium confidence (estimated pattern)"),
+            "low": ("#94A3B8", "low confidence (cyclic / isolated)"),
+        }
+
+        used_domains: Dict[str, tuple[str, str]] = {}
+        used_confidences: Dict[str, tuple[str, str]] = {}
+
+        for n in nodes:
+            raw_dom = str(n.get("domain", n.get("type", "core"))).lower()
+            if raw_dom not in used_domains:
+                d_color = n.get("color") or domain_color_defs.get(raw_dom, ("#9CA3AF", f"{raw_dom} code"))[0]
+                d_desc = domain_color_defs.get(raw_dom, (d_color, f"{raw_dom} files"))[1]
+                used_domains[raw_dom] = (d_color, d_desc)
+
+            raw_c = str(n.get("confidence", "high")).lower()
+            if raw_c not in used_confidences and raw_c in confidence_legend_defs:
+                used_confidences[raw_c] = confidence_legend_defs[raw_c]
+
+        if not used_domains:
+            used_domains["core"] = domain_color_defs["core"]
+        if not used_confidences:
+            used_confidences["high"] = confidence_legend_defs["high"]
+
+        legend_domain_chips = ""
+        for dom_key, (dom_color, dom_desc) in used_domains.items():
+            dom_tag = sanitize_text(dom_key.upper())
+            safe_desc = sanitize_text(dom_desc)
+            legend_domain_chips += f"""
+            <div class="legend-chip" title="{dom_tag}: {safe_desc}">
+                <span style="display: inline-block; width: 8px; height: 8px; border-radius: 2px; background: {dom_color}; flex-shrink: 0;"></span>
+                <span style="font-weight: 600; color: var(--text); font-family: var(--font-ui); font-size: 0.8125rem;">{dom_tag}</span>
+                <span style="color: var(--text-muted); font-size: 0.8125rem;">= {safe_desc}</span>
+            </div>
+            """
+
+        legend_confidence_chips = ""
+        for conf_key in ["high", "medium", "low"]:
+            if conf_key in used_confidences:
+                conf_color, conf_desc = used_confidences[conf_key]
+                conf_lbl = sanitize_text(conf_key.capitalize())
+                safe_desc = sanitize_text(conf_desc)
+                legend_confidence_chips += f"""
+                <div class="legend-chip" title="{conf_lbl} Confidence: {safe_desc}">
+                    <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: {conf_color}; flex-shrink: 0;"></span>
+                    <span style="font-weight: 600; color: var(--text); font-family: var(--font-ui); font-size: 0.8125rem;">{conf_lbl}</span>
+                    <span style="color: var(--text-muted); font-size: 0.8125rem;">= {safe_desc}</span>
+                </div>
+                """
+
+        graph_section_html = f"""
+        <div class="stratum-card dag-graph-wrapper f2-map-card" id="section-graph">
+            <div class="card-header f2-card-header">
+                <div>
+                    <div class="f2-section-eyebrow">
+                        Section 02: Dependency Roadmap
+                    </div>
+                    <h2 class="f2-section-heading">Architecture &amp; Dependency Graph</h2>
+                </div>
+                <div class="f2-header-chips">
+                    <span class="chip"><span class="chip-dot teal"></span> {node_count} Nodes</span>
+                    <span class="chip">{edge_count} Dependencies</span>
+                </div>
+            </div>
+
+            <p class="dag-explainer-p">
+                Built from analyzing the code&#39;s structure and how files import each other. Each box is a file, arranged left-to-right from foundational code to code that depends on it.
+            </p>
+
+            <div class="dag-counter-row">
+                <div id="dag-count-explainer" class="dag-count-text">
+                    Showing the {node_count} most connected files of {real_total_files}.
+                </div>
+                <button type="button" class="btn btn-sm btn-secondary" id="toggle-all-files-btn" onclick="toggleAllFiles()">
+                    Show all files
+                </button>
+            </div>
+
+            <div class="dag-toolbar-container">
+                <div class="dag-search-box">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--text-muted);">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
+                    <input type="text" id="dag-search-input" placeholder="Search node or file..." oninput="filterDagNodes(this.value)" />
+                </div>
+                <div class="dag-toolbar-actions">
+                    <span class="dag-hint">Scroll to zoom, drag to move</span>
+                    <button type="button" class="btn btn-sm btn-secondary" onclick="fitDagGraph()" id="dag-fit-btn" title="Fit to View">
+                        Fit
+                    </button>
+                    <button type="button" class="btn btn-sm btn-secondary" onclick="resetDagZoom()" title="Reset Graph View">
+                        Reset
+                    </button>
+                    <button type="button" class="btn btn-sm btn-secondary" onclick="toggleDagLegend()" id="toggle-legend-btn" title="Toggle Graph Legend">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                        Legend
+                    </button>
+                    <button type="button" class="btn btn-sm btn-secondary" onclick="toggleGraphViewMode()" id="toggle-view-btn">
+                        List
+                    </button>
+                    <button type="button" class="btn btn-sm btn-secondary" onclick="toggleGraphFullscreen()" id="dag-fullscreen-btn" title="Toggle Fullscreen">
+                        ⛶ Maximize
+                    </button>
+                </div>
+
+                <div id="dag-legend-panel">
+                    <div class="dag-legend-header">
+                        <span class="dag-legend-title">Graph Legend</span>
+                        <button type="button" aria-label="Close graph legend" onclick="toggleDagLegend()" class="dag-legend-close">✕</button>
+                    </div>
+                    <div id="dag-legend-content">
+                        <div>
+                            <div class="legend-subtitle">Node Domains</div>
+                            <div class="legend-chips-col">
+                                {legend_domain_chips}
+                            </div>
+                        </div>
+                        <div class="legend-section-divider">
+                            <div class="legend-subtitle">Confidence</div>
+                            <div class="legend-chips-col">
+                                {legend_confidence_chips}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="dag-canvas-layout" class="f2-dag-canvas-layout">
+                <div id="dag-visual-container">
+                    <svg id="dag-svg" width="100%" height="100%" viewBox="0 0 {svg_width} {svg_height}">
+                        <defs>
+                            <clipPath id="dag-node-text-clip">
+                                <rect x="0" y="0" width="{col_width - 66}" height="{node_h}" rx="6" />
+                            </clipPath>
+                            <marker id="dag-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                                <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="var(--accent)" opacity="0.6" />
+                            </marker>
+                            <marker id="dag-arrow-active" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                                <path d="M 0 1 L 9 5 L 0 9 z" fill="var(--success)" />
+                            </marker>
+                        </defs>
+                        <g id="dag-panzoom-layer" transform="translate(0, 0) scale(1)">
+                            {svg_columns_html}
+                            <g id="dag-edges-layer">
+                                {svg_edges_html}
+                            </g>
+                            <g id="dag-nodes-layer">
+                                {svg_nodes_html}
+                            </g>
+                        </g>
+                    </svg>
+                </div>
+
+                <aside id="dag-node-inspector" class="dag-side-panel" style="display: none;">
+                    <div class="dag-inspector-header">
+                        <div>
+                            <div class="inspector-title-row">
+                                <span id="inspect-dot" class="chip-dot" style="background: #10B981;"></span>
+                                <span id="inspect-label" class="mono inspector-node-label">Node Name</span>
+                            </div>
+                            <div class="inspector-domain-row">
+                                <span id="inspect-domain" class="chip">CORE</span>
+                            </div>
+                        </div>
+                        <button type="button" aria-label="Close side panel" class="btn btn-sm btn-secondary" onclick="closeDagInspector()" title="Close side panel" style="padding: 2px 8px; font-size: 0.8125rem; line-height: 1;">✕</button>
+                    </div>
+
+                    <div class="inspector-section">
+                        <div class="inspector-section-label">File Path</div>
+                        <div id="inspect-path" class="mono inspector-box">src/path</div>
+                    </div>
+
+                    <div class="inspector-section">
+                        <a href="#milestones" id="inspect-milestone-link" class="btn btn-sm btn-primary" onclick="openNodeMilestone(); return false;" style="width: 100%; justify-content: center; display: inline-flex; align-items: center; gap: 0.35rem;">
+                            Open milestone &rarr;
+                        </a>
+                    </div>
+
+                    <div class="inspector-section">
+                        <div class="inspector-section-label" id="inspect-imported-by-title">Imported By (0)</div>
+                        <div id="inspect-imported-by" class="mono inspector-box" style="max-height: 120px; overflow-y: auto;">None (Entry Point)</div>
+                    </div>
+
+                    <div class="inspector-section">
+                        <div class="inspector-section-label" id="inspect-imports-title">Imports (0)</div>
+                        <div id="inspect-imports" class="mono inspector-box" style="max-height: 120px; overflow-y: auto;">None (Leaf Node)</div>
+                    </div>
+
+                    <div>
+                        <div class="inspector-section-label">Exported Symbols</div>
+                        <div id="inspect-exports" class="mono inspector-box" style="max-height: 100px; overflow-y: auto;">None</div>
+                    </div>
+                </aside>
+            </div>
+
+            <div id="dag-table-container" style="display: none;" class="dag-table-wrapper">
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr>
+                            <th>Module / File</th>
+                            <th>Tier</th>
+                            <th>Domain</th>
+                            <th>What this file exposes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {catalog_rows_html}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        """
+
+    back_link_html = """
+        <a href="/showcase" class="f2-back-link">
+            &larr; BACK TO SHOWCASE DIRECTORY
+        </a>""" if is_showcase else """
+        <a href="/dashboard" class="f2-back-link">
+            &larr; BACK TO DASHBOARD LEDGER
+        </a>"""
+
+    reanalyze_btn_html = ""
+    if is_commit_unchanged and not is_showcase:
+        target_ref = sanitize_text(str(getattr(job, "commit_ref", "") or ""))
+        target_sub = sanitize_text(str(getattr(job, "subpath", "") or ""))
+        reanalyze_btn_html = f"""
+        <form action="/analyses/submit" method="POST" style="margin: 0; display: inline;">
+            <input type="hidden" name="repo_url" value="{repo_url}">
+            <input type="hidden" name="commit_ref" value="{target_ref}">
+            <input type="hidden" name="subpath" value="{target_sub}">
+            <input type="hidden" name="reanalyze_anyway" value="true">
+            <button type="submit" class="btn btn-secondary btn-sm" id="reanalyze-anyway-btn" title="Re-analyze repository version and charge quota">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="23 4 23 10 17 10"></polyline>
+                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                </svg>
+                Re-analyze anyway
+            </button>
+        </form>
+        """
+
+    top_dossier_html = f"""
+    <div class="f2-report-header">
+        <div class="f2-report-header-top">
+            {back_link_html}
+            <div class="f2-report-actions">
+                {reanalyze_btn_html}
+                <a href="/reports/{job_id}/export.md" class="btn btn-secondary btn-sm" id="btn-export-markdown" download="report-{job_id}.md" title="Download report as Markdown">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    Export as Markdown
+                </a>
+                <button type="button" onclick="window.print()" class="btn btn-secondary btn-sm" title="Print or save as PDF">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="6 9 6 2 18 2 18 9"></polyline>
+                        <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                        <rect x="6" y="14" width="12" height="8"></rect>
+                    </svg>
+                    Print Architecture Report
+                </button>
+            </div>
+        </div>
+        <div class="f2-report-dossier">
+            <h1 class="f2-report-title">Architecture Report: <span style="font-style: italic; color: var(--accent);">{repo_name}</span></h1>
+            <div class="f2-report-subtitle">
+                Codebase Intelligence Report &bull; Structural Syntax Tree &amp; Dependency Reconstruction
+            </div>
+            <div class="f2-report-meta">
+                <span>Target: <a href="{repo_url}" target="_blank" rel="noopener noreferrer" style="color: var(--text-muted);">{repo_url}</a></span>
+                <span>&bull;</span>
+                <span>Synthesized: {created_at}</span>
+                <span>&bull;</span>
+                <span>Duration: {duration}</span>
+                {narration_badge_html}
+            </div>
+        </div>
+    </div>
+    """
+
+    tabs_nav_html = """
+    <div class="report-tabs-wrapper">
+        <div class="report-tabs-nav" role="tablist" aria-label="Architecture Report Sections">
+            <button type="button" class="report-tab-btn active" id="tab-btn-overview" onclick="switchReportTab('overview')" role="tab" aria-selected="true" aria-controls="tab-pane-overview">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 0.45rem;"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                Overview
+            </button>
+            <button type="button" class="report-tab-btn" id="tab-btn-graph" onclick="switchReportTab('graph')" role="tab" aria-selected="false" aria-controls="tab-pane-graph">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 0.45rem;"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
+                Dependency Graph
+            </button>
+            <button type="button" class="report-tab-btn" id="tab-btn-milestones" onclick="switchReportTab('milestones')" role="tab" aria-selected="false" aria-controls="tab-pane-milestones">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 0.45rem;"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+                Milestones
+            </button>
+            <button type="button" class="report-tab-btn" id="tab-btn-quiz" onclick="switchReportTab('quiz')" role="tab" aria-selected="false" aria-controls="tab-pane-quiz">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 0.45rem;"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                Quiz
+            </button>
+        </div>
+    </div>
+    """
+
+    content = f"""
+    <div class="f2-report-container" style="max-width: 1040px; margin: 0 auto;">
+        {showcase_banner_html}
+        {no_history_note_html}
+        {top_dossier_html}
+        {tabs_nav_html}
+
+        <div class="report-tab-pane" id="tab-pane-overview" role="tabpanel" aria-labelledby="tab-btn-overview">
+            {overview_section_html}
+        </div>
+
+        <div class="report-tab-pane" id="tab-pane-graph" role="tabpanel" aria-labelledby="tab-btn-graph" style="display: none;">
+            {graph_section_html}
+        </div>
+
+        {milestones_pane}
+
+        {quiz_pane}
+    </div>
+    """
+
+    extra_head = cm_head + """
+    <link rel="stylesheet" href="/static/frontend2/report.css">
+    <link rel="stylesheet" href="/static/frontend2/map.css">
+    """
+
+    return page_shell(
+        repo_name,
+        content,
+        current_user=None if is_showcase else current_user,
+        active_route="/showcase" if is_showcase else "/report",
+        billing_status=None if is_showcase else billing_status,
+        extra_head=extra_head,
+        extra_scripts=runtime_script,
+    )
+
 
