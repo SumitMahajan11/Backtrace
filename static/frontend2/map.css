@@ -1,0 +1,317 @@
+/* Map & Dependency Graph Styles for Frontend v2 */
+
+/* Graph Wrapper Card */
+.dag-graph-wrapper {
+    position: relative;
+    width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+/* Explainer Count Row */
+.dag-count-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+    font-size: 0.8125rem;
+    color: var(--text-muted);
+}
+
+/* Graph Interactive Toolbar */
+.dag-toolbar {
+    position: relative;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.65rem;
+    margin-bottom: 0.85rem;
+    padding: 0.55rem 0.75rem;
+    background: var(--surface-container-low, #1a1b21);
+    border: 1px solid var(--border-subtle, #292a2f);
+    border-radius: var(--radius-md, 8px);
+    box-sizing: border-box;
+}
+
+.dag-search-box {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    flex: 1;
+    min-width: 160px;
+}
+
+.dag-search-input {
+    background: transparent;
+    border: none;
+    color: var(--text);
+    font-size: 0.8125rem;
+    font-family: inherit;
+    outline: none;
+    width: 100%;
+}
+
+.dag-search-input::placeholder {
+    color: var(--outline, #849495);
+}
+
+.dag-controls-group {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+}
+
+.dag-hint {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-right: 0.25rem;
+    white-space: nowrap;
+}
+
+/* Legend Collapsed Panel */
+#dag-legend-panel {
+    display: none;
+    position: absolute;
+    right: 0.75rem;
+    top: calc(100% + 6px);
+    z-index: 60;
+    width: 320px;
+    max-width: calc(100vw - 2rem);
+    padding: 0.85rem;
+    background: var(--surface-container-high, #292a2f);
+    border: 1px solid var(--border, #3b494b);
+    border-radius: var(--radius-md, 8px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+    flex-direction: column;
+    gap: 0.65rem;
+    font-size: 0.8125rem;
+    box-sizing: border-box;
+}
+
+.legend-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border-subtle, #292a2f);
+    padding-bottom: 0.4rem;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+.legend-close-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 0.85rem;
+    padding: 0 4px;
+}
+
+.legend-chip {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.25rem 0.4rem;
+    background: var(--surface-container, #1e1f25);
+    border-radius: 4px;
+}
+
+/* Canvas Layout & Viewport */
+#dag-canvas-layout {
+    display: flex;
+    position: relative;
+    border: 1px solid var(--border-subtle, #292a2f);
+    border-radius: var(--radius-md, 8px);
+    overflow: hidden;
+    background: var(--surface-container-lowest, #0d0e13);
+    min-height: 480px;
+    max-height: 560px;
+    box-sizing: border-box;
+    width: 100%;
+}
+
+#dag-visual-container {
+    flex: 1 1 auto;
+    overflow: hidden;
+    position: relative;
+    cursor: grab;
+    user-select: none;
+    width: 100%;
+    min-width: 0;
+}
+
+#dag-visual-container:active {
+    cursor: grabbing;
+}
+
+#dag-svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+/* SVG Nodes & Edges */
+.dag-node {
+    cursor: pointer;
+    transition: transform 150ms ease, opacity 150ms ease;
+}
+
+.dag-node:hover .dag-node-box {
+    stroke: var(--primary);
+    stroke-width: 1.5;
+}
+
+.dag-edge {
+    transition: opacity 150ms ease, stroke-width 150ms ease;
+}
+
+/* Node Inspector Side Panel / Bottom Sheet */
+#dag-node-inspector {
+    display: none;
+    width: 320px;
+    max-width: 100%;
+    flex-shrink: 0;
+    background: var(--surface-container, #1e1f25);
+    border-left: 1px solid var(--border-subtle, #292a2f);
+    padding: 1rem;
+    overflow-y: auto;
+    z-index: 20;
+    box-sizing: border-box;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.inspect-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 0.5rem;
+    border-bottom: 1px solid var(--border-subtle, #292a2f);
+    padding-bottom: 0.65rem;
+    margin-bottom: 0.75rem;
+}
+
+.inspect-section {
+    margin-bottom: 0.75rem;
+}
+
+.inspect-title {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 0.25rem;
+}
+
+.inspect-box {
+    font-size: 0.8125rem;
+    font-family: var(--font-mono, monospace);
+    color: var(--text);
+    background: var(--surface-container-low, #1a1b21);
+    padding: 0.5rem;
+    border-radius: 4px;
+    border: 1px solid var(--border-subtle, #292a2f);
+    word-break: break-all;
+    max-height: 120px;
+    overflow-y: auto;
+}
+
+/* List View Table */
+#dag-table-container {
+    display: none;
+    background: var(--surface-container-low, #1a1b21);
+    border: 1px solid var(--border-subtle, #292a2f);
+    border-radius: var(--radius-md, 8px);
+    overflow-x: auto;
+    max-height: 480px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+#dag-table-container table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8125rem;
+}
+
+#dag-table-container th,
+#dag-table-container td {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border-subtle, #292a2f);
+    text-align: left;
+}
+
+#dag-table-container th {
+    background: var(--surface-container, #1e1f25);
+    color: var(--text-muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-size: 0.75rem;
+}
+
+#dag-table-container tr:hover td {
+    background: var(--surface-container-high, #292a2f);
+}
+
+/* Fullscreen Mode */
+.graph-fullscreen {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 9999 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+    background: var(--background, #121318) !important;
+    padding: 1rem !important;
+    display: flex !important;
+    flex-direction: column !important;
+}
+
+.graph-fullscreen #dag-canvas-layout {
+    flex: 1 !important;
+    max-height: none !important;
+    height: auto !important;
+}
+
+/* Mobile 390px Responsive Rule: Inspector becomes a Bottom Sheet */
+@media (max-width: 767px) {
+    #dag-canvas-layout {
+        min-height: 380px;
+        max-height: 460px;
+    }
+
+    #dag-node-inspector {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        width: 100% !important;
+        max-height: 70%;
+        border-left: none !important;
+        border-top: 1px solid var(--border, #3b494b);
+        border-radius: 12px 12px 0 0;
+        box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.7);
+        z-index: 100;
+    }
+
+    .dag-hint {
+        display: none;
+    }
+}
+
+/* Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
