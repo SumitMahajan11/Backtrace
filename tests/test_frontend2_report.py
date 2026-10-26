@@ -6,6 +6,7 @@ Includes unit tests with real fixtures, escaping, dropped elements absence,
 legacy 0-based fixtures, size check, and Playwright verification across 390/768/1440 viewports.
 """
 
+from collections import Counter
 import html
 import json
 import os
@@ -523,6 +524,28 @@ class TestFrontend2ReportUnit:
         assert html_out.count("f2-header") == 1
         assert html_out.count("f2-bottom-bar") == 1
         assert html_out.count("function switchReportTab") == 1
+
+    def test_every_script_url_appears_once(self, mock_user, monkeypatch):
+        """Every script URL (<script src="...">) in the rendered report must appear exactly once."""
+        monkeypatch.setenv("FRONTEND_VERSION", "2")
+        job = AnalysisJobModel(
+            id=309,
+            user_id=mock_user.id,
+            repo_url="https://github.com/org/scripttest",
+            repo_name="scripttest",
+            status="completed",
+        )
+        html_out = fe2_report_view(
+            job=job,
+            raw_markdown="# Report\n## Overview\nScript dedup test",
+            graph_data={"nodes": [{"id": "a.py", "tier": 0}], "edges": []},
+            quiz_data={},
+            current_user=mock_user,
+        )
+        scripts = re.findall(r'<script[^>]+src=["\']([^"\']+)["\']', html_out)
+        counts = Counter(scripts)
+        duplicates = {src: count for src, count in counts.items() if count > 1}
+        assert not duplicates, f"Duplicate scripts found: {duplicates}"
 
 
 
