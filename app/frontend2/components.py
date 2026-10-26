@@ -61,9 +61,9 @@ def nav_shell(
         brand_href = "/login"
         sign_in_link = "" if active_route == "/login" else '<a href="/login" class="btn btn-sm btn-primary">Sign In</a>'
         return f"""
-    <header class="nav-shell">
+    <header class="f2-header nav-shell">
         <div class="nav-shell-inner">
-            <div class="f2-header-left">
+            <div class="f2-nav-left">
                 <a href="{brand_href}" class="brand" id="nav-brand-link">
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2" aria-hidden="true">
                         <circle cx="12" cy="12" r="10"></circle>
@@ -115,9 +115,9 @@ def nav_shell(
         rewards_dropdown_link = f'<a href="/rewards" class="dropdown-item" id="nav-dropdown-rewards">{render_icon("check-circle", 14)} Rewards &amp; Badges</a>'
 
     return f"""
-    <header class="nav-shell">
+    <header class="f2-header nav-shell">
         <div class="nav-shell-inner">
-            <div class="f2-header-left">
+            <div class="f2-nav-left">
                 <a href="/dashboard" class="brand" id="nav-brand-link">
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2" aria-hidden="true">
                         <circle cx="12" cy="12" r="10"></circle>
@@ -2462,7 +2462,7 @@ def report_view(
                 </div>
                 <h2 class="f2-section-heading">Codebase Architecture Overview</h2>
             </div>
-            <div class="f2-header-chips">
+            <div class="card-header-chips">
                 <span class="chip"><span class="chip-dot teal"></span> Verified Invariants</span>
                 <span class="chip">{total_files} Files</span>
             </div>
@@ -2819,7 +2819,7 @@ def report_view(
                     </div>
                     <h2 class="f2-section-heading">Architecture &amp; Dependency Graph</h2>
                 </div>
-                <div class="f2-header-chips">
+                <div class="card-header-chips">
                     <span class="chip"><span class="chip-dot teal"></span> {node_count} Nodes</span>
                     <span class="chip">{edge_count} Dependencies</span>
                 </div>

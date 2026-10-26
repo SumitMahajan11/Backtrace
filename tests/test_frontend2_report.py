@@ -502,6 +502,29 @@ class TestFrontend2ReportUnit:
 
         assert len(fe2_html) <= len(fe1_html), f"Frontend2 ({len(fe2_html)}) exceeded Frontend1 ({len(fe1_html)})"
 
+    def test_single_shell_and_single_tab_switcher(self, mock_user, monkeypatch):
+        """On the rendered report, counts of <header, f2-header, f2-bottom-bar, and function switchReportTab must each be exactly 1."""
+        monkeypatch.setenv("FRONTEND_VERSION", "2")
+        job = AnalysisJobModel(
+            id=308,
+            user_id=mock_user.id,
+            repo_url="https://github.com/org/singleshell",
+            repo_name="singleshell",
+            status="completed",
+        )
+        html_out = fe2_report_view(
+            job=job,
+            raw_markdown="# Report\n## Overview\nSingle shell test",
+            graph_data={"nodes": [{"id": "a.py", "tier": 0}], "edges": []},
+            quiz_data={},
+            current_user=mock_user,
+        )
+        assert html_out.count("<header") == 1
+        assert html_out.count("f2-header") == 1
+        assert html_out.count("f2-bottom-bar") == 1
+        assert html_out.count("function switchReportTab") == 1
+
+
 
 class TestFrontend2ReportPlaywright:
     """Playwright browser tests on a real server at 390, 768, and 1440 viewports with 100-node fixture."""
