@@ -2098,7 +2098,7 @@ def report_view(
     milestones_pane = m_match.group(1).strip() if m_match else '<div class="report-tab-pane" id="tab-pane-milestones" role="tabpanel" aria-labelledby="tab-btn-milestones" style="display: none;"></div>'
 
     # Ensure each milestone pane has milestone-header and milestone-body-container
-    panes = re.split(r'(?=<div class="milestone-pane)', milestones_pane)
+    panes = re.split(r'(?=<div class="milestone-pane[\s"])', milestones_pane)
     injected_panes = []
     for p in panes:
         if not p.startswith('<div class="milestone-pane'):
@@ -2119,15 +2119,31 @@ def report_view(
         if editor_idx != -1:
             div_start = p.rfind('<div class="milestone-editor-wrapper"', 0, editor_idx)
             if div_start != -1:
-                p = p[:div_start] + f'<div class="milestone-body-container" id="milestone-body-container-{tier}" style="display: block;">\n' + p[div_start:]
-                last_div = p.rfind('</div>')
-                if last_div != -1:
-                    p = p[:last_div] + '</div>\n' + p[last_div:]
+                qcard_m = re.search(r'id="milestone-quiz-card-' + re.escape(tier) + r'".*?</div>\s*</div>\s*</div>', p, re.DOTALL)
+                if qcard_m:
+                    body_end = qcard_m.end()
+                    p = (
+                        p[:div_start]
+                        + f'<div class="milestone-body-container" id="milestone-body-container-{tier}" style="display: block;">\n'
+                        + p[div_start:body_end]
+                        + '\n</div>'
+                        + p[body_end:]
+                    )
+                else:
+                    last_div = p.rfind('</div>')
+                    if last_div != -1:
+                        p = (
+                            p[:div_start]
+                            + f'<div class="milestone-body-container" id="milestone-body-container-{tier}" style="display: block;">\n'
+                            + p[div_start:last_div]
+                            + '\n</div>'
+                            + p[last_div:]
+                        )
         injected_panes.append(p)
     milestones_pane = "".join(injected_panes)
 
-    # Extract quiz pane
-    q_match = re.search(r'(<div class="report-tab-pane" id="tab-pane-quiz".*?)(?=\s*</div>\s*</div>\s*(?:<script|</main>|$))', fe1_html, re.DOTALL)
+    # Extract quiz pane with its closing </div>
+    q_match = re.search(r'(<div class="report-tab-pane" id="tab-pane-quiz".*?</div>)\s*</div>\s*(?:<script|</main>|$)', fe1_html, re.DOTALL)
     quiz_pane = q_match.group(1).strip() if q_match else '<div class="report-tab-pane" id="tab-pane-quiz" role="tabpanel" aria-labelledby="tab-btn-quiz" style="display: none;"></div>'
     if not quiz_pane.endswith('</div>'):
         quiz_pane += '</div>'

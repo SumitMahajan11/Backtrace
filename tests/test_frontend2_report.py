@@ -547,6 +547,52 @@ class TestFrontend2ReportUnit:
         duplicates = {src: count for src, count in counts.items() if count > 1}
         assert not duplicates, f"Duplicate scripts found: {duplicates}"
 
+    def test_milestone_container_div_balanced(self, mock_user, monkeypatch):
+        """For the 100-node fixture, html.count('<div') must equal html.count('</div>') in both lazy_milestones=True and False."""
+        monkeypatch.setenv("FRONTEND_VERSION", "2")
+        graph_data = _generate_100_node_graph()
+        job = AnalysisJobModel(
+            id=310,
+            user_id=mock_user.id,
+            repo_url="https://github.com/expressjs/express",
+            repo_name="express",
+            status="completed",
+            created_at=datetime.now(timezone.utc),
+            execution_time_seconds=14.2,
+            graph_output_json=json.dumps(graph_data),
+            markdown_output=(
+                "# Architecture Report: express\n\n"
+                "## Overview\n"
+                "- **Primary Language**: JavaScript\n"
+                "- **Total Analyzed Files**: 100\n"
+                "- **Domain Categories**: 5\n"
+                "- **Entry Point Files**: src/module_0/file_0.py\n\n"
+                "## 3. Step-by-Step Architectural Milestones\n\n"
+                "### Milestone 1: Routing (Tier 1)\n"
+                "**[HIGH CONFIDENCE]** -- *Fast unopinionated routing engine*\n\n"
+                "**Overview:**\n"
+                "Fast, unopinionated routing engine.\n\n"
+                "**Included Files:**\n"
+                "- `src/module_0/file_0.py`\n\n"
+                "**Key Exported Symbols:** `Router, route`\n"
+            ),
+        )
+        quiz_data = {"questions": []}
+
+        for lazy in [True, False]:
+            html_out = fe2_report_view(
+                job=job,
+                raw_markdown=job.markdown_output,
+                graph_data=graph_data,
+                quiz_data=quiz_data,
+                current_user=mock_user,
+                lazy_milestones=lazy,
+            )
+            assert html_out.count("<div") == html_out.count("</div>"), (
+                f"Div tags unbalanced for lazy_milestones={lazy}: "
+                f"<div count is {html_out.count('<div')} vs </div> count {html_out.count('</div>')}"
+            )
+
 
 
 class TestFrontend2ReportPlaywright:
