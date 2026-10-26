@@ -8,6 +8,7 @@ legacy 0-based fixtures, size check, and Playwright verification across 390/768/
 
 from collections import Counter
 import html
+from html.parser import HTMLParser
 import json
 import os
 import re
@@ -630,6 +631,150 @@ class TestFrontend2ReportUnit:
             assert html_out.count("<div") == html_out.count("</div>"), (
                 f"Div tags unbalanced for lazy_milestones={lazy}: "
                 f"<div count is {html_out.count('<div')} vs </div> count {html_out.count('</div>')}"
+            )
+
+    def test_milestone_and_tab_nesting_hierarchy(self, mock_user, monkeypatch):
+        """Parse report with html.parser and assert each milestone-body-container-N is inside milestone-pane-N and tab-pane-quiz shares parent with tab-pane-milestones."""
+        monkeypatch.setenv("FRONTEND_VERSION", "2")
+        graph_data = _generate_100_node_graph()
+        job = AnalysisJobModel(
+            id=311,
+            user_id=mock_user.id,
+            repo_url="https://github.com/expressjs/express",
+            repo_name="express",
+            status="completed",
+            created_at=datetime.now(timezone.utc),
+            execution_time_seconds=14.2,
+            graph_output_json=json.dumps(graph_data),
+            markdown_output=(
+                "# Architecture Report: express\n\n"
+                "## Overview\n"
+                "- **Primary Language**: JavaScript\n"
+                "- **Total Analyzed Files**: 100\n"
+                "- **Domain Categories**: 5\n"
+                "- **Entry Point Files**: src/module_0/file_0.py\n\n"
+                "## 3. Step-by-Step Architectural Milestones\n\n"
+                "### Milestone 1: Routing (Tier 1)\n"
+                "**[HIGH CONFIDENCE]** -- *Fast unopinionated routing engine*\n\n"
+                "**Overview:**\n"
+                "Fast, unopinionated routing engine.\n\n"
+                "**Included Files:**\n"
+                "- `src/module_0/file_0.py`\n\n"
+                "**Key Exported Symbols:** `Router, route`\n\n"
+                "### Milestone 2: Middleware Pipeline (Tier 2)\n"
+                "**[HIGH CONFIDENCE]** -- *Request processing middleware pipeline*\n\n"
+                "**Overview:**\n"
+                "Request processing middleware pipeline.\n\n"
+                "**Included Files:**\n"
+                "- `src/module_1/file_5.py`\n\n"
+                "**Key Exported Symbols:** `use, handle`\n\n"
+                "### Milestone 3: Application Server (Tier 3)\n"
+                "**[HIGH CONFIDENCE]** -- *HTTP application server core*\n\n"
+                "**Overview:**\n"
+                "HTTP application server core.\n\n"
+                "**Included Files:**\n"
+                "- `src/module_2/file_10.py`\n\n"
+                "**Key Exported Symbols:** `listen, createServer`\n"
+            ),
+        )
+        quiz_data = {
+            "questions": [
+                {
+                    "question": "What is the primary role of Router in Tier 1?",
+                    "options": [
+                        "Route request dispatching",
+                        "Database compilation",
+                    ],
+                    "correct_answer": 0,
+                    "explanation": "Router dispatches HTTP requests.",
+                },
+                {
+                    "question": "Which mechanism processes middleware in Tier 2?",
+                    "options": [
+                        "Sequential pipeline execution",
+                        "Thread termination",
+                    ],
+                    "correct_answer": 0,
+                    "explanation": "Middleware executes in pipeline order.",
+                },
+            ]
+        }
+
+        class DomNode:
+            def __init__(self, tag: str, attrs: Dict[str, str], parent: Optional["DomNode"] = None):
+                self.tag = tag.lower()
+                self.attrs = attrs
+                self.id = attrs.get("id")
+                self.parent = parent
+                self.children: List["DomNode"] = []
+
+        class ReportDomParser(HTMLParser):
+            VOID_TAGS = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"}
+
+            def __init__(self):
+                super().__init__()
+                self.root = DomNode("root", {})
+                self.current = self.root
+                self.nodes_by_id: Dict[str, DomNode] = {}
+
+            def handle_starttag(self, tag: str, attrs: List[tuple]):
+                attr_dict = dict(attrs)
+                node = DomNode(tag, attr_dict, parent=self.current)
+                self.current.children.append(node)
+                if node.id:
+                    self.nodes_by_id[node.id] = node
+                if tag.lower() not in self.VOID_TAGS:
+                    self.current = node
+
+            def handle_endtag(self, tag: str):
+                if tag.lower() in self.VOID_TAGS:
+                    return
+                node = self.current
+                while node is not None and node.tag != tag.lower():
+                    node = node.parent
+                if node is not None and node.parent is not None:
+                    self.current = node.parent
+
+        for lazy in [True, False]:
+            html_out = fe2_report_view(
+                job=job,
+                raw_markdown=job.markdown_output,
+                graph_data=graph_data,
+                quiz_data=quiz_data,
+                current_user=mock_user,
+                lazy_milestones=lazy,
+            )
+
+            parser = ReportDomParser()
+            parser.feed(html_out)
+
+            # Assert that each milestone-body-container-N sits inside milestone-pane-N
+            for tier in [1, 2, 3]:
+                body_container = parser.nodes_by_id.get(f"milestone-body-container-{tier}")
+                pane = parser.nodes_by_id.get(f"milestone-pane-{tier}")
+                assert body_container is not None, f"milestone-body-container-{tier} missing in HTML (lazy={lazy})"
+                assert pane is not None, f"milestone-pane-{tier} missing in HTML (lazy={lazy})"
+
+                ancestor = body_container.parent
+                is_inside = False
+                while ancestor is not None:
+                    if ancestor is pane:
+                        is_inside = True
+                        break
+                    ancestor = ancestor.parent
+                assert is_inside, f"milestone-body-container-{tier} does not sit inside milestone-pane-{tier} (lazy={lazy})"
+
+            # Assert that tab-pane-quiz is a direct child of the same parent as tab-pane-milestones
+            quiz_pane = parser.nodes_by_id.get("tab-pane-quiz")
+            milestones_pane = parser.nodes_by_id.get("tab-pane-milestones")
+            assert quiz_pane is not None, f"tab-pane-quiz missing in HTML (lazy={lazy})"
+            assert milestones_pane is not None, f"tab-pane-milestones missing in HTML (lazy={lazy})"
+            assert quiz_pane.parent is not None, f"tab-pane-quiz has no parent (lazy={lazy})"
+            assert milestones_pane.parent is not None, f"tab-pane-milestones has no parent (lazy={lazy})"
+            assert quiz_pane.parent is milestones_pane.parent, (
+                f"tab-pane-quiz parent ({getattr(quiz_pane.parent, 'id', None) or quiz_pane.parent.tag}) "
+                f"does not match tab-pane-milestones parent ({getattr(milestones_pane.parent, 'id', None) or milestones_pane.parent.tag}) "
+                f"(lazy={lazy})"
             )
 
 
