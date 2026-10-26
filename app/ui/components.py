@@ -92,6 +92,7 @@ try:
     _orig_fe1_nav_shell = _fe1_c.nav_shell
     _orig_fe1_dashboard_view = _fe1_c.dashboard_view
     _orig_fe1_progress_view = _fe1_c.progress_view
+    _orig_fe1_report_view = _fe1_c.report_view
 
     def _dynamic_page_shell(*args, **kwargs):
         if active_frontend() == "2":
@@ -113,9 +114,15 @@ try:
             return _fe2_c.progress_view(*args, **kwargs)
         return _orig_fe1_progress_view(*args, **kwargs)
 
+    def _dynamic_report_view(*args, **kwargs):
+        if active_frontend() == "2":
+            return _fe2_c.report_view(*args, **kwargs)
+        return _orig_fe1_report_view(*args, **kwargs)
+
     _fe1_c.page_shell = _dynamic_page_shell
     _fe1_c.nav_shell = _dynamic_nav_shell
     _fe1_c.dashboard_view = _dynamic_dashboard_view
     _fe1_c.progress_view = _dynamic_progress_view
+    _fe1_c.report_view = _dynamic_report_view
 except Exception:
     pass
