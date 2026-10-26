@@ -740,25 +740,36 @@ class TestFrontend2ReportPlaywright:
                 page.wait_for_timeout(150)
                 assert body_container.is_visible(), "Milestone body container should be visible after clicking header again"
 
-                # Click a correct option and assert "✓ Correct", then a wrong option and assert "✗ Incorrect"
+                # Click correct option, click Check answers, assert "✓ Correct" and that POST was sent
                 q_el = page.locator("#milestone-quiz-card-1 .milestone-quiz-q").first
                 correct_idx = q_el.get_attribute("data-correct-idx") or "0"
                 wrong_idx = "0" if correct_idx != "0" else "1"
+                check_btn = page.locator("#btn-check-quiz-1")
+                assert check_btn.is_visible(), "Quiz Check button should be visible"
+                feedback = q_el.locator(".quiz-feedback")
 
                 correct_option = q_el.locator(f'label.quiz-option-row:has(input[value="{correct_idx}"])')
                 assert correct_option.is_visible(), "Correct quiz option row should be visible"
                 correct_option.click()
+                page.wait_for_timeout(100)
+                assert not feedback.is_visible(), "Quiz feedback should not appear before clicking Check answers"
+
+                with page.expect_request(lambda req: f"/api/attempts/{job_id}/1/quiz" in req.url and req.method == "POST"):
+                    check_btn.click()
                 page.wait_for_timeout(150)
-                feedback = q_el.locator(".quiz-feedback")
-                assert feedback.is_visible(), "Quiz feedback should appear after clicking correct option"
+                assert feedback.is_visible(), "Quiz feedback should appear after clicking Check answers"
                 assert "✓ Correct" in feedback.inner_text(), f"Expected '✓ Correct', got: {feedback.inner_text()}"
 
+                # Click wrong option, click Check answers, assert "✗ Incorrect"
                 wrong_option = q_el.locator(f'label.quiz-option-row:has(input[value="{wrong_idx}"])')
                 assert wrong_option.is_visible(), "Wrong quiz option row should be visible"
                 wrong_option.click()
+                with page.expect_request(lambda req: f"/api/attempts/{job_id}/1/quiz" in req.url and req.method == "POST"):
+                    check_btn.click()
                 page.wait_for_timeout(150)
-                assert feedback.is_visible(), "Quiz feedback should appear after clicking wrong option"
+                assert feedback.is_visible(), "Quiz feedback should appear after clicking Check answers for wrong option"
                 assert "✗ Incorrect" in feedback.inner_text(), f"Expected '✗ Incorrect', got: {feedback.inner_text()}"
+
 
                 # Click Verify and assert request is sent (Item 7 requirement)
                 verify_btn = page.locator("#btn-submit-1")

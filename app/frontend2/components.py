@@ -2178,42 +2178,8 @@ def report_view(
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/clike/clike.min.js"></script>
 """
 
-    quiz_helper_js = """    <script>
-    function selectQuizOption(tier, qIdx, optIdx, prefix) {
-        prefix = prefix || '';
-        const selector = 'input[name="' + prefix + 'm_quiz_' + tier + '_' + qIdx + '"][value="' + optIdx + '"]';
-        const radio = document.querySelector(selector);
-        if (radio) {
-            radio.checked = true;
-            radio.dispatchEvent(new Event('change', { bubbles: true }));
-        }
-    }
+    quiz_helper_js = ""
 
-    document.addEventListener('change', function(e) {
-        if (e.target && e.target.matches('input[type="radio"][name*="m_quiz_"]')) {
-            const qEl = e.target.closest('.milestone-quiz-q');
-            if (!qEl) return;
-            const correctIdx = parseInt(qEl.getAttribute('data-correct-idx') || '0', 10);
-            const selectedVal = parseInt(e.target.value, 10);
-            const feedbackEl = qEl.querySelector('.quiz-feedback');
-            const explanationEl = qEl.querySelector('.quiz-explanation');
-            if (feedbackEl) {
-                feedbackEl.style.display = 'inline-block';
-                if (selectedVal === correctIdx) {
-                    feedbackEl.style.color = 'var(--success)';
-                    feedbackEl.textContent = '✓ Correct';
-                } else {
-                    feedbackEl.style.color = 'var(--crimson)';
-                    feedbackEl.textContent = '✗ Incorrect';
-                }
-            }
-            if (explanationEl) {
-                explanationEl.style.display = 'block';
-            }
-        }
-    });
-    </script>
-"""
 
     # Extract Job Metadata
     try:
