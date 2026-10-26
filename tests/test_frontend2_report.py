@@ -658,6 +658,13 @@ class TestFrontend2ReportPlaywright:
                     (1440, 900),
                 ]
 
+                tabs = [
+                    ("overview", "#tab-btn-overview", "#tab-pane-overview"),
+                    ("graph", "#tab-btn-graph", "#tab-pane-graph"),
+                    ("milestones", "#tab-btn-milestones", "#tab-pane-milestones"),
+                    ("quiz", "#tab-btn-quiz", "#tab-pane-quiz"),
+                ]
+
                 for width, height in viewports:
                     page.set_viewport_size({"width": width, "height": height})
                     page.goto(f"http://127.0.0.1:{port}/report/{job_id}", wait_until="networkidle")
@@ -667,9 +674,13 @@ class TestFrontend2ReportPlaywright:
                     inner_width = page.evaluate("() => window.innerWidth")
                     assert scroll_width <= inner_width, f"Horizontal scroll detected at width {width}: {scroll_width} > {inner_width}"
 
-                    # 2. Screenshot overview
-                    shot_path = os.path.join("scratch", "f2_report", f"report_{width}.png")
-                    page.screenshot(path=shot_path, full_page=False)
+                    # 2. Screenshot all four tabs
+                    for tab_name, btn_id, pane_id in tabs:
+                        page.locator(btn_id).click()
+                        page.wait_for_timeout(100)
+                        assert page.locator(pane_id).is_visible(), f"Tab {tab_name} pane should be visible"
+                        shot_path = os.path.join("scratch", "f2_report", f"{tab_name}_{width}.png")
+                        page.screenshot(path=shot_path, full_page=False)
 
                 # Tab switching verification (at 1440px)
                 page.set_viewport_size({"width": 1440, "height": 900})
